@@ -1,16 +1,11 @@
 {
  "obs": [],
  "gaugeZeros": [],
- "dropped": {},
+ "dropped": {
+  "hwlw_edge": 2
+ },
  "unknown": 0,
  "tide": [
-  {
-   "series": "goeree.lichteiland/WATHTE/MSL/other:F007",
-   "kind": "extreme_astro",
-   "ts": "2026-10-17T10:32:00.000Z",
-   "value": -71,
-   "hilo": "low"
-  },
   {
    "series": "goeree.lichteiland/WATHTE/MSL/other:F007",
    "kind": "extreme_astro",
@@ -10818,13 +10813,6 @@
    "ts": "2027-11-20T23:57:00.000Z",
    "value": -45,
    "hilo": "low"
-  },
-  {
-   "series": "goeree.lichteiland/WATHTE/MSL/other:F007",
-   "kind": "extreme_astro",
-   "ts": "2027-11-21T06:25:00.000Z",
-   "value": 85,
-   "hilo": "high"
   }
  ]
 }

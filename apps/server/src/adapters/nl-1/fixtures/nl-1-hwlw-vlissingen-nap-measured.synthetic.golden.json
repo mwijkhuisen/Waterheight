@@ -1,16 +1,11 @@
 {
  "obs": [],
  "gaugeZeros": [],
- "dropped": {},
+ "dropped": {
+  "hwlw_edge": 2
+ },
  "unknown": 0,
  "tide": [
-  {
-   "series": "vlissingen/WATHTE/NAP/other:F007",
-   "kind": "extreme",
-   "ts": "2026-10-14T02:10:00.000Z",
-   "value": 151,
-   "hilo": "high"
-  },
   {
    "series": "vlissingen/WATHTE/NAP/other:F007",
    "kind": "extreme",
@@ -80,13 +75,6 @@
    "ts": "2026-10-16T16:10:00.000Z",
    "value": 166,
    "hilo": "high"
-  },
-  {
-   "series": "vlissingen/WATHTE/NAP/other:F007",
-   "kind": "extreme",
-   "ts": "2026-10-16T22:22:00.000Z",
-   "value": -105,
-   "hilo": "low"
   }
  ]
 }

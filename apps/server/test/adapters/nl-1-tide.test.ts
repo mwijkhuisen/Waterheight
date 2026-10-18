@@ -70,8 +70,8 @@ describe('golden files (real payloads)', () => {
     const out = tide('nl-1-hwlw-astro-goeree-lichteiland-msl', 'extreme_astro');
     expect(out).toEqual(golden('nl-1-hwlw-astro-goeree-lichteiland-msl', out));
     expect(out.obs).toEqual([]);
-    expect(out.tide).toHaveLength(1546);
-    expect(out.dropped).toEqual({});
+    expect(out.tide).toHaveLength(1544);
+    expect(out.dropped).toEqual({ hwlw_edge: 2 });
     const rows = out.tide ?? [];
     expect(rows.every((r) => r.series === GOEREE && r.kind === 'extreme_astro')).toBe(true);
     // Strictly alternating, and every high above its neighbours.
@@ -81,15 +81,9 @@ describe('golden files (real payloads)', () => {
         if (n) expect(r.hilo === 'high' ? r.value > n.value : r.value < n.value).toBe(true);
       }
     });
-    // Recorded 2026-10-17T07:58Z: the first value 10:32 +01:00 is -71 cm (a low), the second 105 cm (a high).
-    expect(rows[0]).toEqual({
-      series: GOEREE,
-      kind: 'extreme_astro',
-      ts: '2026-10-17T10:32:00.000Z',
-      value: -71,
-      hilo: 'low',
-    });
-    expect(rows[1]?.hilo).toBe('high');
+    // Recorded 2026-10-17T07:58Z: the first value (-71 cm, a low) and the last are not stored; the second (a high) is first.
+    expect(rows[0]?.hilo).toBe('high');
+    expect(rows[1]?.hilo).toBe('low');
   });
 
   it('measured high and low waters: RWS answers 204 (no object, never an adapter), so a payload is an error', () => {
@@ -117,11 +111,11 @@ describe('golden files (real payloads)', () => {
 describe('synthetic payloads [U]', () => {
   const name = 'nl-1-hwlw-vlissingen-nap-measured.synthetic';
 
-  it('measured extremes (Groepering GETETM2, ProcesType meting, NAP): 12 alternating, high first', () => {
+  it('measured extremes (Groepering GETETM2, ProcesType meting, NAP): 12 values, the 10 inner ones alternate, low first', () => {
     const out = tide(name, 'extreme');
     expect(out).toEqual(golden(name, out));
-    expect(out.dropped).toEqual({});
-    expect(out.tide?.map((r) => r.hilo)).toEqual(Array.from({ length: 12 }, (_, i) => (i % 2 === 0 ? 'high' : 'low')));
+    expect(out.dropped).toEqual({ hwlw_edge: 2 });
+    expect(out.tide?.map((r) => r.hilo)).toEqual(Array.from({ length: 10 }, (_, i) => (i % 2 === 0 ? 'low' : 'high')));
     expect(out.tide?.every((r) => r.series === VLISSINGEN && r.kind === 'extreme')).toBe(true);
   });
 
@@ -192,7 +186,7 @@ describe('drift and drops', () => {
         m,
         expect.any(Array),
       ]);
-      expect((code(alter(measured, { WaardeBepalingsMethode: m }), 'extreme', c) as Normalised).tide).toHaveLength(12);
+      expect((code(alter(measured, { WaardeBepalingsMethode: m }), 'extreme', c) as Normalised).tide).toHaveLength(10);
     }
     expect(code(alter(measured, { WaardeBepalingsMethode: 'other:F012' }), 'extreme', c)).toMatchObject({
       tide: [],
@@ -228,10 +222,11 @@ describe('drift and drops', () => {
     return { hilo: out.tide?.map((r) => r.hilo), dropped: out.dropped };
   };
 
-  it('labels: strict alternation; first and last have one neighbour', () => {
-    expect(labels([10, 90, 20, 95])).toEqual({ hilo: ['low', 'high', 'low', 'high'], dropped: {} });
-    expect(labels([90, 10, 85])).toEqual({ hilo: ['high', 'low', 'high'], dropped: {} });
-    expect(labels([10, 90])).toEqual({ hilo: ['low', 'high'], dropped: {} });
+  it('labels: strict alternation; the first and last value (one neighbour) are not stored', () => {
+    const edge = { hwlw_edge: 2 };
+    expect(labels([10, 90, 20, 95])).toEqual({ hilo: ['high', 'low'], dropped: edge });
+    expect(labels([90, 10, 85])).toEqual({ hilo: ['low'], dropped: edge });
+    expect(labels([10, 90])).toEqual({ hilo: [], dropped: edge });
   });
 
   it('labels: a series that does not alternate stores nothing, counted by its values (hwlw_unlabelled)', () => {
@@ -264,8 +259,8 @@ describe('drift and drops', () => {
   it('labels: a value dropped between the first and last kept one withholds the series (review CR-2)', () => {
     // The reviewer's case: the high between -100 and -120 is a gap; the rest alternates and would label -100 high.
     expect(result(hours([0, -100], [6, -120], [12, 160], [18, -110], [24, 155]))).toEqual({
-      hilo: ['high', 'low', 'high', 'low', 'high'],
-      dropped: {},
+      hilo: ['low', 'high', 'low'],
+      dropped: { hwlw_edge: 2 },
     });
     expect(result(hours([0, -100], [3, 0, '99'], [6, -120], [12, 160], [18, -110], [24, 155]))).toEqual({
       hilo: [],
@@ -286,26 +281,39 @@ describe('drift and drops', () => {
     });
     // A drop outside the kept values (here after the last one) leaves the labels determined.
     expect(result(hours([0, -100], [6, 120], [12, -110], [18, 0, '99']))).toEqual({
-      hilo: ['low', 'high', 'low'],
-      dropped: { gap: 1 },
+      hilo: ['high'],
+      dropped: { gap: 1, hwlw_edge: 2 },
     });
   });
 
   it('labels: a long spacing alone withholds nothing; a missing extreme inside the list breaks the alternation', () => {
     // The double low waters of the Holland coast: 2.4 h and 10.3 h between extremes (Hoek van Holland 2026-10-17).
     expect(result(hours([0, -60], [2.4, 150], [12.7, -70], [15.1, 140]))).toEqual({
-      hilo: ['low', 'high', 'low', 'high'],
-      dropped: {},
+      hilo: ['high', 'low'],
+      dropped: { hwlw_edge: 2 },
     });
     // A missing pair (12 h with nothing between) leaves every label right.
     expect(result(hours([0, -100], [6, 120], [18, -110], [24, 130]))).toEqual({
-      hilo: ['low', 'high', 'low', 'high'],
-      dropped: {},
+      hilo: ['high', 'low'],
+      dropped: { hwlw_edge: 2 },
     });
-    // One missing low: two highs meet, and the series is withheld whole.
-    expect(result(hours([0, -100], [6, 120], [18, 130], [24, -90]))).toEqual({
+    // One missing low, spacings under 10 h: two highs meet, and the series is withheld whole.
+    expect(result(hours([0, -100], [6, 120], [9, 130], [15, -90]))).toEqual({
       hilo: [],
       dropped: { hwlw_unlabelled: 4 },
+    });
+  });
+
+  it('labels: an extreme missing next to the first or last value never leaves a wrong label stored', () => {
+    // True series H1 L1 H2 L2 with L1 missing: the list still alternates and the first 200 (a high) would be a low.
+    expect(result(hours([0, 200], [6, 210], [12, 50], [18, 200]))).toEqual({
+      hilo: ['high', 'low'],
+      dropped: { hwlw_edge: 2 },
+    });
+    // The mirror at the end: the last 100 would be a low.
+    expect(result(hours([0, -100], [6, 120], [12, 100]))).toEqual({
+      hilo: ['high'],
+      dropped: { hwlw_edge: 2 },
     });
   });
 
@@ -329,8 +337,8 @@ describe('drift and drops', () => {
       },
     }));
     const out = normaliseTide([...good, ...bad], at, 'extreme_astro');
-    expect(out.tide?.map((r) => r.series)).toEqual([GOEREE, GOEREE, GOEREE]);
-    expect(out.dropped).toEqual({ hwlw_unlabelled: 3 });
+    expect(out.tide?.map((r) => r.series)).toEqual([GOEREE]);
+    expect(out.dropped).toEqual({ hwlw_unlabelled: 3, hwlw_edge: 2 });
   });
 
   it('quality, duplicates and conflicts: a gap is dropped, a repeat is one row, different values withhold the instant', () => {
@@ -395,7 +403,7 @@ describe('drift and drops', () => {
       at,
       'extreme',
     );
-    expect([measured.tide?.length, measured.dropped]).toEqual([2, { future: 1, too_old: 1 }]);
+    expect([measured.tide?.length, measured.dropped]).toEqual([0, { future: 1, too_old: 1, hwlw_edge: 2 }]);
     // astronomical: up to fetch + P400D + P1D and from fetch - P1D.
     expect(p('astro', 400 * day, 401 * day + 1, -day, -day - 1, 1)).toEqual([
       3,
@@ -408,7 +416,7 @@ describe('drift and drops', () => {
       { ...at, maxAgeMs: null },
       'extreme',
     );
-    expect(old.dropped).toEqual({});
+    expect(old.dropped).toEqual({ hwlw_edge: 2 });
   });
 });
 
@@ -503,8 +511,11 @@ describe('property and fuzz tests', () => {
         const out = normaliseTide(alter(base, {}, undefined, metingen), at, 'extreme_astro');
         const rows = out.tide ?? [];
         expect(out.obs).toEqual([]);
+        if (out.dropped.hwlw_edge !== undefined) expect(out.dropped.hwlw_edge).toBe(2);
         if (rows.length === 0) return;
-        expect(rows.map((r) => r.value)).toEqual(values);
+        // A labelled series stores n - 2 values: the first and the last are never stored.
+        expect(rows.map((r) => r.value)).toEqual(values.slice(1, -1));
+        expect(out.dropped.hwlw_edge).toBe(2);
         rows.forEach((r, i) => {
           if (i > 0) expect(r.hilo).not.toBe(rows[i - 1]?.hilo);
           for (const n of [rows[i - 1], rows[i + 1]]) {

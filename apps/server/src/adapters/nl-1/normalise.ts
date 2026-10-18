@@ -378,6 +378,11 @@ export type TideKind = 'astro' | 'extreme' | 'extreme_astro';
 //    `conflict`, `out_of_range`: the rest may still alternate with every label after the hole flipped, review CR-2)
 //    stores nothing from this payload and counts its values as `hwlw_unlabelled` (retained). There is no spacing
 //    rule (see `alternation`). `astro` rows carry no label.
+//    The first and the last value of a labelled series are never stored (counted `hwlw_edge`, not retained): their
+//    label rests on one neighbour, and an extreme missing next to them can leave the list alternating with the end
+//    value wrongly labelled. Consecutive monthly astronomical windows (and the daily P3D measured ones) overlap, so
+//    a payload's end extremes lie inside a neighbouring payload and are stored from there; only the very first
+//    extreme of the very first run is never stored.
 
 const TIDE_PROCESS: Record<TideKind, string> = {
   astro: 'astronomisch',
@@ -404,7 +409,8 @@ const TIDE_AHEAD_MS = 401 * DAY_MS;
  * in the 78 production lists of 2026-10-17 one spacing reaches 10.32 h (the double low waters of the Holland coast
  * and the Rotterdam mouths) while two consecutive spacings sum to as little as 6.88 h at 35 locations, so a limit
  * either withholds real lists (10 h withheld 8) or misses an omission. Inside a list a single missing extreme always
- * breaks the alternation (two highs or two lows meet), and a missing pair leaves every label right.
+ * breaks the alternation (two highs or two lows meet), and a missing pair leaves every label right. The first and
+ * last values are labelled from one neighbour only, so `normaliseTide` does not store them.
  */
 function alternation(values: readonly number[]): ('high' | 'low')[] | null {
   if (values.length < 2) return null;
@@ -525,7 +531,10 @@ export function normaliseTide(lists: readonly Waarnemingen[], ctx: Context, kind
       count(out, 'hwlw_unlabelled', rows.length);
       continue;
     }
+    // The end values' labels rest on one neighbour: never stored (see the comment above `normaliseTide`).
+    count(out, 'hwlw_edge', 2);
     rows.forEach(([ts, value], i) => {
+      if (i === 0 || i === rows.length - 1) return;
       tide.push({ series: key, kind, ts: toIso(ts), value, hilo: labels[i] as 'high' | 'low' });
     });
   }
