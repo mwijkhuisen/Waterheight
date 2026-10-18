@@ -3,7 +3,8 @@
 **Trigger:**
 - the owner wants older history for a source that has a spec in `registry/backfill.yaml` (`nl-1-backfill-obs` for NL-1, and from P14b `de-8-backfill-w`, `fr-2-backfill-elab` and `ch-9-backfill-bs`, §8);
 - a backfill job is `paused`, `failed` or `aborted` and must be looked at, resumed or stopped;
-- the database grows faster than the projection of §7 says.
+- the database grows faster than the projection of §7 says;
+- the NL-1 history must be counted by method, or restored after the #184 fix (§9).
 
 The `backfill` role is a one-shot job. It plans one job per unit (a series for NL-1; a decade file for DE-8, a daily-aggregate series for FR-2, a dataset for CH-9), fetches the older observations in chunks of the spec's size (P40D for NL-1) into the raw archive and lets the loader store them. It never runs by itself: nothing starts it, and it is not in the default `up`. **The go-live data is the only copy**, so the backfill is built to change a live row only for a provider-validated value (§1); the P14b specs write into the series of **another source** (their `target`) and stop at `DATA_FLOOR` (§8). Agents have no production access: every command here is run by the owner.
 
@@ -27,7 +28,7 @@ The `backfill` role is a one-shot job. It plans one job per unit (a series for N
 | Truncation: a list at 90 % of the parser's cap (10,000 values), 144,000 values in all, a parser cap error or the client's size cap commits nothing; the runner **halves the chunk at that cursor** and asks again (40, 20, 10, 5, 2.5, 1.25, 1 day), and fails the job as `truncated` only when a one-day chunk is still too big. Every request counts against the budget | P40D holds 5,760 values per 10-minute list, so a chunk stays far below it. The next cursor asks a whole chunk again |
 | Throttling: a 403, 429, 451 or 5xx is retried after the client's backoff (`Retry-After` when the provider sends one), up to 5 attempts. When the backoff would end after the window, the run stops with `"stopped":"throttled"` and exits 1 | The backoff is kept in memory only: a restart forgets it. **Do not restart a throttled run at once**: wait for the `Retry-After` the provider sent, or for the next night |
 | Rows: every backfilled row gets qc bit 512; a live row is replaced **only** by a validated value (qc bit 2: RWS Gecontroleerd or Definitief) over an unvalidated one, and each such change writes one `obs_revision`; `obs_latest`, fetch health, outages and coverage never see a backfill (A§8 Q6) | A backfill cannot make a series look fresh or stale |
-| Values under a method the registry does not know (RWS splits the answer into one list per method: F216, F009, F001, F029) are dropped as `unregistered_method`, counted and retained, never merged into the instantaneous series | Real growth is lower than the projection (§7, KG-342) |
+| Values under a method the registry does not know (RWS splits the answer into one list per method: F216, F009, F001, F029) are dropped as `unregistered_method`, counted and retained, never merged into the instantaneous series. A **processed** list (`WaardeBewerkingsMethode` other than `NVT`, such as the daily mean GEM24H, which RWS sends as a second list under the same method) of a stored series is dropped as `processed` (#184): retained, counted, never merged (before #184 it merged and withheld the midnight values as `conflict`; §9) | Real growth is lower than the projection (§7, KG-342) |
 | The runner logs in as `rws_backfill`: `backfill_job`, `backfill_lease` and `backfill_guard` and nothing else, at most two connections (the running job and one status, pause or abort call beside it), 5 s per statement and 30 s idle in a transaction | A budget cannot be raised by the runner itself (§5) |
 | A request is counted once it went out: a backoff, an open breaker or a refused URL counts nothing; a request a `kill -9` interrupts is not counted either | `requests` may be one short after a crash |
 | `last_error` and every line of output hold fixed codes, never provider text | |
@@ -254,6 +255,64 @@ Expected dry-run totals: 32 series (units), 3,740 chunks, 32 requests, 24,166,94
 Two datasets, `100089` (Rhine at Basel, station 2289: W and Q) and `100236` (Birs at Münchenstein, 2106: W only), P30D chunks from 2020-06-01, 1 request a second (25,200 a night at most, under 10 % of the portal's 500,000 a day). The request is `…/<dataset>/exports/json` with a `where` on the chunk (never `/records`, which stops at offset + limit 10,000), and the manifest line's **variant is the dataset id** (`lineVariant`). Plan and run with `--spec ch-9-backfill-bs`; expected dry-run: 2 units, 152 requests, 0.09 GB database, 10 MB archive (the dry-run counts the 5-minute records, though only the 10-minute grid instants load). Raw only (KG-387); 2106 Q is not loaded (`q_not_twin`, KG-393).
 
 **Failure codes.** `unknown_variant` (`schema_drift`): the line's variant is not `100089` or `100236`, or the record's keys are not the dataset's (a renamed field). Anything else is the generic list of §5.
+
+## 9. The method census and the #184 replay (NL-1)
+
+**Why.** Until #184 the NL-1 normaliser merged RWS's daily mean (`GEM24H`, a second list under the same method) into the 10-minute series: the midnight values were withheld as `conflict` or counted `duplicate`, and where the 10-minute value was missing the daily mean was stored as an instantaneous row (an **orphan**). The archive still holds every payload (class `backfill` is never pruned, §1), so a replay restores what was withheld. The census says first what that replay will write. It also counts, per method, the history the registry does not store (`unregistered_method`), which is the input of stage 2 (twin series per method, KG-342).
+
+**What it is.** `backfill census --spec <id>` is read-only: it reads the raw archive and the registry, **opens no database, sends no request and writes no file**. It takes NL-1 backfill specs only (`nl-1-backfill-obs`); any other spec, or `--dry-run`, `--from` or another flag, exits 64. It parses every archived payload of the spec as the loader does, once as the code stands and once as the code before #184 read it, so the difference is exactly what a replay changes.
+
+**Run it** outside the backfill window (22:00–05:00 UTC), with the runner idle (`backfill status` shows no job `running`) and the loader caught up (`.loader.backlog_age_s` small), and the replay (below) straight after it. A line the loader has not read yet, or a KG-355 job planned again after the census, moves the numbers:
+
+```bash
+rwsc run --rm --no-deps -T backfill backfill census --spec nl-1-backfill-obs > census-184.jsonl
+```
+
+It needs neither `DB_*` settings nor secrets; the raw archive is `RWS_RAW_DIR` (default `/data/raw`, where the service mounts it). Exit codes: 0 done, 64 bad arguments or not an NL-1 backfill spec, 78 the registry or `registry/backfill.yaml` is invalid, 1 the archive root cannot be read or the spec has no line in it (a wrong archive never prints a census of zeros).
+
+**The output** is one JSON object per line, in this order. Every code in it passed a strict pattern or is `"?"`; there is no provider text (no `Omschrijving`, no name) and no error text.
+
+| Line | Fields |
+|---|---|
+| `{"orphan":{…}}` (first, as found) | `series` (the registry's key), `ts`, `value`: a row the old code stored that the new code does not (a daily mean stored as an instantaneous row) |
+| `{"group":{…}}` (sorted by key) | One per `code/quantity/hoedanigheid/method/bewerking/unit` of the lists: `role` and `audience` of the registry row of the list's key (`null` if none), `lists`, `values`, `ok_values` (known quality, not a gap, inside the line's window and the 1990 floor, not in the future), `gap`, `unknown_quality`, `statuses` (`Ongecontroleerd`, `Gecontroleerd`, `Definitief`), `first`, `last` (ISO of the `ok_values`), `step` (the most common gap between instants as an ISO duration, `P1D`, `PT1H`, `PT10M`) |
+| `{"series":{…}}` | One per registered series with a non-zero count: `key`, `restorable`, `requalified`, `orphan` |
+| `{"totals":{…}}` (last) | `spec`, `manifest_from`, `manifest_to` (first and last manifest day holding a counted line), `lines`, `objects`, `duplicate_lines`, `duplicate_lines_differing`, `failed_validity`, `missing`, `bad_object`, `unreadable`, `unparsed`, `excluded_lists` (lists that are not `meting`, `OW`, ungrouped), `values`, `processed_values`, `restorable`, `requalified`, `orphan`, `groups`, and `expect` |
+
+`restorable` counts rows only the new code stores (the withheld midnights), `requalified` rows both codes store with another value or quality, `orphan` rows only the old code stored. Only series of the source's own audience count (the loader stores none of an `off` series). A chunk fetched twice (a `kill -9` between the put and the cursor) is counted once: the second line is a `duplicate_lines`, and a `duplicate_lines_differing` when its sha256 differs from the first (a replay keeps the newest fetch, so the expectation then has that much slack). `unreadable` > 0 means an archive object could not be read: a replay **stops** at that object, so fix it first (`docs/runbooks/disk-full.md`, the restore runbook).
+
+**Read the orphans** from the file, on any machine with `jq` (copy it off the VPS; it holds public NL-1 counts and codes only):
+
+```bash
+jq -c 'select(.orphan)' census-184.jsonl
+jq -c '.totals' census-184.jsonl
+jq -c 'select(.group) | .group | select(.bewerking != "NVT")' census-184.jsonl   # the processed lists
+```
+
+**The stage-1 replay.** Straight after the census, with the runner idle:
+
+```bash
+rwsc run --rm --no-deps -T load replay --source NL-1 --spec nl-1-backfill-obs --from <totals.manifest_from> --to <today> --dry-run
+rwsc run --rm --no-deps -T load replay --source NL-1 --spec nl-1-backfill-obs --from <totals.manifest_from> --to <today>
+```
+
+The final JSON line of the real run (`docs/runbooks/replay.md` §2) matches `totals.expect`:
+
+| Replay field | Expected |
+|---|---|
+| `lines` | `expect.lines` |
+| `quarantined` | `expect.quarantined` = `bad_object` + `unparsed` (normally 0) |
+| `skipped` | `expect.skipped` = `failed_validity` + `missing` |
+| `n_new` | `expect.n_new` = `restorable` + `requalified` |
+| `n_changed` | `expect.n_changed` = 0 (± `duplicate_lines_differing`) |
+
+**Why `n_new` holds the requalified rows too.** The store counts a changed row as `n_new` when it is new or when the stored row already carries the backfill bit 512 (`inserted = old_series IS NULL OR (old_qc & 512) <> 0`, `load/store.ts`). Every backfilled row carries it, so a backfill row whose value or quality the replay changes counts as an insert. `n_changed` is above 0 only when a backfill revises a live row, which cannot happen below the data epoch. `apps/server/test/load/census-replay.int.test.ts` proves the equality with the census.
+
+**Run it a second time:** it must print `"n_new":0,"n_changed":0`. A replay of a backfill payload does not alert for `processed` (a backfill payload counts it only; a live one alerts, `docs/runbooks/schema-drift.md`).
+
+**Orphans stay.** A replay never deletes a row, so the daily means stored as instantaneous rows before the fix (`orphan` in `totals`) are still in the primary series after it. Whether and how they are removed is decided after the census (O1 of #184, stage 2: a reviewed one-off cleanup of exactly the listed `(series, ts)` rows, run by the owner); with `orphan` 0 there is nothing to do. Attach `census-184.jsonl` to #184: it holds public NL-1 counts and codes only (no owner value).
+
+**What it does not cover.** History before each job's `data_from` and everything before 1990 is not in the archive (KG-408); the census counts the archive only.
 
 ## What not to do
 
