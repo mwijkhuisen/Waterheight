@@ -1181,6 +1181,7 @@ CREATE TABLE public.reference_value (
     batch_id bigint,
     seen_at timestamp with time zone,
     seen_batch bigint,
+    CONSTRAINT reference_value_doy_shape CHECK (((kind <> ALL (ARRAY['P10_DOY'::text, 'P90_DOY'::text])) OR ((season_from_md = season_to_md) AND (season_from_md <> 229) AND (semantics = 'statistical'::text)))),
     CONSTRAINT reference_value_kind_check CHECK ((kind ~ '^[A-Z0-9_]{1,40}$'::text)),
     CONSTRAINT reference_value_percentile_convention_check CHECK ((percentile_convention = ANY (ARRAY['exceedance'::text, 'non_exceedance'::text]))),
     CONSTRAINT reference_value_season_from CHECK (((((season_from_md / 100) >= 1) AND ((season_from_md / 100) <= 12)) AND ((((season_from_md)::integer % 100) >= 1) AND (((season_from_md)::integer % 100) <=
@@ -2561,6 +2562,13 @@ CREATE INDEX reference_value_batch ON public.reference_value USING btree (batch_
 
 
 --
+-- Name: reference_value_doy; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX reference_value_doy ON public.reference_value USING btree (season_from_md, series_id) WHERE (kind = ANY (ARRAY['P10_DOY'::text, 'P90_DOY'::text]));
+
+
+--
 -- Name: series_station; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -2906,4 +2914,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261114000001'),
     ('20261115000001'),
     ('20261115000002'),
-    ('20261115000003');
+    ('20261115000003'),
+    ('20261116000001');

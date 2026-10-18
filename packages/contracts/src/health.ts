@@ -92,6 +92,10 @@ const Share = z.strictObject({
   classed: count,
   /** Of the classed, those whose only states are section states (an area class, no gauge state). */
   by_section: count,
+  /** Of the classed, those whose state's basis has a day-of-year part (our own climatology, P14f). */
+  by_climatology: count,
+  /** Of the stations, those with a day-of-year set (a P10_DOY and a P90_DOY row of their own history) valid at t. */
+  climatology: count,
   /** classed / stations; null without stations. */
   ratio: z.number().min(0).max(1).nullable(),
 });

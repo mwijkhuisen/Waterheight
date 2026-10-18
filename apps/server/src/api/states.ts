@@ -8,11 +8,13 @@ import {
   classify,
   classSeries,
   type Datum,
+  DOY_KINDS,
   monthDay,
   napHeight,
   OWNER_ONLY_SOURCES,
   PERMISSION_REQUIRED,
   type RefIn,
+  utcMonthDay,
 } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import { type AttributionRow, attributionRows, type SourceDate, sourceDates } from '../attribution.ts';
@@ -88,6 +90,29 @@ const validAt = (r: Ranged<object>, t: number) =>
   (r.v_to === null || (r.to_inc ? t <= r.v_to.getTime() : t < r.v_to.getTime()));
 
 const RANGE = sql`lower(valid) AS v_from, upper(valid) AS v_to, lower_inc(valid) AS from_inc, upper_inc(valid) AS to_inc`;
+const REF_COLUMNS = sql`series_id, source_id, kind, value, unit, percentile_convention,
+               to_char(lower(period), 'YYYY-MM-DD') AS p_from, to_char(upper(period) - 1, 'YYYY-MM-DD') AS p_to,
+               season_from_md, season_to_md, priority, basis_label`;
+const isDoy = (kind: string) => (DOY_KINDS as readonly string[]).includes(kind);
+
+/**
+ * The family's day-of-year rows (P14f) of the given UTC day keys, with their validity ranges, grouped by day key.
+ * One row per series and kind and day, 730 a series with a set, so a request reads the one day it needs, never all
+ * of them; the literal kind list lets the partial index of the P14f migration apply through the view.
+ */
+async function readDoyRows(
+  db: Kysely<DB>,
+  family: ChannelAudience,
+  mds: readonly number[],
+): Promise<Map<number, Ranged<RefRow>[]>> {
+  const { rows } = await sql<Ranged<RefRow>>`
+    SELECT ${REF_COLUMNS}, ${RANGE}
+    FROM ${sql.table(VIEWS[family].reference)}
+    WHERE kind IN ('P10_DOY', 'P90_DOY') AND season_from_md = ANY(${mds as number[]}::int[])`.execute(db);
+  const out = new Map<number, Ranged<RefRow>[]>(mds.map((md) => [md, []]));
+  for (const r of rows) out.get(r.season_from_md)?.push(r);
+  return out;
+}
 
 function readStatic(db: Kysely<DB>, family: ChannelAudience): Promise<Static> {
   const V = VIEWS[family];
@@ -103,12 +128,12 @@ function readStatic(db: Kysely<DB>, family: ChannelAudience): Promise<Static> {
                (EXTRACT(EPOCH FROM staleness_limit) * 1000)::bigint::float8 AS staleness_ms, audience::text AS audience
         FROM ${sql.table(V.series)} WHERE active ORDER BY id`.execute(tx)
     ).rows,
+    // P14f: our day-of-year rows (730 a series) are not static: readDoy reads the day a request needs (a literal
+    // kind list, so the partial index applies).
     refs: (
       await sql<Ranged<RefRow>>`
-        SELECT series_id, source_id, kind, value, unit, percentile_convention,
-               to_char(lower(period), 'YYYY-MM-DD') AS p_from, to_char(upper(period) - 1, 'YYYY-MM-DD') AS p_to,
-               season_from_md, season_to_md, priority, basis_label, ${RANGE}
-        FROM ${sql.table(V.reference)}`.execute(tx)
+        SELECT ${REF_COLUMNS}, ${RANGE}
+        FROM ${sql.table(V.reference)} WHERE kind NOT IN ('P10_DOY', 'P90_DOY')`.execute(tx)
     ).rows,
     zeros: (
       await sql<Ranged<ZeroRow>>`SELECT series_id, value_m, datum, ${RANGE} FROM ${sql.table(V.gaugeZero)}`.execute(tx)
@@ -147,6 +172,8 @@ export class StaticCache {
   readonly #ttlMs: number;
   readonly #now: () => number;
   readonly #entries = new Map<ChannelAudience, { at: number; value: Promise<Static> }>();
+  /** P14f: the day-of-year rows per (family, UTC day key), at most 365 keys a family, each for the same TTL. */
+  readonly #doy = new Map<string, { at: number; value: Promise<Ranged<RefRow>[]> }>();
   constructor(ttlMs: number, now: () => number) {
     this.#ttlMs = ttlMs;
     this.#now = now;
@@ -162,7 +189,36 @@ export class StaticCache {
     });
     return value;
   }
+  /** The family's DOY rows of `mds` (one read for the keys not held); a failed read is not kept. */
+  async doy(db: Kysely<DB>, family: ChannelAudience, mds: readonly number[]): Promise<Ranged<RefRow>[]> {
+    const now = this.#now();
+    const held: Promise<Ranged<RefRow>[]>[] = [];
+    const missing: number[] = [];
+    for (const md of mds) {
+      const hit = this.#doy.get(`${family}|${md}`);
+      if (hit !== undefined && now - hit.at < this.#ttlMs) held.push(hit.value);
+      else missing.push(md);
+    }
+    if (missing.length > 0) {
+      const read = readDoyRows(db, family, missing);
+      for (const md of missing) {
+        const key = `${family}|${md}`;
+        const value = read.then((m) => m.get(md) ?? []);
+        this.#doy.set(key, { at: now, value });
+        value.catch(() => {
+          if (this.#doy.get(key)?.value === value) this.#doy.delete(key);
+        });
+        held.push(value);
+      }
+    }
+    return (await Promise.all(held)).flat();
+  }
 }
+
+/** The family's DOY rows of the UTC day keys `mds`, from the app's cache when it has one (P14f). */
+const readDoy = (db: Kysely<DB>, family: ChannelAudience, mds: readonly number[], cache?: StaticCache | undefined) =>
+  cache !== undefined ? cache.doy(db, family, mds) : readDoyRows(db, family, mds).then((m) => [...m.values()].flat());
+
 type WarningRow = {
   id: string;
   source_id: string;
@@ -185,7 +241,14 @@ export type SeriesState = {
   height: ReturnType<typeof napHeight>;
 };
 
-export type StateRead = { t: number; series: SeriesState[]; stations: StationRow[]; publicSeries: Set<number> };
+export type StateRead = {
+  t: number;
+  series: SeriesState[];
+  stations: StationRow[];
+  publicSeries: Set<number>;
+  /** P14f: the series with a day-of-year set (a P10_DOY and a P90_DOY row) valid at t, for the coverage counts. */
+  doySeries: Set<number>;
+};
 
 const flagOf = (flags: unknown, key: string) =>
   typeof flags === 'object' && flags !== null && (flags as Record<string, unknown>)[key] === true;
@@ -294,6 +357,8 @@ export async function readStates(
   const fixed = await (opts.cache?.get(db, family) ?? readStatic(db, family));
   const { stations } = fixed;
   const forecast = opts.forecast;
+  // P14f: the day-of-year rows of t's UTC day (also for a forecast t), outside the snapshot like the static rows.
+  const doy = (await readDoy(db, family, [utcMonthDay(t)], opts.cache)).filter((r) => validAt(r, t));
   const rows =
     forecast !== undefined
       ? {
@@ -333,7 +398,7 @@ export async function readStates(
           };
         });
   const series = fixed.series;
-  const refs = fixed.refs.filter((r) => validAt(r, t));
+  const refs = [...fixed.refs.filter((r) => validAt(r, t)), ...doy];
   const zeros = fixed.zeros.filter((z) => validAt(z, t));
 
   const lastOk = new Map(rows.health.map((h) => [h.source_id, h.last_fetch_ok?.getTime() ?? null]));
@@ -413,7 +478,10 @@ export async function readStates(
     };
   });
   const publicSeries = new Set(series.filter((s) => s.audience === 'public').map((s) => s.id));
-  return { t, series: states, stations, publicSeries };
+  const kinds = new Map<number, Set<string>>();
+  for (const r of doy) kinds.set(r.series_id, (kinds.get(r.series_id) ?? new Set()).add(r.kind));
+  const doySeries = new Set([...kinds].filter(([, k]) => k.size === DOY_KINDS.length).map(([id]) => id));
+  return { t, series: states, stations, publicSeries, doySeries };
 }
 
 /** The snapshot's values: the series with a value at t, with their state, basis and detail-view height. */
@@ -551,8 +619,19 @@ export async function readHourStates(
   const seriesById = new Map(fixed.series.map((s) => [s.id, s]));
   const seriesOf = seriesByStation(fixed.series);
   const stationOf = new Map(fixed.stations.map((s) => [s.id, s]));
+  // The NL-4 season day of each hour's instant, computed once per hour, not per cell.
+  const instantOf = (h: number) => Math.min(from + (h + 1) * HOUR_MS - 1, opts.now);
+  const mdOf: number[] = [];
+  // P14f: the UTC day key of each hour's instant, and the day-of-year rows of those keys (ranged, as the snapshot
+  // reads them at that instant).
+  const doyMdOf: number[] = [];
+  for (let h = 0; h < hours; h++) {
+    mdOf.push(monthDay(instantOf(h)));
+    doyMdOf.push(utcMonthDay(instantOf(h)));
+  }
   const refsOf = new Map<number, { r: Ranged<RefRow>; in: RefIn }[]>();
-  for (const r of fixed.refs) refsOf.set(r.series_id, [...(refsOf.get(r.series_id) ?? []), { r, in: refIn(r) }]);
+  for (const r of [...fixed.refs, ...(await readDoy(db, family, [...new Set(doyMdOf)], opts.cache))])
+    refsOf.set(r.series_id, [...(refsOf.get(r.series_id) ?? []), { r, in: refIn(r) }]);
   // Per target series and source (in source order, as readStates' DISTINCT ON orders them): the class rows by time.
   const classesOf = new Map<number, Map<string, ClassAt[]>>();
   for (const c of rows.classes) {
@@ -565,10 +644,6 @@ export async function readHourStates(
   const areasOf = new Map<string, RangedWarning[]>();
   for (const { w, ids } of rows.areas) for (const id of ids) areasOf.set(id, [...(areasOf.get(id) ?? []), w]);
 
-  // The NL-4 season day of each hour's instant, computed once per hour, not per cell.
-  const instantOf = (h: number) => Math.min(from + (h + 1) * HOUR_MS - 1, opts.now);
-  const mdOf: number[] = [];
-  for (let h = 0; h < hours; h++) mdOf.push(monthDay(instantOf(h)));
   for (let i = 0; i < frames.ids.length; i++) {
     if (opts.yieldEvery !== undefined && i > 0 && i % opts.yieldEvery === 0)
       await new Promise<void>((resolve) => setImmediate(resolve));
@@ -585,6 +660,7 @@ export async function readHourStates(
     // are kept per (rows valid at the instant, NL-4 season day, that place), exactly as classify() would answer.
     const thresholds = [...new Set(refs.map((x) => x.r.value))].sort((a, b) => a - b);
     const nl4 = refs.some((x) => x.r.source_id === 'NL-4');
+    const hasDoy = refs.some((x) => isDoy(x.r.kind));
     const known = new Map<string, number>();
     for (let h = 0; h < hours; h++) {
       if (row[h] !== -1) continue;
@@ -593,7 +669,10 @@ export async function readHourStates(
       if (s !== undefined && (refs.length > 0 || classes.length > 0 || areas.length > 0)) {
         const ts = instantOf(h);
         const value = values[h] as number;
-        const validRefs = refs.filter((x) => validAt(x.r, ts));
+        // A day-of-year row holds for its own UTC day key only (the snapshot passes classify() just that day's rows).
+        const validRefs = refs.filter(
+          (x) => validAt(x.r, ts) && (!isDoy(x.r.kind) || x.r.season_from_md === doyMdOf[h]),
+        );
         const validClasses = classes.flatMap(([source, list]) => {
           let at: string | null = null;
           for (const k of list) if (k.ts <= ts) at = k.code;
@@ -602,7 +681,9 @@ export async function readHourStates(
         const validAreas = areas.filter((w) => validAt(w, ts));
         let below = 0;
         let equal = false;
-        for (const x of thresholds) {
+        // With day-of-year rows the places are those of the rows valid on this day, not of all 365 keys.
+        const places = hasDoy ? [...new Set(validRefs.map((x) => x.r.value))].sort((a, b) => a - b) : thresholds;
+        for (const x of places) {
           if (x < value) below += 1;
           else {
             equal = x === value;
@@ -614,6 +695,7 @@ export async function readHourStates(
           validClasses.map((c) => `${c.source}:${c.code}`).join(','),
           validAreas.map((w) => w.id).join(','),
           nl4 ? mdOf[h] : '',
+          hasDoy ? doyMdOf[h] : '',
           `${below}${equal ? '=' : ''}`,
         ].join('|');
         const kept = known.get(key);
@@ -659,19 +741,26 @@ export async function readHourStates(
 }
 
 type Share = ClassCoverage['tier1'];
-type Count = { stations: number; classed: number; bySection: number };
+type Count = { stations: number; classed: number; bySection: number; byClimatology: number; climatology: number };
 const share = (c: Count): Share => ({
   stations: c.stations,
   classed: c.classed,
   by_section: c.bySection,
+  by_climatology: c.byClimatology,
+  climatology: c.climatology,
   ratio: c.stations === 0 ? null : c.classed / c.stations,
 });
-const zero = (): Count => ({ stations: 0, classed: 0, bySection: 0 });
-/** Adds one station whose states (other than no_ref) are `states`. */
-const add = (c: Count, states: readonly SeriesState[]) => {
+const zero = (): Count => ({ stations: 0, classed: 0, bySection: 0, byClimatology: 0, climatology: 0 });
+/** A basis has a day-of-year part when any kind of its ref (`a/b` after a collapse) is one of ours (P14f). */
+const hasDoyPart = (s: SeriesState) =>
+  s.classified.basis?.ref.split('/').some((k) => k.trim().endsWith('_DOY')) ?? false;
+/** Adds one station whose states (other than no_ref) are `states`; `doy`: it has a day-of-year set valid at t. */
+const add = (c: Count, states: readonly SeriesState[], doy: boolean) => {
   c.stations += 1;
   c.classed += states.length > 0 ? 1 : 0;
   c.bySection += states.length > 0 && states.every((s) => s.classified.section) ? 1 : 0;
+  c.byClimatology += states.some(hasDoyPart) ? 1 : 0;
+  c.climatology += doy ? 1 : 0;
 };
 
 /**
@@ -695,10 +784,11 @@ export function classCoverage(read: StateRead): ClassCoverage {
       (s) => s.classified.basis !== null && !PERMISSION_REQUIRED.has(s.classified.basis.source),
     );
     const firstRelease = list.some((s) => read.publicSeries.has(s.series));
+    const doy = list.some((s) => read.doySeries.has(s.series));
     const c = count.get(st.country) ?? { t1: zero(), fr: zero() };
     for (const k of [c, all]) {
-      add(k.t1, states);
-      if (firstRelease) add(k.fr, open);
+      add(k.t1, states, doy);
+      if (firstRelease) add(k.fr, open, doy);
     }
     count.set(st.country, c);
   }

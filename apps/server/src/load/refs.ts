@@ -60,7 +60,9 @@ const sameRef = (s: Stored, r: ResolvedRef) =>
 
 /**
  * Stores a payload's references. `scope` names the series whose references the payload states in full: an open
- * range of such a series that the payload no longer states is closed at the fetch time (`removed`).
+ * range of such a series that the payload no longer states is closed at the fetch time (`removed`). P14f: our own
+ * day-of-year rows (P10_DOY, P90_DOY) carry the series' source id but no payload states them, so the stored-rows
+ * query leaves them out: a refScope payload would otherwise close all of them (the climatology command owns them).
  */
 export async function applyReferences(
   tx: Tx,
@@ -86,6 +88,7 @@ export async function applyReferences(
            seen_batch IS NOT DISTINCT FROM ${batch}::bigint AS mine
     FROM reference_value
     WHERE source_id = ${source} AND series_id = ANY(${ids}::int[])
+      AND kind NOT IN ('P10_DOY', 'P90_DOY')
     ORDER BY series_id, kind, season_from_md, season_to_md, priority, lower(valid) DESC NULLS LAST`.execute(tx);
   const newest = new Map(stored.map((s) => [keyOf(s.series_id, s), s]));
   const wanted = new Map(rows.map((r) => [keyOf(r.id, r), r]));

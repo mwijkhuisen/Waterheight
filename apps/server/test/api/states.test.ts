@@ -36,7 +36,7 @@ const section = (source = 'FR-5'): Classified => ({
 const none: Classified = { state: 'no_ref', basis: null, section: false, area: null, flags: FLAGS, sources: [] };
 
 /** A read of one series per entry: [station, country, classified]; every station is tier 1 and public. */
-function read(entries: [string, 'DE' | 'FR', Classified][]): StateRead {
+function read(entries: [string, 'DE' | 'FR', Classified][], doy: number[] = []): StateRead {
   return {
     t: T,
     stations: [...new Set(entries.map(([s, c]) => `${s}\n${c}`))].map((k) => {
@@ -52,6 +52,7 @@ function read(entries: [string, 'DE' | 'FR', Classified][]): StateRead {
       height: null,
     })),
     publicSeries: new Set(entries.map((_, i) => i + 1)),
+    doySeries: new Set(doy),
   };
 }
 
@@ -66,11 +67,20 @@ describe('classCoverage: by_section and the D10 mode (review CR-4)', () => {
         ['d', 'FR', none],
       ]),
     );
-    expect(c.tier1).toEqual({ stations: 4, classed: 3, by_section: 1, ratio: 0.75 });
+    expect(c.tier1).toEqual({
+      stations: 4,
+      classed: 3,
+      by_section: 1,
+      by_climatology: 0,
+      climatology: 0,
+      ratio: 0.75,
+    });
     expect(c.countries.find((x) => x.country === 'FR')?.tier1).toEqual({
       stations: 3,
       classed: 2,
       by_section: 1,
+      by_climatology: 0,
+      climatology: 0,
       ratio: 2 / 3,
     });
     // (3 − 1) / 4 = 0.5: under 60 % with gauge states, although 75 % are classed.
@@ -99,13 +109,20 @@ describe('classCoverage: by_section and the D10 mode (review CR-4)', () => {
         ['c', 'DE', gauge('DE-9')],
       ]),
     );
-    expect(c.first_release).toEqual({ stations: 3, classed: 1, by_section: 1, ratio: 1 / 3 });
+    expect(c.first_release).toEqual({
+      stations: 3,
+      classed: 1,
+      by_section: 1,
+      by_climatology: 0,
+      climatology: 0,
+      ratio: 1 / 3,
+    });
   });
 
   it('no stations: dh and a null ratio', () => {
     expect(classCoverage(read([]))).toMatchObject({
       mode: 'dh',
-      tier1: { stations: 0, classed: 0, by_section: 0, ratio: null },
+      tier1: { stations: 0, classed: 0, by_section: 0, by_climatology: 0, climatology: 0, ratio: null },
     });
   });
 });
