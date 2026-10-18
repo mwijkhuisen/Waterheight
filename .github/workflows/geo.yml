@@ -32,6 +32,7 @@ on:
       - registry/stations/**
       - registry/rivernet.yaml
       - registry/snap-overrides.yaml
+      - registry/travel-empirical.yaml
       - registry/sources.yaml
       - registry/seed/de-7-waters.csv
       - packages/contracts/**

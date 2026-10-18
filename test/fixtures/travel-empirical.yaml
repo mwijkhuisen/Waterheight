@@ -1,0 +1,9 @@
+# A test fixture of registry/travel-empirical.yaml (P14f): invented numbers on two real reaches of the committed river
+# graph, used by test/rivernet-empirical.test.ts. Never a measurement.
+#   nl.rws.tiel.waal -> nl.rws.zaltbommel is reach waal.6 (no sourced pair: the empirical one applies);
+#   de.wsv.2790020 -> nl.rws.lobith.bovenrijn.tolkamer is reach rhine.69 (a sourced pair of rivers.yaml: it wins).
+version: 1
+generated: "2026-11-20T04:30:00Z"
+pairs:
+  - {"from_station":"de.wsv.2790020","to_station":"nl.rws.lobith.bovenrijn.tolkamer","h":[3,8],"classes":{"low":[5,8],"high":[3,6]},"quantity":"Q","years":[1991,2025],"windows":40}
+  - {"from_station":"nl.rws.tiel.waal","to_station":"nl.rws.zaltbommel","h":[2,7],"classes":{"low":[4,7],"mid":[3,5],"high":[2,4]},"quantity":"H","years":[1995,2026],"windows":120}
