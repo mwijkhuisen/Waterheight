@@ -73,7 +73,16 @@ export function place(
   stations: readonly StationInput[],
   overrides: SnapOverridesFile,
 ): Placed {
-  const net = buildNetwork(edges, rivers);
+  // P17a: canals stay out of every public output until P17b. Their own edges are dropped, and a canal id is stripped
+  // from an edge it shares with a river (a canal deeper in the parent tree would otherwise be that edge's primary),
+  // so no canal has an edge in the network and a canal junction cuts no river's reach.
+  const canals = new Set(rivers.rivers.filter((r) => r.kind === 'canal').map((r) => r.id));
+  const net = buildNetwork(
+    edges
+      .filter((e) => e.direction_reason !== 'canal')
+      .map((e) => (e.rivers.some((r) => canals.has(r)) ? { ...e, rivers: e.rivers.filter((r) => !canals.has(r)) } : e)),
+    rivers,
+  );
   const snaps = snapStations(net, stations, overrides);
   const kmAt = (river: string, p: Placement) =>
     (net.kmGraph.get(river)?.get((net.edges.get(p.edge) as Edge).from) ?? 0) + p.offset_m;
@@ -152,6 +161,9 @@ export function place(
       }
     }
   }
+  // A reach of a tidal-zone channel (P17a) is tidal throughout and never carries a travel time.
+  const zone = new Set(rivers.rivers.filter((r) => r.tidal_zone).map((r) => r.id));
+  for (const r of reaches) if (zone.has(r.river)) r.flags.tidal = true;
 
   // Travel times: only sourced pairs between two public placed stations; a reach carries one only when the
   // pair is exactly its two ends and the value is a range in hours.
@@ -159,7 +171,7 @@ export function place(
   const travel = (rivers.travel_times ?? []).filter((t) => shown.has(t.from_station) && shown.has(t.to_station));
   for (const r of reaches) {
     const t = travel.find((x) => x.from_station === r.up_station && x.to_station === r.down_station);
-    if (t !== undefined && Array.isArray(t.h)) {
+    if (t !== undefined && Array.isArray(t.h) && !zone.has(r.river)) {
       r.travel_time_h = [t.h[0], t.h[1]];
       r.travel_time_source = t.source;
     }

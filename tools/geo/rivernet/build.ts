@@ -10,9 +10,11 @@ import { parseOplRelations, type Relation } from './opl.ts';
 // relations (registry/rivers.yaml) → a directed graph whose nodes are the OSM
 // nodes where kept ways meet or end and whose edges are the ways as drawn
 // (OSM ways point downstream, catalogue §5.3), split at every such node. A node
-// may have several downstream edges (Pannerdensche Kop, IJsselkop); a cycle
-// fails the build. The output is an ODbL derivative database (D15): it holds
-// OSM ids, geometry and our river ids only, no OSM name strings and no station.
+// may have several downstream edges (Pannerdensche Kop, IJsselkop); a cycle of
+// downstream edges fails the build, while the edges of the declared tidal zone
+// and of canals have direction `none` and may close loops (P17a). The output
+// is an ODbL derivative database (D15): it holds OSM ids, geometry and our
+// river ids only, no OSM name strings and no station.
 // build-report.json (not a release asset) is the one exception: see SEED_TAGS.
 // Same input, same bytes: sorted keys and arrays, 7-decimal coordinates, no clock.
 
@@ -76,6 +78,12 @@ export interface Edge {
   rivers: string[];
   length_m: number;
   coords: [number, number][];
+  /**
+   * P17a: `none` on an edge of a tidal-zone river (`tidal_zone`) or of canals only (`canal`): no flow direction, so
+   * loops are allowed. The builder always writes it; a missing value reads as downstream.
+   */
+  direction?: 'downstream' | 'none';
+  direction_reason?: 'tidal_zone' | 'canal';
 }
 
 // Roles counted by name in the report; any other role is counted as `other_role`
@@ -115,6 +123,18 @@ function selectWays(
     members[k] = (members[k] ?? 0) + 1;
   };
   const kept = new Set<number>();
+  if (river.osm_member_of !== undefined) {
+    // P17a: a delta side stream with no relation of its own: the waterway ways of the parent river's curated
+    // relation (here `relation`), any role, whose name tag is the given one.
+    for (const m of relation?.members ?? []) {
+      const way = m.type === 'w' ? ways.get(m.ref) : undefined;
+      if (way?.tags.waterway === undefined || way.tags.name !== river.osm_member_of.name) continue;
+      if (drop.has(m.ref)) count('drop_ways');
+      else kept.add(m.ref);
+    }
+    members.selected = kept.size;
+    return { kept, members, relationTags: null };
+  }
   if (relation === undefined) {
     // A documented way selection: waterway ways tagged with the river's Wikidata id and its name.
     for (const [id, way] of ways) {
@@ -240,6 +260,7 @@ export function buildGraph(
   const empty: string[] = [];
   const wayRivers = new Map<number, Set<string>>();
   const riverReports: Record<string, unknown>[] = [];
+  const relationOf = new Map(rivers.rivers.map((r) => [r.id, r.osm_relation_id]));
   for (const river of [...rivers.rivers].sort((a, b) => byString(a.id, b.id))) {
     const relation = river.osm_relation_id === null ? undefined : relById.get(river.osm_relation_id);
     if (river.osm_relation_id !== null && relation === undefined) {
@@ -251,7 +272,9 @@ export function buildGraph(
     if (relation !== undefined && relation.tags.type !== 'waterway') notWaterway.push(`r${relation.id}`);
     const tag = relation?.tags.wikidata;
     if (tag !== undefined && tag !== river.wikidata) mismatch.push(`r${relation?.id}`);
-    const sel = selectWays(river, relation, ways);
+    // A member-of row has no relation of its own: it selects from the parent river's, which that river's row checks.
+    const of = river.osm_member_of;
+    const sel = selectWays(river, of === undefined ? relation : relById.get(relationOf.get(of.river) ?? 0), ways);
     if (sel.kept.size === 0) empty.push(river.id);
     for (const id of sel.kept) wayRivers.set(id, (wayRivers.get(id) ?? new Set()).add(river.id));
     const tags = sel.relationTags;
@@ -295,9 +318,16 @@ export function buildGraph(
   }
   const coordOf = new Map<number, [number, number]>();
   const edges: Edge[] = [];
+  const riverById = new Map(rivers.rivers.map((r) => [r.id, r]));
   for (const id of keptWays) {
     const way = ways.get(id) as WayFeature;
     const rs = [...(wayRivers.get(id) as Set<string>)].sort(byString);
+    // P17a, in this order: a tidal-zone river on the way, then canals only, else the drawn direction.
+    const direction: Pick<Edge, 'direction' | 'direction_reason'> = rs.some((r) => riverById.get(r)?.tidal_zone)
+      ? { direction: 'none', direction_reason: 'tidal_zone' }
+      : rs.every((r) => riverById.get(r)?.kind === 'canal')
+        ? { direction: 'none', direction_reason: 'canal' }
+        : { direction: 'downstream' };
     const isNode = (i: number) =>
       i === 0 ||
       i === way.nodes.length - 1 ||
@@ -324,11 +354,13 @@ export function buildGraph(
         rivers: rs,
         length_m: Math.round(length * 10) / 10,
         coords,
+        ...direction,
       });
       start = i;
     }
   }
-  checkAcyclic(edges);
+  // Loops are allowed where the direction is `none` (the tidal zone, canals); everywhere else a cycle fails.
+  checkAcyclic(edges.filter((e) => e.direction === 'downstream'));
 
   const nodes = [...coordOf.keys()].sort(byNumber);
   const outEdges = new Map<string, Edge[]>();
@@ -337,11 +369,13 @@ export function buildGraph(
     outEdges.set(e.from, [...(outEdges.get(e.from) ?? []), e]);
     indeg.set(e.to, (indeg.get(e.to) ?? 0) + 1);
   }
+  // A bifurcation splits the flow: only downstream edges count.
+  const downOut = (n: string) => (outEdges.get(n) ?? []).filter((e) => e.direction === 'downstream');
   const bifurcations = nodes
     .map((n) => `n${n}`)
-    .filter((n) => (outEdges.get(n)?.length ?? 0) > 1)
+    .filter((n) => downOut(n).length > 1)
     .map((n) => {
-      const out = outEdges.get(n) as Edge[];
+      const out = downOut(n);
       return {
         node: n,
         coord: coordOf.get(Number(n.slice(1))),
@@ -354,11 +388,25 @@ export function buildGraph(
     replication_timestamp: provenance.replication_timestamp,
     regions: [...provenance.regions].sort((a, b) => byString(a.id, b.id)),
   };
-  const head = { attribution: ATTRIBUTION, attribution_url: ATTRIBUTION_URL, licence: LICENCE, osm, schema_version: 1 };
+  // schema_version 2 (P17a): edges carry direction and direction_reason, and the graph lists the mouths.
+  const head = { attribution: ATTRIBUTION, attribution_url: ATTRIBUTION_URL, licence: LICENCE, osm, schema_version: 2 };
   const riverEdges = new Map<string, Edge[]>();
   for (const e of edges) for (const r of e.rivers) riverEdges.set(r, [...(riverEdges.get(r) ?? []), e]);
   const edgeCount = (river: string) => riverEdges.get(river)?.length ?? 0;
   for (const r of riverReports) r.components = components(riverEdges.get(r.id as string) ?? []);
+  // A mouth is the node of its river's own edges nearest `at`, at most `max_m` away (the nl_entry rule).
+  const mouths = (rivers.mouths ?? [])
+    .map((m) => {
+      let best: { node: string; d: number } | undefined;
+      for (const e of riverEdges.get(m.river) ?? [])
+        for (const node of [e.from, e.to]) {
+          const d = haversine(coordOf.get(Number(node.slice(1))) as [number, number], m.at);
+          if (best === undefined || d < best.d || (d === best.d && byString(node, best.node) < 0)) best = { node, d };
+        }
+      if (best === undefined || best.d > m.max_m) throw new BuildError('mouth_unplaced', [m.id]);
+      return { id: m.id, river: m.river, node: best.node, waterbody: m.waterbody };
+    })
+    .sort((a, b) => byString(a.id, b.id));
   const graph = {
     ...head,
     rivers: rivers.rivers
@@ -367,6 +415,7 @@ export function buildGraph(
       .map((id) => ({ id, edges: edgeCount(id) })),
     nodes: nodes.map((n) => ({ id: `n${n}`, coord: coordOf.get(n) })),
     edges: edges.map(({ coords: _, ...e }) => e),
+    mouths,
   };
   const reaches = {
     ...head,

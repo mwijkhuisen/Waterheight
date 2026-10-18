@@ -1,7 +1,7 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { BuildError } from '../tools/geo/rivernet/build.ts';
-import { buildNetwork, type LonLat } from '../tools/geo/rivernet/network.ts';
+import { BuildError, type Edge } from '../tools/geo/rivernet/build.ts';
+import { buildNetwork, type LonLat, topoOrder } from '../tools/geo/rivernet/network.ts';
 import { place } from '../tools/geo/rivernet/place.ts';
 import { riverOf, snapStations } from '../tools/geo/rivernet/snap.ts';
 import { chain, chainNode, edge, overrides, river, riversFile, station } from './rivernet-synth.ts';
@@ -90,6 +90,143 @@ describe('buildNetwork', () => {
   it('fails closed on a join whose target is too far (join_too_far)', () => {
     const edges = [...chain('a', 2, ['alpha']), ...beta(5.5, 51)];
     expect(code(() => buildNetwork(edges, joined(chainNode(2), 600)))).toBe('join_too_far');
+  });
+
+  it('orders a zone loop with every node once, and still refuses a loop of directed links (P17a)', () => {
+    // a -> b -> c -> a are `none` (the zone), c -> d -> b directed. Released are a, then c; reaching b later must
+    // not queue the released c a second time.
+    const links: Record<string, [string, string, boolean]> = {
+      ab: ['a', 'b', true],
+      bc: ['b', 'c', true],
+      ca: ['c', 'a', true],
+      cd: ['c', 'd', false],
+      db: ['d', 'b', false],
+    };
+    const out = new Map<string, string[]>();
+    for (const [id, [from]] of Object.entries(links)) out.set(from, [...(out.get(from) ?? []), id]);
+    const ends = (id: string) => ({ to: (links[id] as [string, string, boolean])[1] });
+    const nodes = ['a', 'b', 'c', 'd'];
+    expect(topoOrder(nodes, out, ends, (id) => links[id]?.[2] === true)).toEqual(['a', 'c', 'd', 'b']);
+    expect(code(() => topoOrder(nodes, out, ends, () => false))).toBe('cycle');
+  });
+});
+
+describe('the tidal zone and canals in place() (P17a)', () => {
+  const at = (i: number, f: number): LonLat => [chainNode(i)[0] + 0.02 * f, 51];
+  const none = <T extends object>(e: T, reason: 'tidal_zone' | 'canal') => ({
+    ...e,
+    direction: 'none' as const,
+    direction_reason: reason,
+  });
+  const delta = river({ id: 'delta', kind: 'delta_channel', tidal_zone: true });
+  // alpha an0 -> an2, then the zone loop an2 -> zn1 -> zn2 -> an2 of delta.
+  const loop = [
+    edge('z1', 'an2', 'zn1', ['delta'], [chainNode(2), [5.05, 51.01]]),
+    edge(
+      'z2',
+      'zn1',
+      'zn2',
+      ['delta'],
+      [
+        [5.05, 51.01],
+        [5.05, 50.99],
+      ],
+    ),
+    edge('z3', 'zn2', 'an2', ['delta'], [[5.05, 50.99], chainNode(2)]),
+  ].map((e) => none(e, 'tidal_zone'));
+
+  it('places on a graph with a zone loop: the directed river is as without it, every zone reach is tidal', () => {
+    const A2 = chain('a', 2, ['alpha']);
+    const s = [station('de.t.1', at(0, 0.5), { river_hint: 'alpha' })];
+    const plain = place(A2, riversFile([river({ id: 'alpha' })]), s, overrides());
+    const p = place([...A2, ...loop], riversFile([river({ id: 'alpha' }), delta]), s, overrides());
+    expect(p.stations).toEqual(plain.stations);
+    expect(p.reaches.filter((r) => r.river === 'alpha')).toEqual(
+      plain.reaches.map((r) => ({ ...r, downstream: r.downstream.length > 0 ? r.downstream : ['delta.1'] })),
+    );
+    const zone = p.reaches.filter((r) => r.river === 'delta');
+    expect(zone.length).toBeGreaterThan(0);
+    for (const r of zone) expect(r.flags).toMatchObject({ tidal: true, bifurcation: false });
+  });
+
+  it('counts no `none` piece as a bifurcation, and skips the back link of a loop in km_graph', () => {
+    // alpha runs on through an2, where the zone loop leaves and returns: two pieces leave an2, one of them `none`.
+    const p = place(
+      [...chain('a', 3, ['alpha']), ...loop],
+      riversFile([river({ id: 'alpha' }), delta]),
+      [],
+      overrides(),
+    );
+    expect(p.reaches.map((r) => [r.id, r.flags.bifurcation, r.flags.tidal])).toEqual([
+      ['alpha.1', false, false],
+      ['alpha.2', false, false],
+      ['delta.1', false, true],
+    ]);
+    // an2 is released first, so it is delta's start; the link zn2 -> an2 back into it is skipped.
+    const len = (id: string) => p.net.edges.get(id)?.length_m as number;
+    expect([...(p.net.kmGraph.get('delta') ?? [])]).toEqual([
+      ['an2', 0],
+      ['zn1', len('z1')],
+      ['zn2', len('z1') + len('z2')],
+    ]);
+  });
+
+  it('attaches no travel time to a zone reach, where a river reach between the same stations gets one', () => {
+    const pair = {
+      from_station: 'de.t.1',
+      to_station: 'de.t.2',
+      h: [1, 2] as [number, number],
+      basis: 'synthetic',
+      source: 'synthetic',
+      source_url: 'https://example.org/t',
+    };
+    const run = (r: ReturnType<typeof river>, edges: Edge[]) =>
+      place(
+        edges,
+        riversFile([r], { travel_times: [pair] }),
+        [at(0, 0.5), at(2, 0.5)].map((p, i) => station(`de.t.${i + 1}`, p, { river_hint: r.id })),
+        overrides(),
+      ).reaches.map((x) => [x.id, x.up_station, x.down_station, x.travel_time_h, x.flags.tidal]);
+    expect(run(river({ id: 'alpha' }), chain('a', 3, ['alpha']))).toEqual([
+      ['alpha.1', null, 'de.t.1', null, false],
+      ['alpha.2', 'de.t.1', 'de.t.2', [1, 2], false],
+      ['alpha.3', 'de.t.2', null, null, false],
+    ]);
+    expect(
+      run(
+        delta,
+        chain('d', 3, ['delta']).map((e) => none(e, 'tidal_zone')),
+      ),
+    ).toEqual([
+      ['delta.1', null, 'de.t.1', null, true],
+      ['delta.2', 'de.t.1', 'de.t.2', null, true],
+      ['delta.3', 'de.t.2', null, null, true],
+    ]);
+  });
+
+  it('drops a canal: its crossing does not split the river it crosses', () => {
+    const rv = riversFile([river({ id: 'alpha' }), river({ id: 'kanaal', kind: 'canal' })]);
+    const crossing = [
+      edge('k1', 'kn0', 'an2', ['kanaal'], [[5.04, 51.01], chainNode(2)]),
+      edge('k2', 'an2', 'kn1', ['kanaal'], [chainNode(2), [5.04, 50.99]]),
+    ].map((e) => none(e, 'canal'));
+    const p = place([...A, ...crossing], rv, [], overrides());
+    expect(p.reaches).toEqual(place(A, rv, [], overrides()).reaches);
+    expect(p.reaches.map((r) => r.id)).toEqual(['alpha.1']);
+  });
+
+  it('keeps no reach, station or rivers[] entry of a canal, even on an edge it shares with a shallower river', () => {
+    // kanaal is a child of alpha, so it would be the primary of the shared edge a2 (A3).
+    const rv = riversFile([river({ id: 'alpha' }), river({ id: 'kanaal', kind: 'canal', parent_river_id: 'alpha' })]);
+    const edges = [
+      ...A.map((e) => (e.id === 'a2' ? { ...e, rivers: ['alpha', 'kanaal'] } : e)),
+      none(edge('k1', 'an1', 'kn0', ['kanaal'], [chainNode(1), [5.02, 51.01]]), 'canal'),
+    ];
+    const p = place(edges, rv, [station('de.t.1', at(1, 0.5), { river_hint: 'kanaal' })], overrides());
+    expect(p.reaches.map((r) => r.id)).toEqual(['alpha.1']);
+    expect([...p.net.edges.values()].flatMap((e) => e.rivers).filter((r) => r !== 'alpha')).toEqual([]);
+    expect(p.net.riverEdges.has('kanaal')).toBe(false);
+    expect(p.stations[0]).toMatchObject({ river: null, reach: null, rule: 'no_edge_within_500m' });
   });
 });
 
@@ -415,11 +552,13 @@ describe('reaches through place()', () => {
   it('property: reaches cover the edges, and km_graph never falls along a downstream link', () => {
     const lonStep = fc.double({ min: 0.005, max: 0.03, noNaN: true });
     const latStep = fc.double({ min: -0.004, max: 0.004, noNaN: true });
+    const zoned = riversFile([river({ id: 'alpha' }), river({ id: 'delta', kind: 'delta_channel', tidal_zone: true })]);
     fc.assert(
       fc.property(
         fc.array(fc.tuple(lonStep, latStep), { minLength: 2, maxLength: 6 }),
         fc.array(fc.tuple(fc.nat(5), fc.double({ min: 0, max: 1, noNaN: true })), { maxLength: 4 }),
-        (steps, picks) => {
+        fc.boolean(),
+        (steps, picks, withZone) => {
           const pts: LonLat[] = [[5, 51]];
           for (const [dx, dy] of steps) {
             const [x, y] = pts.at(-1) as LonLat;
@@ -428,20 +567,58 @@ describe('reaches through place()', () => {
           const edges = steps.map((_, i) =>
             edge(`e${i + 1}`, `n${i}`, `n${i + 1}`, ['alpha'], [pts[i] as LonLat, pts[i + 1] as LonLat]),
           );
+          // P17a: a zone loop at the river's end, direction `none`; only links between directed reaches are checked.
+          const [x, y] = pts.at(-1) as LonLat;
+          const end = `n${steps.length}`;
+          const loop: Edge[] = withZone
+            ? [
+                edge(
+                  'z1',
+                  end,
+                  'zn1',
+                  ['delta'],
+                  [
+                    [x, y],
+                    [x + 0.01, y + 0.01],
+                  ],
+                ),
+                edge(
+                  'z2',
+                  'zn1',
+                  'zn2',
+                  ['delta'],
+                  [
+                    [x + 0.01, y + 0.01],
+                    [x + 0.02, y],
+                  ],
+                ),
+                edge(
+                  'z3',
+                  'zn2',
+                  end,
+                  ['delta'],
+                  [
+                    [x + 0.02, y],
+                    [x, y],
+                  ],
+                ),
+              ].map((e) => ({ ...e, direction: 'none', direction_reason: 'tidal_zone' }))
+            : [];
           const stations = picks.map(([k, t], i) => {
             const j = k % edges.length;
             const [a, b] = [pts[j] as LonLat, pts[j + 1] as LonLat];
             return station(`de.t.${i}`, [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])], { river_hint: 'alpha' });
           });
-          const { reaches } = place(edges, none, stations, overrides());
-          const total = edges.reduce((s, e) => s + e.length_m, 0);
+          const { reaches } = place([...edges, ...loop], withZone ? zoned : none, stations, overrides());
+          const total = [...edges, ...loop].reduce((s, e) => s + e.length_m, 0);
           expect(Math.abs(reaches.reduce((s, r) => s + r.length_m, 0) - total)).toBeLessThanOrEqual(
             0.01 * reaches.length,
           );
           const byId = new Map(reaches.map((r) => [r.id, r]));
           for (const r of reaches)
             for (const d of r.downstream)
-              expect(r.km_graph_to).toBeLessThanOrEqual((byId.get(d) as typeof r).km_graph_from + 1e-6);
+              if (r.river !== 'delta' && byId.get(d)?.river !== 'delta')
+                expect(r.km_graph_to).toBeLessThanOrEqual((byId.get(d) as typeof r).km_graph_from + 1e-6);
         },
       ),
       { numRuns: 100 },

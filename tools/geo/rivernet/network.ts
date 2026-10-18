@@ -89,31 +89,47 @@ function ancestors(
   return seen;
 }
 
-/** Nodes in a topological order of the links (Kahn); a cycle is a BuildError naming the links left over. */
-function topoOrder(
+/**
+ * Nodes in a topological order of the links (Kahn). When it stalls on the loops of the tidal zone (P17a), the
+ * smallest stalled node with a remaining `none` in-link from another stalled node is released; a loop of directed
+ * links only is a BuildError naming the links left over.
+ */
+export function topoOrder(
   nodes: readonly string[],
   out: ReadonlyMap<string, readonly string[]>,
   ends: (id: string) => { to: string },
+  isNone: (id: string) => boolean,
 ) {
   const indeg = new Map(nodes.map((n) => [n, 0]));
   for (const n of nodes) for (const l of out.get(n) ?? []) indeg.set(ends(l).to, (indeg.get(ends(l).to) ?? 0) + 1);
   const ready = nodes.filter((n) => indeg.get(n) === 0).sort(byString);
   const order: string[] = [];
-  while (ready.length > 0) {
-    const n = ready.shift() as string;
-    order.push(n);
-    for (const l of out.get(n) ?? []) {
-      const t = ends(l).to;
-      const d = (indeg.get(t) as number) - 1;
-      indeg.set(t, d);
-      if (d === 0) ready.push(t);
+  const done = new Set<string>();
+  for (;;) {
+    while (ready.length > 0) {
+      const n = ready.shift() as string;
+      order.push(n);
+      done.add(n);
+      for (const l of out.get(n) ?? []) {
+        const t = ends(l).to;
+        if (done.has(t)) continue; // a released node: its in-degree never reaches 0
+        const d = (indeg.get(t) as number) - 1;
+        indeg.set(t, d);
+        if (d === 0) ready.push(t);
+      }
     }
+    if (order.length === nodes.length) return order;
+    const left = nodes.filter((n) => !done.has(n));
+    const stalled = new Set(left);
+    // ponytail: the release may pick a node behind a loop rather than on it, which only skews km_graph inside the
+    // zone (the end of every directed river); Tarjan SCC is the upgrade if P17b needs chainage in the zone.
+    const release = left
+      .flatMap((n) => (out.get(n) ?? []).filter((l) => isNone(l) && stalled.has(ends(l).to)).map((l) => ends(l).to))
+      .sort(byString)[0];
+    if (release === undefined)
+      throw new BuildError('cycle', left.flatMap((n) => [...(out.get(n) ?? [])]).sort(byString));
+    ready.push(release);
   }
-  if (order.length !== nodes.length) {
-    const left = nodes.filter((n) => (indeg.get(n) ?? 0) > 0);
-    throw new BuildError('cycle', left.flatMap((n) => [...(out.get(n) ?? [])]).sort(byString));
-  }
-  return order;
 }
 
 /** Builds the routing view; fails closed on a join or entry it cannot place. */
@@ -183,10 +199,11 @@ export function buildNetwork(edgeList: readonly Edge[], rivers: RiversFile): Net
   for (const m of [out, inn, riverEdges]) for (const list of m.values()) list.sort(byString);
 
   const nodes = [...coord.keys()].sort(byString);
-  const order = topoOrder(nodes, out, ends);
+  const order = topoOrder(nodes, out, ends, (id) => edges.get(id)?.direction === 'none');
   const rank = new Map(order.map((n, i) => [n, i]));
 
-  // km_graph: longest path from the river's own sources, over its own links, in topological order.
+  // km_graph: longest path from the river's own sources, over its own links, in topological order. Inside the tidal
+  // zone and on canals it is bookkeeping along the drawn direction, not a chainage (P17a).
   const kmGraph = new Map<string, Map<string, number>>();
   for (const [river, links] of [...riverEdges].sort((a, b) => byString(a[0], b[0]))) {
     const linkSet = new Set(links);
@@ -197,6 +214,7 @@ export function buildNetwork(edgeList: readonly Edge[], rivers: RiversFile): Net
       for (const l of inn.get(n) ?? []) {
         if (!linkSet.has(l)) continue;
         const u = ends(l).from;
+        if ((rank.get(u) as number) >= (rank.get(n) as number)) continue; // a back link of a zone loop, or a self-loop
         best = Math.max(best, (d.get(u) ?? 0) + linkLengthOf(edges, joins, l));
       }
       d.set(n, best);

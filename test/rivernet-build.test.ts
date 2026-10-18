@@ -322,7 +322,15 @@ describe('buildGraph', () => {
     expect(run([...ws].reverse(), [...rels].reverse(), [b, a])).toBe(first);
     const graph = JSON.parse(canonicalJson(buildGraph(ways(...ws), rels, rivers(a, b), provenance).graph));
     expect(graph.nodes[0]).toEqual({ coord: [5.001, 51.001], id: 'n1' });
-    expect(graph.edges[0]).toEqual({ from: 'n1', id: 'w10.0', length_m: 262.8, rivers: ['main'], to: 'n3', way: 10 });
+    expect(graph.edges[0]).toEqual({
+      direction: 'downstream',
+      from: 'n1',
+      id: 'w10.0',
+      length_m: 262.8,
+      rivers: ['main'],
+      to: 'n3',
+      way: 10,
+    });
     expect(Object.keys(graph)).toEqual([...Object.keys(graph)].sort());
     expect(graph).toMatchObject({ licence: 'ODbL-1.0', attribution: '© OpenStreetMap contributors' });
   });
@@ -442,6 +450,207 @@ describe('buildGraph: the split at a join onto another river', () => {
       'w30.0:n200>n201:trib2',
     ]);
     expect(buildNetwork(r.edges, rf).joins.map((j) => j.to)).toEqual(['n3', 'n3']);
+  });
+});
+
+// P17a: the declared tidal zone and canals (direction `none`), member-of selection and mouths.
+describe('buildGraph: tidal zone, canals, member-of and mouths (P17a)', () => {
+  const up = river('up', 1);
+  const zone = (id: string, rel: number) => river(id, rel, { kind: 'delta_channel', tidal_zone: true });
+  const canal = river('kanaal', 3, { kind: 'canal' });
+  const delta = zone('delta', 2);
+  const main = (...refs: number[]) => refs.map((r): [number, string] => [r, 'main_stream']);
+  const dirOf = (r: ReturnType<typeof buildGraph>) =>
+    r.edges.map((e) => `${e.id}:${e.direction}${e.direction_reason ? `/${e.direction_reason}` : ''}`);
+  const cycleIds = (f: () => unknown) => {
+    try {
+      f();
+    } catch (e) {
+      return e instanceof BuildError && e.code === 'cycle' ? [...e.ids].sort() : `other:${String(e)}`;
+    }
+    return 'no error';
+  };
+  // up: 1 -> 2; the zone loop 2 -> 3 -> 4 -> 2 (ways 2, 3, 4) of `delta`.
+  const zoneLoop = [way(1, [1, 2]), way(2, [2, 3]), way(3, [3, 4]), way(4, [4, 2])];
+  const zoneRels = [rel(1, up.wikidata, main(1)), rel(2, delta.wikidata, main(2, 3, 4))];
+
+  it('gives tidal-zone edges and canal-only edges direction none, in that order, and every other edge downstream', () => {
+    const r = buildGraph(
+      ways(way(1, [1, 2]), way(2, [2, 3]), way(3, [3, 4]), way(4, [4, 5]), way(5, [5, 6])),
+      [
+        rel(1, up.wikidata, main(1, 2)),
+        rel(2, delta.wikidata, main(2, 3)),
+        rel(3, canal.wikidata, main(3, 4, 5)),
+        rel(4, 'Q40', main(5)),
+      ],
+      rivers(up, delta, canal, river('other', 4, { wikidata: 'Q40' })),
+      provenance,
+    );
+    expect(dirOf(r)).toEqual([
+      'w1.0:downstream', // up only
+      'w2.0:none/tidal_zone', // shared by a zone channel and a river: the zone wins
+      'w3.0:none/tidal_zone', // a zone channel and a canal: the zone comes first
+      'w4.0:none/canal', // canals only
+      'w5.0:downstream', // a canal and a river
+    ]);
+  });
+
+  it('builds a loop made only of zone edges, and one mixing zone and directed edges', () => {
+    expect(dirOf(buildGraph(ways(...zoneLoop), zoneRels, rivers(up, delta), provenance))).toEqual([
+      'w1.0:downstream',
+      'w2.0:none/tidal_zone',
+      'w3.0:none/tidal_zone',
+      'w4.0:none/tidal_zone',
+    ]);
+    // up runs 1 -> 2 -> 3, the zone channel back 3 -> 2.
+    const mixed = buildGraph(
+      ways(way(1, [1, 2]), way(2, [2, 3]), way(3, [3, 2])),
+      [rel(1, up.wikidata, main(1, 2)), rel(2, delta.wikidata, main(3))],
+      rivers(up, delta),
+      provenance,
+    );
+    expect(dirOf(mixed)).toEqual(['w1.0:downstream', 'w2.0:downstream', 'w3.0:none/tidal_zone']);
+  });
+
+  it('fails a directed loop outside the zone with exactly its own ways, beside a zone loop that builds', () => {
+    const other = river('other', 3);
+    const build = () =>
+      buildGraph(
+        ways(...zoneLoop, way(10, [20, 21]), way(11, [21, 22]), way(12, [22, 21])),
+        [...zoneRels, rel(3, other.wikidata, main(10, 11, 12))],
+        rivers(up, delta, other),
+        provenance,
+      );
+    expect(cycleIds(build)).toEqual(['w11', 'w12']);
+    // The same loop as zone edges builds.
+    const zoned = zone('other', 3);
+    expect(() =>
+      buildGraph(
+        ways(...zoneLoop, way(10, [20, 21]), way(11, [21, 22]), way(12, [22, 21])),
+        [...zoneRels, rel(3, zoned.wikidata, main(10, 11, 12))],
+        rivers(up, delta, zoned),
+        provenance,
+      ),
+    ).not.toThrow();
+  });
+
+  it('counts only downstream out-edges as a bifurcation', () => {
+    const w = river('waal', 3);
+    const bif = (r: ReturnType<typeof buildGraph>) => (r.report as { graph: { bifurcations: unknown[] } }).graph;
+    // Node 2: up on to 3 and the zone channel to 4 is no bifurcation; adding waal 2 -> 5 makes one of two edges.
+    const base = [way(1, [1, 2]), way(2, [2, 3]), way(3, [2, 4])];
+    const rels = [rel(1, up.wikidata, main(1, 2)), rel(2, delta.wikidata, main(3))];
+    expect(bif(buildGraph(ways(...base), rels, rivers(up, delta), provenance)).bifurcations).toEqual([]);
+    const r = buildGraph(
+      ways(...base, way(4, [2, 5])),
+      [...rels, rel(3, w.wikidata, main(4))],
+      rivers(up, delta, w),
+      provenance,
+    );
+    expect(bif(r).bifurcations).toEqual([
+      { node: 'n2', coord: [5.002, 51.002], out: ['w2.0', 'w4.0'], rivers: ['up', 'waal'] },
+    ]);
+  });
+
+  it('places a mouth on the nearest node of its own river, and fails past max_m (mouth_unplaced)', () => {
+    // n4 of delta is at [5.004, 51.004]; n2 (shared with up) at [5.002, 51.002].
+    const mouth = (max_m: number) => ({
+      ...rivers(up, delta),
+      mouths: [
+        {
+          id: 'delta-noordzee',
+          river: 'delta',
+          at: [5.0041, 51.004] as [number, number],
+          max_m,
+          waterbody: 'noordzee',
+          evidence: 's',
+        },
+        {
+          id: 'a-up',
+          river: 'up',
+          at: [5.0011, 51.001] as [number, number],
+          max_m: 100,
+          waterbody: 'ketelmeer',
+          evidence: 's',
+        },
+      ],
+    });
+    const r = buildGraph(ways(...zoneLoop), zoneRels, mouth(100), provenance);
+    expect((r.graph as { mouths: unknown }).mouths).toEqual([
+      { id: 'a-up', river: 'up', node: 'n1', waterbody: 'ketelmeer' },
+      { id: 'delta-noordzee', river: 'delta', node: 'n4', waterbody: 'noordzee' },
+    ]);
+    expect(() => buildGraph(ways(...zoneLoop), zoneRels, mouth(5), provenance)).toThrow(
+      /^mouth_unplaced: delta-noordzee$/,
+    );
+  });
+
+  it('selects a member-of row by name from the parent relation, any role, minus drop_ways, with no relation check', () => {
+    const rhine = river('rhine', 1, { wikidata: 'Q584' });
+    const noord = river('noord', null, {
+      osm_way_name: null,
+      osm_member_of: { river: 'rhine', name: 'Noord' },
+      wikidata: 'Q1899552', // not the Rhine relation's tag: no wikidata_mismatch
+      drop_ways: [{ id: 4, reason: 'test' }],
+    });
+    const named = { waterway: 'river', name: 'Noord' };
+    const ws = ways(
+      way(1, [1, 2]), // the Rhine's main stream
+      way(2, [2, 3], named), // side_stream
+      way(3, [3, 4], { waterway: 'canal', name: 'Noord' }), // empty role, any waterway
+      way(4, [4, 5], named), // tributary, but in drop_ways
+      way(5, [2, 6], { waterway: 'river', name: 'Oude Maas' }), // another name
+      way(6, [3, 7], { natural: 'water', name: 'Noord' }), // no waterway tag
+      way(7, [8, 9], named), // the name, but no member
+    );
+    const base = rel(1, 'Q584', [
+      [1, 'main_stream'],
+      [2, 'side_stream'],
+      [3, ''],
+      [4, 'tributary'],
+      [5, 'side_stream'],
+      [6, 'side_stream'],
+    ]);
+    const rhineRel = { ...base, members: [...base.members, { type: 'n' as const, ref: 3, role: '' }] };
+    const r = buildGraph(ws, [rhineRel], rivers(rhine, noord), provenance);
+    expect(edgesOf(r)).toEqual(['w1.0:n1>n2:rhine', 'w2.0:n2>n3:noord', 'w3.0:n3>n4:noord']);
+    expect((r.report as { rivers: unknown[] }).rivers).toContainEqual(
+      expect.objectContaining({
+        id: 'noord',
+        relation: null,
+        relation_tags: null,
+        members: { drop_ways: 1, selected: 2 },
+      }),
+    );
+    // A member-of row has no relation of its own: a missing parent relation is the parent's relation_missing only.
+    expect(() => buildGraph(ws, [], rivers(rhine, noord), provenance)).toThrow(/^relation_missing: r1$/);
+  });
+
+  it('writes schema_version 2 on the graph and the reaches, and the same bytes whatever the input order', () => {
+    const rf = (rs: River[]) => ({
+      ...rivers(...rs),
+      mouths: [
+        {
+          id: 'm',
+          river: 'delta',
+          at: [5.003, 51.003] as [number, number],
+          max_m: 100,
+          waterbody: 'noordzee',
+          evidence: 's',
+        },
+      ],
+    });
+    const run = (w: WayFeature[], r: Relation[], rv: River[]) => {
+      const out = buildGraph(ways(...w), r, rf(rv), provenance);
+      return [canonicalJson(out.graph), canonicalJson(out.reaches), canonicalJson(out.report, 2)].join('');
+    };
+    const first = run(zoneLoop, zoneRels, [up, delta]);
+    expect(run([...zoneLoop].reverse(), [...zoneRels].reverse(), [delta, up])).toBe(first);
+    const r = buildGraph(ways(...zoneLoop), zoneRels, rf([up, delta]), provenance);
+    expect(r.graph).toMatchObject({ schema_version: 2, mouths: [{ id: 'm', node: 'n3' }] });
+    expect(r.reaches).toMatchObject({ schema_version: 2 });
+    const props = (r.reaches as { features: { properties: unknown }[] }).features.map((f) => f.properties);
+    expect(props[1]).toMatchObject({ id: 'w2.0', direction: 'none', direction_reason: 'tidal_zone' });
   });
 });
 
