@@ -38,10 +38,10 @@ Job states: `planned`, `running`, `paused`, `done`, `failed`, `aborted`. The fix
 `backfill` runs as a one-off container of the `backfill` service (profile `jobs`; the only service on both `egress` and `db`; secrets `db_rws_backfill` and `rws_x_api_key`; the raw archive mounted read-write). It needs the compose files of the running release and the secret `db_rws_backfill`, which `bootstrap.sh` creates. A release that adds a database role or a secret needs its bootstrap **before** its deploy (the migration grants to the new role, and `migrate` fails and rolls back without it): run the new bootstrap of the verified release, then deploy it (`docs/runbooks/bootstrap.md`). Define this once per shell (every new login needs it again); it is the same as in `docs/runbooks/replay.md` §2, `rws_compose` of the installed `rws-lib.sh`, the command line of every deploy:
 
 ```bash
-rwsc() { sudo bash -c '. /usr/local/lib/rws/deploy/bin/rws-lib.sh && rws_compose "$@"' rwsc "$@"; }
+rwsc() { sudo bash -c 'cd / && . /usr/local/lib/rws/deploy/bin/rws-lib.sh && rws_compose "$@"' rwsc "$@"; }
 ```
 
-`rwsc` already holds `sudo`: never write `sudo rwsc`. It adds the tunnel and owner overlays as a deploy does. The plain `-f compose.yaml` line this runbook had until the P14a queue fix warns of an orphan `rws-cloudflared-1` on a tunnel host: **never** answer that warning with `--remove-orphans`, which removes the tunnel and takes the site off line.
+`rwsc` already holds `sudo`: never write `sudo rwsc`. It adds the tunnel and owner overlays as a deploy does, and it starts from `/`: from a directory a deploy has since removed (a shell left in `/var/lib/rws/releases/<old tag>`) compose fails with `getwd: no such file or directory` (2026-10-17). The plain `-f compose.yaml` line this runbook had until the P14a queue fix warns of an orphan `rws-cloudflared-1` on a tunnel host: **never** answer that warning with `--remove-orphans`, which removes the tunnel and takes the site off line.
 
 `compose run` replaces the service's command, so the role name is given again: `backfill backfill <subcommand>`.
 
