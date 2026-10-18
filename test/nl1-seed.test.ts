@@ -223,11 +223,23 @@ describe('invariant 1: the P16a specs ask only what the seeds say', () => {
       expect(['nl-1', 'nl-1-tide'], s.id).toContain(s.variants?.seed);
       const where = Object.entries(s.variants?.where ?? {});
       expect(where.length, s.id).toBeGreaterThan(0);
-      const want = readSeed(REGISTRY_DIR, s.variants?.seed as string).filter((r) =>
-        where.every(([k, v]) => r[k] === v),
-      );
+      let want = readSeed(REGISTRY_DIR, s.variants?.seed as string).filter((r) => where.every(([k, v]) => r[k] === v));
       expect(want.length, s.id).toBeGreaterThan(0);
+      for (const [field, values] of Object.entries(s.variants?.each ?? {})) {
+        want = want.flatMap((r) => values.map((x) => ({ ...r, [field]: x })));
+      }
       expect(s.rows, s.id).toEqual(want);
     }
+  });
+
+  it('nl-1-hwlw-astro asks the type series of each location (#174) right before its heights: 158 rows', () => {
+    const s = specs.find((x) => x.id === 'nl-1-hwlw-astro');
+    expect(s?.variants?.each).toEqual({ typering: ['GETETTPE', 'NVT'] });
+    expect(s?.variants?.key).toEqual(['code', 'hoedanigheid', 'typering']);
+    expect(s?.rows).toHaveLength(158);
+    s?.rows.forEach((r, i) => {
+      expect(r.typering).toBe(i % 2 === 0 ? 'GETETTPE' : 'NVT');
+      if (i % 2 === 1) expect(r.code).toBe(s.rows[i - 1]?.code);
+    });
   });
 });

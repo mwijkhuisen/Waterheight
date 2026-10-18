@@ -11,6 +11,8 @@ import type { Adapter } from '../../http/types.ts';
 // high and low water groupings) and a `method`; `params.proces` may also be `astronomisch`, and
 // `params.ahead` asks a window forward from now (the astronomical tide). Seed values are registry data,
 // still enum-guarded: anything else throws, so no request is built from an unknown string.
+// #174: a row with `typering: GETETTPE` (from `variants.each`) asks RWS's type series of an astronomical high and low
+// water grouping instead of its heights: the body of the 2026-10-17 probe, Grootheid NVT and no Hoedanigheid.
 
 const utc = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, 'Z');
 const MINUTE = 60_000;
@@ -18,6 +20,7 @@ const PROCES = new Set(['meting', 'verwachting', 'astronomisch']);
 const H_DATUM = new Set(['NAP', 'MSL', 'TAW', 'PLAATSLR']);
 const GROEPERING = new Set(['GETETM2', 'GETETMSL2', 'GETETBRKD2', 'GETETBRKDMSL2']);
 const METHOD = /^other:F\d{3}$/;
+const TYPERING = new Set(['', 'NVT', 'GETETTPE']);
 /** RWS answers at most 160,000 values per request (catalogue §2.1); the finest step asked is 10 minutes. */
 const MAX_VALUES = 160_000;
 const STEP_MS = 10 * MINUTE;
@@ -36,25 +39,39 @@ export const adapter: Adapter = {
     // The Q body has no place for either: a seed row that names one is a registry mistake, not something to ignore.
     if (q && (groepering !== '' || method !== '')) throw new Error('nl-1: groepering or method on a Q row');
     if (params.ahead !== undefined && proces !== 'astronomisch') throw new Error('nl-1: ahead needs astronomisch');
-    const aquo = q
+    const typering = row.typering ?? '';
+    if (!TYPERING.has(typering)) throw new Error('nl-1: bad typering');
+    const type = typering === 'GETETTPE';
+    if (type && (q || !groepering.startsWith('GETETBRKD') || proces !== 'astronomisch' || method !== '')) {
+      throw new Error('nl-1: typering needs an astronomical extreme row');
+    }
+    const aquo = type
       ? {
-          Grootheid: { Code: 'Q' },
-          // Only the backfill and the P16a rows name it (NVT); live bodies stay as they were.
-          ...(own !== ''
-            ? { Hoedanigheid: { Code: own } }
-            : params.hoedanigheid === undefined
-              ? {}
-              : { Hoedanigheid: { Code: params.hoedanigheid } }),
+          Compartiment: { Code: 'OW' },
+          Grootheid: { Code: 'NVT' },
+          Groepering: { Code: groepering },
+          Typering: { Code: 'GETETTPE' },
           ProcesType: proces,
         }
-      : {
-          Compartiment: { Code: 'OW' },
-          Grootheid: { Code: 'WATHTE' },
-          ...(groepering === '' ? {} : { Groepering: { Code: groepering } }),
-          Hoedanigheid: { Code: own !== '' ? own : params.hoedanigheid === 'TAW' ? 'TAW' : 'NAP' },
-          ProcesType: proces,
-          ...(method === '' ? {} : { WaardeBepalingsMethode: { Code: method } }),
-        };
+      : q
+        ? {
+            Grootheid: { Code: 'Q' },
+            // Only the backfill and the P16a rows name it (NVT); live bodies stay as they were.
+            ...(own !== ''
+              ? { Hoedanigheid: { Code: own } }
+              : params.hoedanigheid === undefined
+                ? {}
+                : { Hoedanigheid: { Code: params.hoedanigheid } }),
+            ProcesType: proces,
+          }
+        : {
+            Compartiment: { Code: 'OW' },
+            Grootheid: { Code: 'WATHTE' },
+            ...(groepering === '' ? {} : { Groepering: { Code: groepering } }),
+            Hoedanigheid: { Code: own !== '' ? own : params.hoedanigheid === 'TAW' ? 'TAW' : 'NAP' },
+            ProcesType: proces,
+            ...(method === '' ? {} : { WaardeBepalingsMethode: { Code: method } }),
+          };
     let from: Date;
     let to: Date;
     // Whole minutes, so a repeated fetch of the same run hashes the same.

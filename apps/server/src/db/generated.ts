@@ -370,6 +370,13 @@ export interface Tide {
   value: number;
 }
 
+export interface TideLabel {
+  batch_id: Int8;
+  hilo: string;
+  series_id: number;
+  ts: Timestamp;
+}
+
 export interface Twin {
   id: string;
   relation: Generated<Json>;
@@ -433,6 +440,7 @@ export interface DB {
   station: Station;
   station_alias: StationAlias;
   tide: Tide;
+  tide_label: TideLabel;
   twin: Twin;
   twin_check: TwinCheck;
   warning_area: WarningArea;
