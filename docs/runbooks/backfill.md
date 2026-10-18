@@ -196,9 +196,9 @@ The year-1 budget gives the observations **at most 23 GB** (`docs/plan/ARCHITECT
 |---|---|---|---|---|---|---|---|---|
 | NL-1 (28 H, 13 Q; P14a) | 41 | 1990-01-01 to 2026-10-02 | 13,776 | 15,293 | about 4.2 h | 79.2 M | about 7.1 GB (31 % of 23 GB) | about 1.5 GB |
 | NL-1 (**today**, 71 series since P16b) | 71 | 1990-01-01 to 2026-10-02 | – | 26,483 | about 7.4 h | – | **about 12.35 GB** (54 % of 23 GB) | – |
-| DE-8 (`hydro/w`, 9 tier-1 gauges) | 32 units | 1950-01-01 to 2026-08-01 | 3,740 | 32 | about 16 min at 30 s | 24.2 M grid points | about 2.18 GB | about 157 MB (ZIPs do not compress) |
-| FR-2 (QmnJ 31, HIXnJ 40) | 71 | 1950-01-01 to 2026-08-01 | 284 (with halvings) | 284 | about 10 min at 2 s | TODO-LEAD (dry-run) | about 0.18 GB | about 17 MB |
-| CH-9 (2289 W and Q, 2106 W) | 2 datasets | 2020-06-01 to 2026-08-01 | 152 | 152 | about 3 min at 1 s | TODO-LEAD (dry-run) | about 0.09 GB | about 10 MB |
+| DE-8 (`hydro/w`, 9 tier-1 gauges) | 32 units | 1950-01-01 to 2026-08-01 | 3,740 | 32 | 16 min of requests at 30 s, but about 8.6 h with the loads (`hours_with_loads`: every slice waits for its load, about 8 s) | 24.2 M grid points | about 2.18 GB | about 157 MB (ZIPs do not compress) |
+| FR-2 (QmnJ 31, HIXnJ 40) | 71 | 1950-01-01 to 2026-08-01 | 284 (with halvings) | 284 | about 10 min at 2 s | 1,985,941 daily values | about 0.18 GB | about 17 MB |
+| CH-9 (2289 W and Q, 2106 W) | 2 datasets | 2020-06-01 to 2026-08-01 | 152 | 152 | about 3 min at 1 s | 2,594,304 values (1,297,152 records; half on the 10-minute grid) | about 0.09 GB | about 10 MB |
 | BE-3, BE-1/2, CH-8, LU-7, others | – | – | – | – | – | – | – | later P14 PRs add their own row |
 
 These are **upper bounds**:
