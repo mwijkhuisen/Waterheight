@@ -376,8 +376,8 @@ export type TideKind = 'astro' | 'extreme' | 'extreme_astro';
 //    neighbours and highs and lows alternate. A series that breaks it (fewer than 2 values, equal neighbours, two
 //    highs or two lows in a row), that lost a value between its first and last kept one (`gap`, `unknown_quality`,
 //    `conflict`, `out_of_range`: the rest may still alternate with every label after the hole flipped, review CR-2)
-//    or whose consecutive extremes lie more than 10 h apart (a missing extreme) stores nothing from this payload and
-//    counts its values as `hwlw_unlabelled` (retained). `astro` rows carry no label.
+//    stores nothing from this payload and counts its values as `hwlw_unlabelled` (retained). There is no spacing
+//    rule (see `alternation`). `astro` rows carry no label.
 
 const TIDE_PROCESS: Record<TideKind, string> = {
   astro: 'astronomisch',
@@ -400,12 +400,12 @@ const DAY_MS = 86_400_000;
 const TIDE_AHEAD_MS = 401 * DAY_MS;
 
 /**
- * Consecutive extremes further apart than this mean one is missing (review CR-2): the measured spacing is 4.48 to
- * 8.00 h at Goeree lichteiland over 400 days and 5.48 to 7.20 h at Vlissingen; a missing extreme leaves about 12 h.
+ * `high`/`low` by strict alternation, or null when the values do not alternate. No spacing limit (P16b follow-up):
+ * in the 78 production lists of 2026-10-17 one spacing reaches 10.32 h (the double low waters of the Holland coast
+ * and the Rotterdam mouths) while two consecutive spacings sum to as little as 6.88 h at 35 locations, so a limit
+ * either withholds real lists (10 h withheld 8) or misses an omission. Inside a list a single missing extreme always
+ * breaks the alternation (two highs or two lows meet), and a missing pair leaves every label right.
  */
-const EXTREME_MAX_SPACING_MS = 10 * 3_600_000;
-
-/** `high`/`low` by strict alternation, or null when the values do not alternate. */
 function alternation(values: readonly number[]): ('high' | 'low')[] | null {
   if (values.length < 2) return null;
   const up = values.slice(1).map((v, i) => v > (values[i] as number));
@@ -519,9 +519,7 @@ export function normaliseTide(lists: readonly Waarnemingen[], ctx: Context, kind
     if (rows.length === 0) continue;
     const first = (rows[0] as [number, number])[0];
     const last = (rows[rows.length - 1] as [number, number])[0];
-    const whole =
-      !holes.some((ts) => ts > first && ts < last) &&
-      rows.every(([ts], i) => i === 0 || ts - (rows[i - 1] as [number, number])[0] <= EXTREME_MAX_SPACING_MS);
+    const whole = !holes.some((ts) => ts > first && ts < last);
     const labels = whole ? alternation(rows.map((r) => r[1])) : null;
     if (labels === null) {
       count(out, 'hwlw_unlabelled', rows.length);

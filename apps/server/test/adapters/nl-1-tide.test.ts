@@ -291,12 +291,22 @@ describe('drift and drops', () => {
     });
   });
 
-  it('labels: consecutive extremes more than 10 h apart withhold the series (a missing extreme)', () => {
+  it('labels: a long spacing alone withholds nothing; a missing extreme inside the list breaks the alternation', () => {
+    // The double low waters of the Holland coast: 2.4 h and 10.3 h between extremes (Hoek van Holland 2026-10-17).
+    expect(result(hours([0, -60], [2.4, 150], [12.7, -70], [15.1, 140]))).toEqual({
+      hilo: ['low', 'high', 'low', 'high'],
+      dropped: {},
+    });
+    // A missing pair (12 h with nothing between) leaves every label right.
     expect(result(hours([0, -100], [6, 120], [18, -110], [24, 130]))).toEqual({
+      hilo: ['low', 'high', 'low', 'high'],
+      dropped: {},
+    });
+    // One missing low: two highs meet, and the series is withheld whole.
+    expect(result(hours([0, -100], [6, 120], [18, 130], [24, -90]))).toEqual({
       hilo: [],
       dropped: { hwlw_unlabelled: 4 },
     });
-    expect(result(hours([0, -100], [10, 120]))).toEqual({ hilo: ['low', 'high'], dropped: {} });
   });
 
   it('values outside the observation range of the series are dropped as out_of_range (review SR-4)', () => {
