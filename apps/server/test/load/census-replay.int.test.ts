@@ -66,7 +66,13 @@ function lith2004(): {
 let h: Harness;
 let fetches = 0;
 /** A backfill line as the runner writes it (retention 'backfill'), each a later fetch; no job row behind it. */
-async function putBackfill(body: Buffer, from: string, to: string, job: number): Promise<ManifestLine> {
+async function putBackfill(
+  body: Buffer,
+  from: string,
+  to: string,
+  job: number,
+  extra: Partial<ManifestLine> = {},
+): Promise<ManifestLine> {
   const when = new Date(FIRST_FETCH + ++fetches * 60_000);
   const hash = sha256(body);
   const { key, stored } = await h.archive.put('NL-1', SPEC, when, body, hash);
@@ -79,6 +85,7 @@ async function putBackfill(body: Buffer, from: string, to: string, job: number):
     validity: { ok: true, reason: null, count: 1 },
     retention: 'backfill',
     backfill: { job, chunk: 0, from: `${from}T00:00:00.000Z`, to: `${to}T00:00:00.000Z` },
+    ...extra,
   });
   await h.archive.append(line);
   return line;
@@ -137,6 +144,11 @@ describe('the census predicts the replay (#184 stage 1)', { timeout: 120_000 }, 
     await putBackfill(lith, '2003-01-29', '2003-03-10', 2); // a refetch of the same window, another job
     await putBackfill(edited.body, '2004-01-29', '2004-03-10', 3);
     await putBackfill(rawFixture('NL-1', 'nl-1-backfill-lobith-q-20100101').body, '2010-01-01', '2010-02-10', 4);
+    // Review CR-2: a line the loader skips and two it quarantines, so `expect` meets a replay on those counts too.
+    const h95 = rawFixture('NL-1', 'nl-1-backfill-lobith-h-19950125').body;
+    await putBackfill(h95, '1995-01-25', '1995-03-06', 5, { validity: { ok: false, reason: 'status', count: null } });
+    await putBackfill(Buffer.from('not json'), '1996-01-25', '1996-03-06', 6);
+    await putBackfill(h95, '1997-01-25', '1997-03-06', 7, { sha256: 'a'.repeat(64) });
 
     printed = [];
     const log: string[] = [];
@@ -154,7 +166,7 @@ describe('the census predicts the replay (#184 stage 1)', { timeout: 120_000 }, 
 
   it('the census counts the archive: a refetch is a duplicate, the edits are an orphan and a requalified row', () => {
     expect(totals).toMatchObject({
-      lines: 4,
+      lines: 7,
       objects: 3,
       duplicate_lines: 1,
       duplicate_lines_differing: 0,
@@ -163,7 +175,7 @@ describe('the census predicts the replay (#184 stage 1)', { timeout: 120_000 }, 
       requalified: 1,
       orphan: 1,
     });
-    expect(totals.expect).toEqual({ lines: 4, n_new: 26 + 25 + 1, n_changed: 0, quarantined: 0, skipped: 0 });
+    expect(totals.expect).toEqual({ lines: 7, n_new: 26 + 25 + 1, n_changed: 0, quarantined: 2, skipped: 1 });
     expect(printed).toContainEqual({
       orphan: { series: LITH, ts: new Date(edited.orphan.ts).toISOString(), value: edited.orphan.value },
     });
@@ -171,7 +183,7 @@ describe('the census predicts the replay (#184 stage 1)', { timeout: 120_000 }, 
 
   it('replay #1 with the code before the fix loads the database as production holds it today', async () => {
     const r = await replay(deps(BEFORE_FIX), args);
-    expect(r).toMatchObject({ lines: 4, loaded: 4, quarantined: 0, skipped: 0, n_changed: 0 });
+    expect(r).toMatchObject({ lines: 7, loaded: 4, quarantined: 2, skipped: 1, n_changed: 0 });
     // The orphan and the requalified instants are stored from the daily mean: validated (bit 2) plus backfill (512).
     const orphan = await lithRow(edited.orphan.ts);
     expect(orphan).toHaveLength(1);
@@ -193,7 +205,7 @@ describe('the census predicts the replay (#184 stage 1)', { timeout: 120_000 }, 
       skipped: r.skipped,
     }).toEqual(totals.expect);
     // Spelled out: 26 + 25 restored rows and the one requalified row, all backfill rows (so none counts as changed).
-    expect(r).toEqual({ lines: 4, loaded: 4, quarantined: 0, skipped: 0, n_new: 26 + 25 + 1, n_changed: 0 });
+    expect(r).toEqual({ lines: 7, loaded: 4, quarantined: 2, skipped: 1, n_new: 26 + 25 + 1, n_changed: 0 });
 
     // A replay never deletes: the orphan keeps the daily mean and its backfill bit.
     const orphan = await lithRow(edited.orphan.ts);
@@ -214,7 +226,7 @@ describe('the census predicts the replay (#184 stage 1)', { timeout: 120_000 }, 
   it('replay #3 writes nothing', async () => {
     const before = await h.checksums();
     const r = await replay(deps(), args);
-    expect(r).toMatchObject({ lines: 4, loaded: 4, quarantined: 0, skipped: 0, n_new: 0, n_changed: 0 });
+    expect(r).toMatchObject({ lines: 7, loaded: 4, quarantined: 2, skipped: 1, n_new: 0, n_changed: 0 });
     expect(await h.checksums()).toEqual(before);
   });
 });

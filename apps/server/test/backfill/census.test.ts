@@ -27,8 +27,15 @@ type Meting = {
   Tijdstip: string;
   WaarnemingMetadata: { Kwaliteitswaardecode: string; Statuswaarde: string };
 };
+type Coded = { Code: string };
 type Lijst = {
-  AquoMetadata: { WaardeBewerkingsMethode: { Code: string } };
+  AquoMetadata: {
+    WaardeBewerkingsMethode: Coded;
+    WaardeBepalingsMethode: Coded;
+    Grootheid: Coded;
+    Hoedanigheid: Coded;
+    Eenheid: Coded;
+  };
   Locatie: { Code: string };
   MetingenLijst: Meting[];
 };
@@ -66,11 +73,31 @@ function lith2004() {
   return { body: toBody(doc), orphan };
 }
 
-/** The 1996 copy of the Lobith H 1995 payload under a hostile location code. */
+/** A provider string that would break a line or inject markup if it were ever printed (review SR-4). */
+const EVIL = 'x<script>"\n{"orphan":1}';
+/** The 1996 copy of the Lobith H 1995 payload with every printed code hostile. */
 function hostile() {
   const doc = json(real('lobith-h-19950125'));
   shiftYear(doc, '1995-', '1996-');
-  for (const l of doc.WaarnemingenLijst) l.Locatie.Code = 'lobith<script>"x';
+  for (const l of doc.WaarnemingenLijst) {
+    l.Locatie.Code = EVIL;
+    for (const f of [
+      'Grootheid',
+      'Hoedanigheid',
+      'WaardeBepalingsMethode',
+      'WaardeBewerkingsMethode',
+      'Eenheid',
+    ] as const)
+      l.AquoMetadata[f].Code = EVIL;
+  }
+  return toBody(doc);
+}
+
+/** The Lobith H 1995 payload moved to another year, optionally under another location code. */
+function lobithH(year: string, code?: string) {
+  const doc = json(real('lobith-h-19950125'));
+  shiftYear(doc, '1995-', `${year}-`);
+  if (code !== undefined) for (const l of doc.WaarnemingenLijst) l.Locatie.Code = code;
   return toBody(doc);
 }
 
@@ -238,14 +265,14 @@ describe('backfill census', { timeout: 60_000 }, () => {
     expect(out).toEqual([
       // The edited midnight: the old code kept the daily mean (its value), the NVT sample is now a gap value.
       { orphan: { series: LITH, ts: orphan.ts, value: orphan.value } },
-      // A hostile code prints as "?", with no role and no audience; its Tijdstip were moved to 1996 (265 values).
+      // Hostile codes print as "?", with no role and no audience; its Tijdstip were moved to 1996 (265 values).
       group({
         code: '?',
-        quantity: 'WATHTE',
-        hoedanigheid: 'NAP',
-        method: 'other:F007',
-        bewerking: 'NVT',
-        unit: 'cm',
+        quantity: '?',
+        hoedanigheid: '?',
+        method: '?',
+        bewerking: '?',
+        unit: '?',
         lists: 1,
         values: 265,
         ok_values: 265,
@@ -370,8 +397,9 @@ describe('backfill census', { timeout: 60_000 }, () => {
           unreadable: 0,
           unparsed: 1,
           excluded_lists: 0,
+          withheld_lists: 0,
           values: 2 * 5801 + 2 * 251 + 2 * 265 + 40,
-          processed_values: 2 * 40 + 2 * 10,
+          processed_values: 2 * 40 + 2 * 10 + 265, // the hostile list's bewerking is not NVT either
           restorable: 26 + 25,
           requalified: 1,
           orphan: 1,
@@ -385,11 +413,96 @@ describe('backfill census', { timeout: 60_000 }, () => {
   it('prints no provider free text', () => {
     const text = JSON.stringify(out);
     for (const s of ['<script>', 'Omschrijving', 'Lith, boven', 'Vlotterniveaumeter']) expect(text).not.toContain(s);
+    // Every printed string is a code, a key, a day or an instant: no quote, markup, space or line break (review SR-4).
+    const strings: string[] = [];
+    const walk = (v: unknown): void => {
+      if (typeof v === 'string') strings.push(v);
+      else if (v !== null && typeof v === 'object') for (const x of Object.values(v)) walk(x);
+    };
+    walk(out);
+    expect(strings.filter((s) => !/^[A-Za-z0-9.:/?_-]*$/.test(s))).toEqual([]);
   });
 
   it('restores nothing from a hostile location code', () => {
     expect(JSON.stringify(out)).not.toContain('"series":"?');
     expect(out.filter((o) => (o as { series?: { key: string } }).series !== undefined)).toHaveLength(1);
+  });
+});
+
+describe('recovered lines and other audiences (review CR-4, SR-2)', { timeout: 60_000 }, () => {
+  it('a recovered line of a counted object is a duplicate; recovered lines of other objects count; an off series is not described', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'census-dedupe-'));
+    try {
+      const archive = new Archive(dir);
+      let at = Date.parse('2026-10-15T10:00:00Z');
+      const put = async (body: Buffer, extra: Partial<Parameters<typeof bareLine>[3]>) => {
+        at += 60_000;
+        const when = new Date(at);
+        const hash = sha256(body);
+        const { key, stored } = await archive.put('NL-1', SPEC, when, body, hash);
+        const line = bareLine('NL-1', SPEC, when, {
+          sha256: hash,
+          bytes: body.length,
+          stored_bytes: stored,
+          key,
+          validity: { ok: true, reason: null, count: 1 },
+          retention: 'backfill',
+          ...extra,
+        });
+        await archive.append(line);
+        return line;
+      };
+      const recovered = { recovered: true as const, request: null };
+      const first = await put(real('lobith-h-19950125'), {
+        backfill: { job: 1, chunk: 0, from: '1995-01-25T00:00:00.000Z', to: '1995-03-06T00:00:00.000Z' },
+      });
+      // The recorder's recovery of the same object (KG-341): no chunk window, the same bytes.
+      at += 60_000;
+      await archive.append({ ...first, ...recovered, fetched_at: { start: new Date(at).toISOString(), end: null } });
+      // Two recovered lines of other objects of the same location: both count (no chunk key without a window).
+      await put(lobithH('1997'), recovered);
+      await put(lobithH('1998'), recovered);
+      // A registered NL-1 series whose audience is off: counted as withheld, never described.
+      await put(lobithH('1999', 'haghorst.sluis4.schuif1'), {
+        backfill: { job: 2, chunk: 0, from: '1999-01-25T00:00:00.000Z', to: '1999-03-06T00:00:00.000Z' },
+      });
+      const r = await run(new ArchiveReader(dir));
+      expect(r.exit).toBe(0);
+      expect(JSON.stringify(r.lines)).not.toContain('haghorst');
+      const groups = r.lines.filter((o) => (o as { group?: unknown }).group !== undefined);
+      expect(groups).toEqual([
+        group({
+          code: 'lobith.bovenrijn.tolkamer',
+          quantity: 'WATHTE',
+          hoedanigheid: 'NAP',
+          method: 'other:F007',
+          bewerking: 'NVT',
+          unit: 'cm',
+          role: 'primary',
+          audience: 'public',
+          lists: 3, // 1995, 1997, 1998
+          values: 3 * 265,
+          ok_values: 3 * 265,
+          statuses: statuses(0, 0, 3 * 265),
+          first: '1995-01-25T00:00:00.000Z',
+          last: '1998-02-05T00:00:00.000Z',
+          step: 'PT1H',
+        }),
+      ]);
+      const totals = (r.lines.at(-1) as { totals: Record<string, unknown> }).totals;
+      expect(totals).toMatchObject({
+        lines: 5,
+        objects: 4,
+        duplicate_lines: 1,
+        duplicate_lines_differing: 0,
+        withheld_lists: 1,
+        values: 3 * 265,
+        restorable: 0,
+        groups: 1,
+      });
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

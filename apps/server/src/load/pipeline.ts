@@ -768,13 +768,7 @@ export class Loader {
     const ceiling = spec.obsTarget === undefined ? EPOCH_MS : FLOOR_MS;
     // P14a: a backfill payload loads only inside its chunk (when the line names one) and before DATA_EPOCH; P14b:
     // before DATA_FLOOR for a spec that fills another source's series (its live rows own every day the site can show).
-    const window =
-      spec.backfill === true
-        ? {
-            from: line.backfill === undefined ? Number.NEGATIVE_INFINITY : Date.parse(line.backfill.from),
-            to: Math.min(ceiling, line.backfill === undefined ? ceiling : Date.parse(line.backfill.to)),
-          }
-        : undefined;
+    const window = spec.backfill === true ? backfillWindow(line, ceiling) : undefined;
     let result: Normalised;
     let checked: CheckedRun[];
     try {
@@ -1210,6 +1204,17 @@ export class Loader {
       // A report, not a load: try again tomorrow.
     }
   }
+}
+
+/**
+ * The window [from, to) (UTC ms) a backfill line's rows must lie in: its chunk (when it names one) cut at `ceiling`
+ * (DATA_EPOCH, or DATA_FLOOR for a spec with an obsTarget). #184: the census (backfill/census.ts) uses it too.
+ */
+export function backfillWindow(line: ManifestLine, ceiling: number): { from: number; to: number } {
+  return {
+    from: line.backfill === undefined ? Number.NEGATIVE_INFINITY : Date.parse(line.backfill.from),
+    to: Math.min(ceiling, line.backfill === undefined ? ceiling : Date.parse(line.backfill.to)),
+  };
 }
 
 /** A manifest line, or null when it is not one (damage, or a version this loader does not know). */

@@ -4,9 +4,10 @@ import { isFuture, parseInstant, type Registry } from '@rws/core';
 import { GAP, INSTANTANEOUS, KNOWN_QUALITY, TIME } from '../adapters/nl-1/normalise.ts';
 import { parseWaarnemingen, type Waarnemingen } from '../adapters/nl-1/parse.ts';
 import { ArchiveError, type ArchiveReader } from '../archive/reader.ts';
+import { errorCode } from '../db/pool.ts';
 import { LOAD_ADAPTERS, loadNl1Backfill, NL1_BACKFILL_FLOOR } from '../load/adapters.ts';
 import { DATA_EPOCH } from '../load/dirty.ts';
-import { parseLine } from '../load/pipeline.ts';
+import { backfillWindow, parseLine } from '../load/pipeline.ts';
 import { declarationsOf, type RegistryInput } from '../load/registry-sync.ts';
 import type { LoadedBackfill } from './spec.ts';
 
@@ -122,6 +123,7 @@ export async function census(
     unreadable: 0,
     unparsed: 0,
     excluded_lists: 0,
+    withheld_lists: 0,
     values: 0,
     processed_values: 0,
     restorable: 0,
@@ -137,9 +139,12 @@ export async function census(
     perSeries.set(key, s);
     return s;
   };
-  // ponytail: one chunk = the payload's own code/G/H set and its line's chunk start (NL-1 lines carry no variant, a
-  // re-planned job has a new id); two jobs whose chunks of one series start on other days would count twice.
-  const seen = new Map<string, string | null>();
+  // A chunk counts once: the same bytes (a refetch, or a recovered line beside the runner's own), or the payload's own
+  // code/G/H set with its line's chunk start (NL-1 lines carry no variant, a re-planned job has a new id).
+  // ponytail: two jobs whose chunks of one series start on other days would count twice; none exist before the
+  // KG-355 re-plans.
+  const seenBodies = new Set<string>();
+  const seenChunks = new Set<string>();
 
   try {
     for (const { file } of await deps.reader.manifests()) {
@@ -175,18 +180,13 @@ export async function census(
             continue;
           }
           const fetchedAt = Date.parse(line.fetched_at.end ?? line.fetched_at.start);
-          const window = {
-            from: line.backfill === undefined ? Number.NEGATIVE_INFINITY : Date.parse(line.backfill.from),
-            to: Math.min(EPOCH_MS, line.backfill === undefined ? EPOCH_MS : Date.parse(line.backfill.to)),
-          };
+          const window = backfillWindow(line, EPOCH_MS);
           const ctx = { registry, fetchedAt, backfill: window };
           let lists: Waarnemingen[];
           let now: ReturnType<typeof loadNl1Backfill>;
           let before: ReturnType<typeof loadNl1Backfill>;
           try {
             lists = parseWaarnemingen(body);
-            now = loadNl1Backfill(lists, ctx);
-            before = loadNl1Backfill(beforeFix(lists), ctx);
           } catch {
             // The loader quarantines such a payload (drift or adapter_error); its values are counted nowhere here.
             t.unparsed += 1;
@@ -197,13 +197,26 @@ export async function census(
           ]
             .sort()
             .join('\n');
-          const chunkKey = `${where}\n\n${line.backfill?.from ?? ''}`;
-          if (seen.has(chunkKey)) {
+          const chunkKey = line.backfill === undefined || where === '' ? null : `${where}\n\n${line.backfill.from}`;
+          const sameBody = line.sha256 !== null && seenBodies.has(line.sha256);
+          if (sameBody || (chunkKey !== null && seenChunks.has(chunkKey))) {
+            // A changed answer of a chunk seen before: the replay keeps the newest fetch, the census the first.
             t.duplicate_lines += 1;
-            if (seen.get(chunkKey) !== line.sha256) t.duplicate_lines_differing += 1;
+            if (!sameBody) t.duplicate_lines_differing += 1;
             continue;
           }
-          seen.set(chunkKey, line.sha256);
+          try {
+            now = loadNl1Backfill(lists, ctx);
+            // Without a processed list both readings are the same, and so is what a replay writes.
+            before = lists.some((l) => l.aquo.WaardeBewerkingsMethode.Code !== INSTANTANEOUS)
+              ? loadNl1Backfill(beforeFix(lists), ctx)
+              : now;
+          } catch {
+            t.unparsed += 1;
+            continue;
+          }
+          if (line.sha256 !== null) seenBodies.add(line.sha256);
+          if (chunkKey !== null) seenChunks.add(chunkKey);
           t.objects += 1;
 
           const lo = Math.max(FLOOR_MS, window.from);
@@ -214,6 +227,13 @@ export async function census(
               continue;
             }
             const raw4 = `${l.locatie.Code}/${a.Grootheid.Code}/${a.Hoedanigheid.Code}/${a.WaardeBepalingsMethode.Code}`;
+            const row = rows.get(raw4);
+            // A registered series of another audience than the source's (off, or narrowed) is not described: the
+            // output is attached to a public issue (invariant 8). Counted only.
+            if (row !== undefined && row.audience !== sourceAudience) {
+              t.withheld_lists += 1;
+              continue;
+            }
             const g = {
               code: safe('code', l.locatie.Code),
               quantity: safe('quantity', a.Grootheid.Code),
@@ -225,7 +245,6 @@ export async function census(
             const key = Object.values(g).join('/');
             let group = groups.get(key);
             if (group === undefined) {
-              const row = rows.get(raw4);
               group = {
                 ...g,
                 role: row?.role ?? null,
@@ -270,6 +289,7 @@ export async function census(
           // What the replay writes: rows only the fix stores (restorable), rows it stores otherwise (requalified;
           // both count as the replay's n_new, a backfill row being one with qc bit 512), and rows only the old code
           // stored (orphans: a replay never deletes, so they stay).
+          if (before === now) continue;
           const old = new Map<string, { series: string; ts: string; value: number; qc: number }>();
           for (const r of before.obs) if (counted(r.series)) old.set(`${r.series}\n${r.ts}`, r);
           for (const r of now.obs) {
@@ -295,8 +315,10 @@ export async function census(
         }
       }
     }
-  } catch {
-    log('backfill census: failed (the archive could not be read)');
+  } catch (err) {
+    // A file-system code (EACCES, EIO, …) is the archive; `unknown` is the census's own failure. What was printed
+    // before has no totals line, and is no census.
+    log(`backfill census: failed (${errorCode(err)})`);
     return 1;
   }
   if (t.lines === 0) {

@@ -54,8 +54,8 @@ const USAGE = `usage: main.js <${ROLES.join('|')}> (capture takes --dry-run; wat
   api takes [--audience public|owner]; publish takes [--audience public|owner] [--once];
   replay takes --source <ID> [--spec <id>] --from <YYYY-MM-DD[THH:MM:SSZ]> --to <YYYY-MM-DD> [--dry-run];
   basemap takes <fetch|promote|rollback> [--build <YYYYMMDD>] [--dry-run];
-  backfill takes <plan|run|status|pause|resume|abort> (plan --spec <id> [--from D] [--to D] [--series key,…] [--dry-run];
-  run [--until <instant>]; pause|resume|abort --job <id>))`;
+  backfill takes <plan|run|status|pause|resume|abort|census> (plan --spec <id> [--from D] [--to D] [--series key,…] [--dry-run];
+  run [--until <instant>]; pause|resume|abort --job <id>; census --spec <id>))`;
 const RWS_HOST = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
 const RWS_LIMIT = 1000;
 
