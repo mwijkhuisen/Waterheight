@@ -1,4 +1,3 @@
-import { SchemaDrift } from '@rws/core';
 import type { ValiditySpec } from '../archive/validity.ts';
 import type { Req } from '../http/types.ts';
 import type { Chunk } from './plan.ts';
@@ -23,9 +22,7 @@ export type Inspect =
   | { ok: false; code: 'truncated' }
   | { ok: false; code: 'schema_drift'; drift: string };
 
-/** A SchemaDrift's code as the run prints it: a fixed code, or `other` should one ever carry anything else. */
-export const driftCode = (err: unknown): string =>
-  err instanceof SchemaDrift && /^[a-z0-9_]{1,40}$/.test(err.code) ? err.code : 'other';
+export { driftCode } from './drift.ts';
 
 /**
  * P14b: the dry-run constants of a provider (project.ts), measured on its real fixtures (a test pins them ±25 %).

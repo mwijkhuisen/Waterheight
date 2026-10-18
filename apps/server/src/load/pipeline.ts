@@ -192,6 +192,23 @@ const badText = (v: unknown): boolean =>
 const REFERENCE_MAX = 1e9;
 
 /**
+ * P14b (review S1): a backfill payload's observations outside its line's window [from, to) are dropped as
+ * `outside_backfill`, whatever the wire did, so a wire that forgets the window still cannot write a live day or the
+ * series of another source past DATA_FLOOR. A chunked result is materialised (a backfill payload is one bounded chunk).
+ */
+export function clipToWindow(n: Normalised, w: { from: number; to: number }): void {
+  const rows = n.obsChunks === undefined ? n.obs : [...obsParts(n)].flat();
+  const kept = rows.filter((r) => {
+    const t = Date.parse(r.ts);
+    return t >= w.from && t < w.to;
+  });
+  if (kept.length < rows.length)
+    n.dropped.outside_backfill = (n.dropped.outside_backfill ?? 0) + rows.length - kept.length;
+  n.obs = kept;
+  delete n.obsChunks;
+}
+
+/**
  * Rows PostgreSQL cannot store never fail the payload's transaction (round-2 review M1, M2): a reference, class or
  * warning row with U+0000 or a lone surrogate in any text is withheld as `bad_text`, a reference whose value is
  * beyond ±1e9 as `reference_out_of_range` (both RETAINED: alerted, the object kept for a replay). A withheld snapshot area stays
@@ -745,6 +762,15 @@ export class Loader {
         : await previousLoad(this.deps.db, line.source, line.spec, fetchedAt);
     const labelOffsets = spec.labelOffsets === true ? await labelOffsetsOf(this.deps.db, line.source) : undefined;
     const ceiling = spec.obsTarget === undefined ? EPOCH_MS : FLOOR_MS;
+    // P14a: a backfill payload loads only inside its chunk (when the line names one) and before DATA_EPOCH; P14b:
+    // before DATA_FLOOR for a spec that fills another source's series (its live rows own every day the site can show).
+    const window =
+      spec.backfill === true
+        ? {
+            from: line.backfill === undefined ? Number.NEGATIVE_INFINITY : Date.parse(line.backfill.from),
+            to: Math.min(ceiling, line.backfill === undefined ? ceiling : Date.parse(line.backfill.to)),
+          }
+        : undefined;
     let result: Normalised;
     let checked: CheckedRun[];
     try {
@@ -758,18 +784,8 @@ export class Loader {
         ...(refRegistries === undefined ? {} : { refRegistries }),
         ...(previous === null || spec.window === undefined ? {} : { since: previous.getTime() - spec.window }),
         ...(labelOffsets === undefined ? {} : { labelOffsets }),
-        // P14a: a backfill payload loads only inside its chunk (when the line names one) and before DATA_EPOCH;
-        // P14b: before DATA_FLOOR for a spec that fills another source's series (its live rows own every day the site
-        // can show). Its key and the adapter version name one parse, which a wire may keep across slice lines.
-        ...(spec.backfill === true
-          ? {
-              backfill: {
-                from: line.backfill === undefined ? Number.NEGATIVE_INFINITY : Date.parse(line.backfill.from),
-                to: Math.min(ceiling, line.backfill === undefined ? ceiling : Date.parse(line.backfill.to)),
-              },
-              memoKey: `${line.key}\n${adapterVersion}`,
-            }
-          : {}),
+        // A backfill line's key and the adapter version name one parse, which a wire may keep across slice lines.
+        ...(window === undefined ? {} : { backfill: window, memoKey: `${line.key}\n${adapterVersion}` }),
       });
       // P8a: every forecast run passes the core bounds before anything is stored (drift quarantines the payload).
       checked = checkForecasts(result.forecasts, line.source, fetchedAt.getTime(), result.dropped);
@@ -780,6 +796,9 @@ export class Loader {
       return setAside('quarantined', 'adapter_error');
     }
 
+    // P14b (review S1): the window holds whatever the wire did; a row outside it is `outside_backfill` (the wire counted
+    // it in `provider_values`, so the ledger's identities hold).
+    if (window !== undefined) clipToWindow(result, { from: window.from - (spec.windowSlackMs ?? 0), to: window.to });
     dropUnstorable(result);
     // Gap-fill rows go only into an active primary series of the fill source that is not withheld; a key that
     // source does not register is unknown (a registry change could still load it), any other is dropped.

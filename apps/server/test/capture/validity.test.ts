@@ -1,7 +1,8 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { adapter as nl4 } from '../../src/adapters/nl-4/capture.ts';
-import { validate } from '../../src/archive/validity.ts';
+import { ValiditySpec, validate } from '../../src/archive/validity.ts';
+import { RegistryValidity } from '../../src/capture/specs.ts';
 import { fixture, fixtureFor, registry, STAGE2 } from './helpers.ts';
 
 // Criterion "[CI] Every CaptureSpec has a validity assertion with one passing
@@ -122,5 +123,15 @@ describe('NL-4 patterns (S5)', () => {
     const f = fixture('NL-4', 'nl-4-page');
     expect((await validate(page?.validity ?? ({ format: 'html' } as never), 200, f.body)).ok).toBe(true);
     expect(nl4.alertKey?.(f.body.toString())).toMatch(/grenswaarden-en-legendakleuren.*\.xlsx/);
+  });
+});
+
+describe('a code-only ZIP pattern (P14b review S5)', () => {
+  it('is refused in capture.yaml, accepted from a provider', () => {
+    const zip = { format: 'zip', required: [], reject: [], min: 1, allow_status: [], end_html: false };
+    const withPattern = { ...zip, zip: { members: [], member_pattern: '^\\d{13}_x\\.csv$' } };
+    expect(RegistryValidity.safeParse(withPattern).success).toBe(false);
+    expect(ValiditySpec.safeParse(withPattern).success).toBe(true);
+    expect(RegistryValidity.safeParse({ ...zip, zip: { members: ['a.txt'] } }).success).toBe(true);
   });
 });

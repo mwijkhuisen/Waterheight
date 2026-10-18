@@ -200,6 +200,12 @@ export type SpecLoader = {
    */
   obsTarget?: string;
   /**
+   * P14b: how far before its line's window a backfill row may lie and still be the window's (FR-2: a day before
+   * 2007-03-23 starts at Europe/Paris midnight, up to 2 h before its UTC day). The pipeline's clip widens the window's
+   * lower edge by this, never its upper edge (the chunk's end and DATA_FLOOR hold exactly).
+   */
+  windowSlackMs?: number;
+  /**
    * P16b: a catch-up seed (nl-1-obs-*-catchup): each payload revises every settled day from DATA_EPOCH on, so its day
    * bumps are deferred into app_meta `bump_pending` and flushed by the loader's tick with one bumpDays per family, an
    * hour after the set's first deferral or once none came for 15 minutes (dirty.ts `bumpsDue`), not once per payload.

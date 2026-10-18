@@ -4,7 +4,8 @@ import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import { parseElab } from '../../adapters/fr-2/parse.ts';
 import type { Req } from '../../http/types.ts';
-import { driftCode, type Provider } from '../provider.ts';
+import { driftCode } from '../drift.ts';
+import type { Provider } from '../provider.ts';
 import type { BackfillSpecAny, Fr2BackfillSpec, Fr2Unit, LoadedBackfillSpec } from '../spec.ts';
 
 // P14b: the FR-2 backfill provider (Hub'Eau obs_elab): units are the FR-1 aggregate twin series, one GET per series

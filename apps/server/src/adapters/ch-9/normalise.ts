@@ -5,6 +5,7 @@ import {
   parseInstant,
   QC,
   type Registry,
+  rangeBit,
   SchemaDrift,
   type SeriesDecl,
   scale,
@@ -37,6 +38,8 @@ const FLOOR_MS = Date.parse(FLOOR);
 const GRID_MS = 600_000;
 /** pegelhoehe is cm above 240 m ü. M. */
 const PEGELHOEHE_ZERO_CM = 24_000;
+/** CH-1's floor: no Swiss water level is below 150 m ü. M. (a lower `pegel` is not a level of LN02). */
+const LEVEL_FLOOR_M = 150;
 const TOLERANCE_CM = 1;
 
 /** dataset → CH-1 station; `q`: whether its discharge is loaded. */
@@ -85,7 +88,18 @@ export function normaliseRecords(records: readonly Ch9Record[], ctx: Context): R
       out.unknown_values += 1;
       out.unknown += 1;
     } else if (decl.native_unit !== UNIT[quantity]) count('unit_mismatch');
-    else out.obs.push({ series: decl.key, ts: toIso(ts), value: scale(decl.to_canonical, raw), qc: QC.RAW });
+    // The CH-1 level rules (review C2): an exact 0 is "no value", and no Swiss level is below 150 m ü. M.
+    else if (quantity === 'H' && raw === 0) count('sentinel');
+    else if (quantity === 'H' && raw < LEVEL_FLOOR_M) count('datum_mismatch');
+    else {
+      const value = scale(decl.to_canonical, raw);
+      out.obs.push({
+        series: decl.key,
+        ts: toIso(ts),
+        value,
+        qc: QC.RAW | rangeBit(quantity === 'Q' ? 'Q' : 'level', value),
+      });
+    }
   };
 
   for (const r of records) {

@@ -168,6 +168,21 @@ describe('normalise', () => {
     ...over,
   });
 
+  it("applies CH-1's level rules and range bit (review C2): 0 is a sentinel, below 150 m a datum mismatch", () => {
+    const out = normaliseRecords(
+      [
+        rec('2026-06-01T00:00:00+00:00', { pegel: 0, pegelhoehe: null }),
+        rec('2026-06-01T00:10:00+00:00', { pegel: 100, pegelhoehe: null }),
+        rec('2026-06-01T00:20:00+00:00', { pegelhoehe: null, abfluss: 200_000 }),
+      ],
+      c(),
+    );
+    expect(out.dropped).toMatchObject({ sentinel: 1, datum_mismatch: 1 });
+    const q = out.obs.find((r) => r.series === '2289/Q' && r.ts === '2026-06-01T00:20:00.000Z');
+    expect(q?.qc).toBe(QC.RAW | QC.RANGE);
+    expect(out.provider_values).toBe(out.obs.length + Object.values(out.dropped).reduce((a, b) => a + b, 0));
+  });
+
   it('only the 10-minute grid loads, in any offset spelling', () => {
     const out = normaliseRecords(
       [rec('2026-06-01T00:00:00+00:00'), rec('2026-06-01T00:05:00+00:00'), rec('2026-06-01T02:10:00+02:00')],

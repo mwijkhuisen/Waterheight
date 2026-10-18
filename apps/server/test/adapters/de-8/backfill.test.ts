@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { StationsFile } from '@rws/contracts';
-import { type Registry, SchemaDrift } from '@rws/core';
+import { QC, type Registry, SchemaDrift } from '@rws/core';
 import fc from 'fast-check';
 import { strToU8, unzipSync, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
@@ -203,6 +203,13 @@ describe('the loader spec', () => {
     ]);
     expect(out.raw_dropped).toEqual({ unselected: 2, unregistered: 2, wsv_duplicate: 2 });
     expect([out.dropped, out.provider_values, out.unknown, out.unknown_values]).toEqual([{}, 2, 0, 0]);
+  });
+
+  it("a value outside the stage range keeps the live DE-7 rows' RANGE bit (review C2)", () => {
+    const t = utc('2026-06-01T00:00:00Z');
+    const rows = new Map([[STAH, { ts: [t], value: [-9999] }]]);
+    const out = normaliseBackfill({ rows, counted: new Map() }, { registry, window: { from: t, to: t + 900_000 } });
+    expect(out.obs.map((r) => [r.value, r.qc])).toEqual([[-9999, QC.VALIDATED | QC.RANGE]]);
   });
 
   it('a placeholder number is counted as placeholder (pure normaliser)', () => {

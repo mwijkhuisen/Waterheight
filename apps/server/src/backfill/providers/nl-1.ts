@@ -6,7 +6,8 @@ import { buildCheck, adapter as nl1 } from '../../adapters/nl-1/capture.ts';
 import { JSON_CAPS, parseCheck, parseWaarnemingen } from '../../adapters/nl-1/parse.ts';
 import { durationMs, REGISTRY_DIR } from '../../capture/specs.ts';
 import type { Req } from '../../http/types.ts';
-import { driftCode, type Provider } from '../provider.ts';
+import { driftCode } from '../drift.ts';
+import type { Provider } from '../provider.ts';
 import type { BackfillSpecAny, LoadedBackfillSpec, Nl1BackfillSpec, Series } from '../spec.ts';
 
 // The NL-1 backfill provider (P14a; moved here in P14b): the series of the spec from registry/stations/nl-1.yaml,

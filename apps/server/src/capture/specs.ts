@@ -15,6 +15,11 @@ import type { Req, Row } from '../http/types.ts';
 export const REGISTRY_DIR = new URL('../../../../registry/', import.meta.url);
 
 const Duration = z.string().regex(/^-?P(?:\d+D)?(?:T(?:\d+H)?(?:\d+M)?)?$/);
+/** P14b (review S5): a member pattern becomes a RegExp, so it is code-only (a backfill provider's), never registry data. */
+export const RegistryValidity = ValiditySpec.refine(
+  (v) => v.zip?.member_pattern === undefined && v.zip?.header_all === undefined,
+  'zip.member_pattern and zip.header_all are code-only, never from capture.yaml',
+);
 
 /** ISO 8601 duration subset (days, hours, minutes; optional leading minus) in ms. */
 export function durationMs(d: string): number {
@@ -46,7 +51,7 @@ export const Spec = z.strictObject({
     expand: z.boolean().default(false),
     max_expand: z.number().int().positive().max(500).default(60),
     /** Validity of the stage-2 documents (default: the spec's own). */
-    expand_validity: ValiditySpec.optional(),
+    expand_validity: RegistryValidity.optional(),
   }),
   variants: z
     .strictObject({
@@ -101,7 +106,7 @@ export const Spec = z.strictObject({
     .max(25 * 1024 * 1024),
   timeout: z.enum(['normal', 'metadata']).default('normal'),
   retention: z.enum(['obs', 'forever']),
-  validity: ValiditySpec,
+  validity: RegistryValidity,
   /** §0.1b day-0 harvest, run once off the scheduler. */
   seed: z
     .strictObject({

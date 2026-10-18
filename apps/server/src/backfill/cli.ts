@@ -91,6 +91,11 @@ export function parseBackfillArgs(argv: readonly string[]): BackfillArgs | strin
 }
 
 const print = (o: unknown) => console.log(JSON.stringify(o));
+/**
+ * A rough wait per committed chunk until the loader has it (UNLOADED_SLEEP_MS 2 s plus a loader tick of up to 10 s; a
+ * warm DE-8 slice loads in milliseconds): the dry-run's estimate for a reuse provider, never a limit.
+ */
+const SLICE_WAIT_MS = 8_000;
 
 const jobLine = (j: Job) => ({
   job: j.id,
@@ -179,12 +184,18 @@ export async function plan(
     const rows = planned.map((j) => project(j.unit, j.from, j.to, spec.chunk_ms, provider));
     for (const r of rows) print(r);
     const ratio = (provider.dryRun ?? NL1_DRY_RUN).zstd_ratio;
+    const t = totals(rows, spec.limits.min_interval_ms);
     print({
       totals: {
         spec: spec.id,
         from: range.from.toISOString(),
         to: range.to.toISOString(),
-        ...totals(rows, spec.limits.min_interval_ms),
+        ...t,
+        // P14b (review C4): a reused answer sends nothing, but every slice still waits for its load (the guard's
+        // `unloaded`), so the night is the slices', not the requests'.
+        ...(provider.reuse === true
+          ? { hours_with_loads: Math.round(t.hours_at_pace * 10 + (t.chunks * SLICE_WAIT_MS) / 360_000) / 10 }
+          : {}),
         zstd_ratio: ratio,
         ...(ratio === 1 ? { note: 'the archive grows by the bytes: a ZIP does not compress' } : {}),
       },

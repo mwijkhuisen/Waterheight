@@ -4,7 +4,8 @@ import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import { DATASETS } from '../../adapters/ch-9/normalise.ts';
 import { countRecords } from '../../adapters/ch-9/parse.ts';
-import { driftCode, type Provider } from '../provider.ts';
+import { driftCode } from '../drift.ts';
+import type { Provider } from '../provider.ts';
 import type { Ch9BackfillSpec, Ch9Unit } from '../spec.ts';
 
 // P14b: the CH-9 backfill provider (data.bs.ch): units are the spec's datasets, one GET of the dataset's JSON export per

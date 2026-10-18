@@ -1,4 +1,4 @@
-import { emptyNormalised, type Normalised, QC, type Registry, SchemaDrift, scale } from '@rws/core';
+import { emptyNormalised, type Normalised, QC, type Registry, rangeBit, SchemaDrift, scale } from '@rws/core';
 import type { Held, HydroRow, Station } from './parse.ts';
 
 export { TIME } from './parse.ts';
@@ -192,11 +192,13 @@ export function normaliseBackfill(input: BackfillRows, ctx: BackfillContext): Ba
         bump(out.dropped, 'no_value', 1);
         continue;
       }
+      const value = scale(decl.to_canonical, v);
+      // The live DE-7 rows' range check too (review C2): a glitch keeps its RANGE bit, whatever the archive says.
       out.obs.push({
         series: decl.key,
         ts: new Date(g).toISOString(),
-        value: scale(decl.to_canonical, v),
-        qc: QC.VALIDATED,
+        value,
+        qc: QC.VALIDATED | rangeBit(decl.value_kind ?? 'stage', value),
       });
     }
   }

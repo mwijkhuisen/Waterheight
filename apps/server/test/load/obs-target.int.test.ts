@@ -34,9 +34,11 @@ const info: [string, Record<string, string | number> | undefined][] = [];
 /** A backfill run of the wires' shape: rows of the context's registry inside `ctx.backfill`, the rest dropped. */
 const run = (b: Uint8Array, c: LoadContext): Backfilled => {
   seen.push({ registry: c.registry, backfill: c.backfill, memoKey: c.memoKey });
-  const body = JSON.parse(Buffer.from(b).toString('utf8')) as { rows: Row[]; drift?: true };
+  const body = JSON.parse(Buffer.from(b).toString('utf8')) as { rows: Row[]; drift?: true; ignoreWindow?: true };
   if (body.drift) throw new SchemaDrift('a2_test');
-  const window = c.backfill ?? { from: Number.NEGATIVE_INFINITY, to: Number.POSITIVE_INFINITY };
+  // `ignoreWindow`: a faulty wire that loads every row it reads (review S1: the pipeline holds the window anyway).
+  const all = { from: Number.NEGATIVE_INFINITY, to: Number.POSITIVE_INFINITY };
+  const window = body.ignoreWindow ? all : (c.backfill ?? all);
   const inside = body.rows.filter((r) => Date.parse(r.ts) >= window.from && Date.parse(r.ts) < window.to);
   const obs = inside.filter((r) => c.registry.has(r.series)).map((r) => ({ ...r, qc: 0 }));
   const dropped: Record<string, number> = {};
@@ -211,6 +213,24 @@ describe('a backfill into another source (P14b)', { timeout: 60_000 }, () => {
     expect(replayed).toMatchObject({ lines: 2, loaded: 2, n_new: 0, n_changed: 0 });
     expect(await h.checksums()).toEqual(before);
     expect(await h.count('backfill_chunk')).toBe(2);
+  });
+
+  it('holds the window in the pipeline when a wire ignores it (review S1)', async () => {
+    const rows: Row[] = [
+      { series: STAH, ts: '2026-04-01T00:00:00Z', value: 201 }, // before the chunk
+      { series: STAH, ts: '2026-05-25T00:00:00Z', value: 202 }, // inside
+      { series: STAH, ts: '2026-08-15T00:00:00Z', value: 203 }, // past DATA_FLOOR, inside the line's chunk
+    ];
+    await put({ rows, ignoreWindow: true }, jobDe8, [['2026-05-20T00:00:00.000Z', '2026-10-01T00:00:00.000Z']]);
+    expect(await loader('DE-7').tick()).toEqual({ lines: 1, loaded: 1 });
+    const stored = (await obsOf(STAH)).filter((r) => r.value > 200);
+    expect(stored).toEqual([{ ts: new Date('2026-05-25T00:00:00Z'), value: 202 }]);
+    const ledger = await h.t.admin.query(
+      `SELECT provider_values, kept, dropped, reconciled FROM backfill_chunk c
+       JOIN ingest_batch b ON b.archive_key = c.archive_key WHERE c.job_id = $1 ORDER BY b.id DESC LIMIT 1`,
+      [jobDe8],
+    );
+    expect(ledger.rows).toEqual([{ provider_values: 3, kept: 1, dropped: 2, reconciled: true }]);
   });
 
   it('stores a provider aggregate without a rollup or a dirty row', async () => {

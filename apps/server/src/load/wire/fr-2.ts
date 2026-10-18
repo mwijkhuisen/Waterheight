@@ -20,6 +20,9 @@ export const ADAPTER: LoadAdapter | null = {
       needsVariant: false,
       backfill: true,
       obsTarget: 'FR-1',
+      // A day before 2007-03-23 is stamped at Europe/Paris midnight, 1 or 2 h before its UTC day: the pipeline's clip
+      // of the window (by stamp) takes that much more at its lower edge; the normaliser windows by the day itself.
+      windowSlackMs: 2 * 3_600_000,
       // ctx.registry is FR-1's (the target's); the window is the line's chunk.
       run: (body, ctx): Backfilled =>
         normaliseElab(parseElab(body).data, {
