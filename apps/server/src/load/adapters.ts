@@ -68,6 +68,7 @@ import {
   CATCHUP_CAPS,
   parseWaarnemingen,
   TIDE_CAPS,
+  type Waarnemingen,
   type WaarnemingenCaps,
 } from '../adapters/nl-1/parse.ts';
 import { driftReport as driftNl2 } from '../adapters/nl-2/drift.ts';
@@ -360,34 +361,38 @@ const NL1_FLOOR_MS = Date.parse(NL1_BACKFILL_FLOOR);
  * `window` (it loads whole), and the per-value counts of its ledger. A list's `unknown` verdict depends on its
  * metadata alone, so it is asked of the list without its values. A row outside [floor, DATA_EPOCH) or outside the
  * line's chunk is dropped as `outside_backfill` (review S3: a forged or recovered line loads no other time), so the
- * ledger's identities still hold.
+ * ledger's identities still hold. #184: the census (backfill/census.ts) runs the same function on parsed lists.
  */
+export function loadNl1Backfill(
+  lists: readonly Waarnemingen[],
+  c: Pick<LoadContext, 'registry' | 'fetchedAt' | 'backfill'>,
+): Backfilled {
+  const ctx = { ...c, maxAgeMs: null };
+  let unknown_values = 0;
+  for (const l of lists)
+    if (normaliseNl1([{ ...l, metingen: [] }], ctx).unknown > 0) unknown_values += l.metingen.length;
+  const out = normaliseNl1(lists, ctx);
+  const lo = Math.max(NL1_FLOOR_MS, c.backfill?.from ?? Number.NEGATIVE_INFINITY);
+  const hi = c.backfill?.to ?? Number.POSITIVE_INFINITY;
+  const obs = out.obs.filter((r) => {
+    const t = Date.parse(r.ts);
+    return t >= lo && t < hi;
+  });
+  if (obs.length < out.obs.length)
+    out.dropped.outside_backfill = (out.dropped.outside_backfill ?? 0) + out.obs.length - obs.length;
+  return {
+    ...out,
+    obs,
+    provider_values: lists.reduce((n, l) => n + l.metingen.length, 0),
+    unknown_values,
+  };
+}
+
 const nl1Backfill: SpecLoader = {
   maxBytes: 4 * MIB,
   needsVariant: false,
   backfill: true,
-  run: (b, c): Backfilled => {
-    const lists = parseWaarnemingen(b);
-    const ctx = { ...c, maxAgeMs: null };
-    let unknown_values = 0;
-    for (const l of lists)
-      if (normaliseNl1([{ ...l, metingen: [] }], ctx).unknown > 0) unknown_values += l.metingen.length;
-    const out = normaliseNl1(lists, ctx);
-    const lo = Math.max(NL1_FLOOR_MS, c.backfill?.from ?? Number.NEGATIVE_INFINITY);
-    const hi = c.backfill?.to ?? Number.POSITIVE_INFINITY;
-    const obs = out.obs.filter((r) => {
-      const t = Date.parse(r.ts);
-      return t >= lo && t < hi;
-    });
-    if (obs.length < out.obs.length)
-      out.dropped.outside_backfill = (out.dropped.outside_backfill ?? 0) + out.obs.length - obs.length;
-    return {
-      ...out,
-      obs,
-      provider_values: lists.reduce((n, l) => n + l.metingen.length, 0),
-      unknown_values,
-    };
-  },
+  run: (b, c): Backfilled => loadNl1Backfill(parseWaarnemingen(b), c),
 };
 
 /**
