@@ -43,11 +43,11 @@ Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/
 
 | | |
 |---|---|
-| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/38878209797 (`pull_request` on `claude/fix-143-stage3-ch1` at `dabb4be`, 2026-10-16), job `rivernet fixture` |
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/39158162082 (`pull_request` on `claude/p17a-delta-canals` at `86c607f`, 2026-10-18), job `rivernet fixture` |
 | Made | tippecanoe 2.79.0 in the tool image (`tools/geo/rivernet/tiles.sh build` with the bins input), layers `rivers` and `reach_bins`, z0–12 |
-| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.330476,11.397685,53.443230, 4,105 tiles. Layer `rivers`: one feature per drawn reach (1,767 reaches in the file), each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation`. Layer `reach_bins`: 9,875 bins (1 to 8 per reach; the file's tilestats, equal to the sum of `binCount` (`apps/web/src/features/flow/reaches/bins.ts`, imported and summed over the 1,767 `reaches` of `test/fixtures/reaches-fixture.json`) of the fixture), each with `reach_id`, `bin`, `seg` and `tidal`, in the tiles of zoom 8 and up only (a z5 or z7 tile holds `rivers` alone) |
-| Bytes | 4,984,769 |
-| sha256 | `02d72bb7bb28958805c23932dc4c7bff6711aec416735c1739b50cfcaa11cccd` |
+| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.330476,11.397685,53.443230, 4,150 tiles. Layer `rivers`: one feature per drawn reach (1,794 reaches in the file), each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation`. Layer `reach_bins`: 10,055 bins (1 to 8 per reach; the file's tilestats, equal to the sum of `binCount` (`apps/web/src/features/flow/reaches/bins.ts`, imported and summed over the 1,794 `reaches` of `test/fixtures/reaches-fixture.json`) of the fixture), each with `reach_id`, `bin`, `seg` and `tidal`, in the tiles of zoom 8 and up only (a z5 or z7 tile holds `rivers` alone) |
+| Bytes | 5,045,937 |
+| sha256 | `82e99fda8a5b6489cc29f1d493e2c48a34884ef3256c9bf3cb038dae2623c4cd` |
 
 A refresh of the fixture graph replaces it with the next run's artifact and regenerates `test/fixtures/reaches-fixture.json` (`UPDATE_FIXTURE=1`); compare the two reaches files first.
 
