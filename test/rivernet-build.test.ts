@@ -453,8 +453,8 @@ describe('buildGraph: the split at a join onto another river', () => {
   });
 });
 
-// P17a: the declared tidal zone and canals (direction `none`), member-of selection and mouths.
-describe('buildGraph: tidal zone, canals, member-of and mouths (P17a)', () => {
+// P17a: the declared tidal zone and canals (direction `none`) and mouths.
+describe('buildGraph: tidal zone, canals and mouths (P17a)', () => {
   const up = river('up', 1);
   const zone = (id: string, rel: number) => river(id, rel, { kind: 'delta_channel', tidal_zone: true });
   const canal = river('kanaal', 3, { kind: 'canal' });
@@ -583,47 +583,6 @@ describe('buildGraph: tidal zone, canals, member-of and mouths (P17a)', () => {
     expect(() => buildGraph(ways(...zoneLoop), zoneRels, mouth(5), provenance)).toThrow(
       /^mouth_unplaced: delta-noordzee$/,
     );
-  });
-
-  it('selects a member-of row by name from the parent relation, any role, minus drop_ways, with no relation check', () => {
-    const rhine = river('rhine', 1, { wikidata: 'Q584' });
-    const noord = river('noord', null, {
-      osm_way_name: null,
-      osm_member_of: { river: 'rhine', name: 'Noord' },
-      wikidata: 'Q1899552', // not the Rhine relation's tag: no wikidata_mismatch
-      drop_ways: [{ id: 4, reason: 'test' }],
-    });
-    const named = { waterway: 'river', name: 'Noord' };
-    const ws = ways(
-      way(1, [1, 2]), // the Rhine's main stream
-      way(2, [2, 3], named), // side_stream
-      way(3, [3, 4], { waterway: 'canal', name: 'Noord' }), // empty role, any waterway
-      way(4, [4, 5], named), // tributary, but in drop_ways
-      way(5, [2, 6], { waterway: 'river', name: 'Oude Maas' }), // another name
-      way(6, [3, 7], { natural: 'water', name: 'Noord' }), // no waterway tag
-      way(7, [8, 9], named), // the name, but no member
-    );
-    const base = rel(1, 'Q584', [
-      [1, 'main_stream'],
-      [2, 'side_stream'],
-      [3, ''],
-      [4, 'tributary'],
-      [5, 'side_stream'],
-      [6, 'side_stream'],
-    ]);
-    const rhineRel = { ...base, members: [...base.members, { type: 'n' as const, ref: 3, role: '' }] };
-    const r = buildGraph(ws, [rhineRel], rivers(rhine, noord), provenance);
-    expect(edgesOf(r)).toEqual(['w1.0:n1>n2:rhine', 'w2.0:n2>n3:noord', 'w3.0:n3>n4:noord']);
-    expect((r.report as { rivers: unknown[] }).rivers).toContainEqual(
-      expect.objectContaining({
-        id: 'noord',
-        relation: null,
-        relation_tags: null,
-        members: { drop_ways: 1, selected: 2 },
-      }),
-    );
-    // A member-of row has no relation of its own: a missing parent relation is the parent's relation_missing only.
-    expect(() => buildGraph(ws, [], rivers(rhine, noord), provenance)).toThrow(/^relation_missing: r1$/);
   });
 
   it('writes schema_version 2 on the graph and the reaches, and the same bytes whatever the input order', () => {

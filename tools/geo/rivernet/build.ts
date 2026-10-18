@@ -123,18 +123,6 @@ function selectWays(
     members[k] = (members[k] ?? 0) + 1;
   };
   const kept = new Set<number>();
-  if (river.osm_member_of !== undefined) {
-    // P17a: a delta side stream with no relation of its own: the waterway ways of the parent river's curated
-    // relation (here `relation`), any role, whose name tag is the given one.
-    for (const m of relation?.members ?? []) {
-      const way = m.type === 'w' ? ways.get(m.ref) : undefined;
-      if (way?.tags.waterway === undefined || way.tags.name !== river.osm_member_of.name) continue;
-      if (drop.has(m.ref)) count('drop_ways');
-      else kept.add(m.ref);
-    }
-    members.selected = kept.size;
-    return { kept, members, relationTags: null };
-  }
   if (relation === undefined) {
     // A documented way selection: waterway ways tagged with the river's Wikidata id and its name.
     for (const [id, way] of ways) {
@@ -260,7 +248,6 @@ export function buildGraph(
   const empty: string[] = [];
   const wayRivers = new Map<number, Set<string>>();
   const riverReports: Record<string, unknown>[] = [];
-  const relationOf = new Map(rivers.rivers.map((r) => [r.id, r.osm_relation_id]));
   for (const river of [...rivers.rivers].sort((a, b) => byString(a.id, b.id))) {
     const relation = river.osm_relation_id === null ? undefined : relById.get(river.osm_relation_id);
     if (river.osm_relation_id !== null && relation === undefined) {
@@ -272,9 +259,7 @@ export function buildGraph(
     if (relation !== undefined && relation.tags.type !== 'waterway') notWaterway.push(`r${relation.id}`);
     const tag = relation?.tags.wikidata;
     if (tag !== undefined && tag !== river.wikidata) mismatch.push(`r${relation?.id}`);
-    // A member-of row has no relation of its own: it selects from the parent river's, which that river's row checks.
-    const of = river.osm_member_of;
-    const sel = selectWays(river, of === undefined ? relation : relById.get(relationOf.get(of.river) ?? 0), ways);
+    const sel = selectWays(river, relation, ways);
     if (sel.kept.size === 0) empty.push(river.id);
     for (const id of sel.kept) wayRivers.set(id, (wayRivers.get(id) ?? new Set()).add(river.id));
     const tags = sel.relationTags;

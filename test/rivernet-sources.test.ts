@@ -124,8 +124,4 @@ describe('selection', () => {
   it('is empty without selections', () => {
     expect(selection({ rivers: [river(1, null, 'Q1')] }, { canal_traps: [] })).toEqual({ relations: 'r1\n', qids: '' });
   });
-  it('adds nothing for a member-of row: its ways come in as members of the parent relation (P17a)', () => {
-    const rivers = { rivers: [river(1, null, 'Q1'), river(null, null, 'Q2')] };
-    expect(selection(rivers, { canal_traps: [] })).toEqual({ relations: 'r1\n', qids: '' });
-  });
 });

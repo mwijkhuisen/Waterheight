@@ -64,9 +64,6 @@ export const River = z.strictObject({
   tidal_zone: z.literal(true).optional(),
   osm_relation_id: z.number().int().positive().nullable(),
   osm_way_name: Spelling.nullable(),
-  // P17a: the waterway ways of `river`'s curated relation (any role) whose OSM `name` is `name`. The name selects
-  // ways only and never reaches an output.
-  osm_member_of: z.strictObject({ river: Slug, name: Spelling }).optional(),
   wikidata: Qid,
   parent_river_id: Slug.nullable(),
   km_direction: z.enum(KM_DIRECTIONS),
@@ -161,10 +158,8 @@ export function validateRivers(input: unknown): { problems: string[]; rivers?: R
     dup('id', ids, r.id, r.id);
     dup('osm_relation_id', relations, r.osm_relation_id, r.id);
     dup('wikidata', qids, r.wikidata, r.id);
-    if (
-      [r.osm_relation_id !== null, r.osm_way_name !== null, r.osm_member_of !== undefined].filter(Boolean).length !== 1
-    )
-      problems.push(`${r.id}: exactly one of osm_relation_id, osm_way_name and osm_member_of must be set`);
+    if ((r.osm_relation_id === null) === (r.osm_way_name === null))
+      problems.push(`${r.id}: exactly one of osm_relation_id and osm_way_name must be set`);
     if (r.tidal_zone && r.kind !== 'delta_channel') problems.push(`${r.id}: tidal_zone needs kind delta_channel`);
     for (const [src, list] of Object.entries(r.names))
       if (new Set(list).size !== list.length) problems.push(`${r.id}: names.${src} has a duplicate spelling`);
@@ -172,13 +167,9 @@ export function validateRivers(input: unknown): { problems: string[]; rivers?: R
     for (const w of r.drop_ways ?? []) dup('drop_ways id', ways, w.id, r.id);
   }
   const parent = new Map(f.rivers.map((r) => [r.id, r.parent_river_id]));
-  const relationOf = new Map(f.rivers.map((r) => [r.id, r.osm_relation_id]));
   for (const r of f.rivers) {
     if (r.parent_river_id !== null && !parent.has(r.parent_river_id))
       problems.push(`${r.id}: unknown parent_river_id ${r.parent_river_id}`);
-    const of = r.osm_member_of?.river;
-    if (of !== undefined && (relationOf.get(of) ?? null) === null)
-      problems.push(`${r.id}: osm_member_of.river ${of} is not a river with an osm_relation_id`);
   }
   const looped = new Set<string>();
   for (const r of f.rivers) {

@@ -5,8 +5,7 @@
 #                    water_name); a test checks each one occurs there
 #   aliases          other spellings (OSM name:* and local forms), for P6b matching; never shown
 #   osm_relation_id  the curated type=waterway relation; the geo run fails if it carries another wikidata tag
-#   osm_way_name     only without a relation or osm_member_of: ways tagged waterway=*, wikidata=<wikidata> and
-#                    name=<this>
+#   osm_way_name     only without a relation: ways tagged waterway=*, wikidata=<wikidata> and name=<this>
 #   parent_river_id  the river it flows into, or for a delta branch the one it splits from
 #   km_direction     how the official km count (downstream, upstream = from the mouth, none known)
 #   evidence         where the relation and Wikidata ids come from (never guessed)
@@ -28,9 +27,6 @@
 #                    until P17b
 #   tidal_zone       (P17a, `true` only, delta_channel only) the declared tidal zone: its edges have direction `none`, so
 #                    loops are allowed there; its reaches are tidal and carry no travel time
-#   osm_member_of    (P17a) instead of a relation or a way name: {river, name}, the waterway ways of that registered
-#                    river's curated relation (any role) whose OSM name is `name`, minus drop_ways; selection only,
-#                    never in an output
 #   mouths           (P17a, top level) where a river ends in the sea or a lake: id, river, `at` [lon, lat], `max_m`
 #                    (at most 2000), `waterbody` (one of PENDING_WATERBODY_IDS until P17b's water-body file) and evidence;
 #                    the mouth node is the node of the river's own edges nearest `at` within `max_m`, else the build

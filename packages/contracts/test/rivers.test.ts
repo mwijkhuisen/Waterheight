@@ -91,7 +91,7 @@ describe('rivers.yaml schema', () => {
   });
 });
 
-describe('rivers.yaml kind, tidal zone, member-of selection and mouths (P17a)', () => {
+describe('rivers.yaml kind, tidal zone and mouths (P17a)', () => {
   const mouth = (over: Record<string, unknown> = {}) => ({
     id: 'waal-noordzee',
     river: 'waal',
@@ -109,7 +109,7 @@ describe('rivers.yaml kind, tidal zone, member-of selection and mouths (P17a)', 
       river('noord', 'Noord', {
         kind: 'delta_channel',
         tidal_zone: true,
-        osm_member_of: { river: 'rhine', name: 'Noord' },
+        osm_way_name: 'Noord',
         wikidata: 'Q7',
         parent_river_id: 'waal',
       }),
@@ -117,31 +117,17 @@ describe('rivers.yaml kind, tidal zone, member-of selection and mouths (P17a)', 
     return { ...d, mouths: [mouth()] };
   };
 
-  it('accepts kind, tidal_zone, osm_member_of and mouths, all optional', () => {
+  it('accepts kind, tidal_zone and mouths, all optional', () => {
     expect(problems(p17a())).toBe('');
     expect(PENDING_WATERBODY_IDS).toEqual(['eems-dollard', 'ketelmeer', 'noordzee', 'westerschelde', 'zwarte-meer']);
   });
 
   it('fails each mutation with its own problem', () => {
-    const noord = (d: ReturnType<typeof p17a>) => d.rivers[5] as Record<string, unknown>;
     const cases: [string, (d: ReturnType<typeof p17a>) => void, RegExp][] = [
       ['bad kind', (d) => (at(d, 0).kind = 'lake'), /kind/],
       ['tidal_zone false', (d) => (at(d, 1).tidal_zone = false), /tidal_zone/],
       ['tidal_zone on a river', (d) => (at(d, 1).kind = 'river'), /waal: tidal_zone needs kind delta_channel/],
       ['tidal_zone without a kind', (d) => delete at(d, 1).kind, /waal: tidal_zone needs kind delta_channel/],
-      ['member-of and a relation', (d) => (noord(d).osm_relation_id = 9), /noord: exactly one of/],
-      ['member-of and a way name', (d) => (noord(d).osm_way_name = 'Noord'), /noord: exactly one of/],
-      [
-        'member-of a river without a relation',
-        (d) => (noord(d).osm_member_of = { river: 'merkske', name: 'Noord' }),
-        /noord: osm_member_of.river merkske is not a river with an osm_relation_id/,
-      ],
-      [
-        'member-of an unknown river',
-        (d) => (noord(d).osm_member_of = { river: 'nowhere', name: 'Noord' }),
-        /noord: osm_member_of.river nowhere is not/,
-      ],
-      ['member-of without a name', (d) => (noord(d).osm_member_of = { river: 'rhine' }), /osm_member_of/],
       [
         'mouth of an unknown river',
         (d) => (d.mouths = [mouth({ river: 'nowhere' })]),
