@@ -1156,8 +1156,8 @@ sources:
     country: FR
     licence_text: As FR-1
     licence_kind: etalab-2.0
-    audience: "off"
-    capture_enabled: false
+    audience: public
+    capture_enabled: true
     permission_required: false
     private_basis: null
     display: true
@@ -1678,8 +1678,8 @@ sources:
     country: CH
     licence_text: opendata.swiss "Open use"
     licence_kind: ch-open-use
-    audience: "off"
-    capture_enabled: false
+    audience: public
+    capture_enabled: true
     permission_required: false
     private_basis: null
     display: true

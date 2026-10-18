@@ -2884,13 +2884,14 @@ describe('belgian set (catalogue §0.6)', () => {
   });
 
   it('every one of the 25 is a public primary station of the registry on Belgian soil (an id typo here would never pass)', () => {
-    type Row = { id: string; country: string; role: string; audience: string };
+    type Row = { id: string; country: string; role: string; audience: string; aggregate?: string };
     const rows = ['nl-1', 'fr-1'].flatMap(
       (file) =>
         (parse(readFileSync(join(repoRoot, `registry/stations/${file}.yaml`), 'utf8')) as { stations: Row[] }).stations,
     );
     for (const id of ids) {
-      const of = rows.filter((r) => r.id === id);
+      // The series of the station, not its FR-2 aggregate twins (P14b: Torgny has two).
+      const of = rows.filter((r) => r.id === id && r.aggregate === undefined);
       expect(of.length, id).toBeGreaterThan(0);
       for (const r of of) expect([r.country, r.role, r.audience], id).toEqual(['BE', 'primary', 'public']);
     }

@@ -4,12 +4,11 @@ import { validate } from '../archive/validity.ts';
 import { type Archive, sha256 } from '../archive/writer.ts';
 import type { Client } from '../http/client.ts';
 import type { ErrorCode, Req } from '../http/types.ts';
-import { DATA_EPOCH } from '../load/dirty.ts';
 import type { JobStatus, JobStore } from './job.ts';
 import { inWindow, Pacer, windowEnd } from './pacer.ts';
-import { nextChunk, planChunks, probeYears, requestBudget, yearEnd } from './plan.ts';
+import { jobBudget, nextChunk, yearEnd } from './plan.ts';
 import { driftCode, PROVIDERS, type Provider } from './provider.ts';
-import type { LoadedBackfill } from './spec.ts';
+import { ceilingMs, type LoadedBackfill, type Unit } from './spec.ts';
 
 // The backfill run loop (P14a, plan §3.3): one-shot, inside the off-peak window, one job at a time in id order.
 // Each pass of a job's loop is: window → budget → guard (a finished job's too) → pace → request → commit. A chunk
@@ -17,7 +16,8 @@ import type { LoadedBackfill } from './spec.ts';
 // cursor update; a kill -9 between any two of them resumes at the old cursor, and the second line for the same chunk
 // loads idempotently.
 // Only fixed codes reach the job table and the output, never provider text. One runner per host: the run holds the
-// host's lease (backfill_lease) from start to exit and renews it before every request (review C1/S1).
+// host's lease (backfill_lease) from start to exit and renews it before every request and every commit (review
+// C1/S1; P14b: a reused answer sends nothing, so the commit renews it).
 
 export const MAX_ATTEMPTS = 5;
 /** The guard said wait (loader not running, backlog, source stale): look again after this long. */
@@ -36,7 +36,6 @@ export const UNLOADED_SLEEP_MS = 2_000;
 export const STUCK_MS = 10 * 60_000;
 /** A truncated response halves the chunk at the cursor, down to this; below it the job fails `truncated` (C3). */
 export const MIN_CHUNK_MS = 86_400_000;
-const EPOCH_MS = Date.parse(DATA_EPOCH);
 /** Client errors returned before anything went out: no request is counted for them (review C6/S4). */
 const NOT_SENT: ReadonlySet<ErrorCode> = new Set([
   'bad_url',
@@ -99,8 +98,13 @@ export type Stopped =
   | 'interrupted';
 export type RunResult = { stopped: Stopped; jobs: JobResult[]; guard_waits: number };
 
+type Answered = { status: number; headers: Record<string, string>; body: Buffer };
+/** A validated and inspected answer: what its manifest lines carry. */
+type Checked = { count: number | null; shape: string | null };
+/** The statuses that carry data unless a provider says otherwise (204: no data). */
+const OK_STATUS: readonly number[] = [200, 204];
 type Step =
-  | { kind: 'ok'; res: { status: number; headers: Record<string, string>; body: Buffer }; start: Date; end: Date }
+  | { kind: 'ok'; res: Answered; start: Date; end: Date }
   | { kind: 'retry' }
   | { kind: 'fail'; code: string }
   | { kind: 'truncated' }
@@ -141,11 +145,13 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
 
     // Re-resolved against the registry before any request: the body is built from the registry row only.
     const entry = deps.config.specs.find((s) => s.id === first.spec_id && s.source === first.source_id);
-    const series = entry?.series.find((s) => s.series_key === first.series_key);
+    const units: readonly Unit[] = entry?.series ?? [];
+    const series = units.find((s) => s.series_key === first.series_key);
     const provider = providers[first.source_id];
     if (entry === undefined || series === undefined || provider === undefined) return finish('failed', 'unregistered');
-    // The job row is not trusted either (review S2): its chunk is the spec's, its range lies in [floor, DATA_EPOCH)
-    // and its budget is no more than the plan gives that range.
+    // The job row is not trusted either (review S2): its chunk is the spec's, its range lies in [floor, ceiling)
+    // (DATA_EPOCH, or DATA_FLOOR for a spec with a target) and in its unit's own range, and its budget is no more
+    // than the plan gives that range.
     const from = first.range_from.getTime();
     const to = first.range_to.getTime();
     const floor = Date.parse(`${entry.floor}T00:00:00Z`);
@@ -153,16 +159,21 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
     if (
       first.chunk_ms !== entry.chunk_ms ||
       from < floor ||
-      to > EPOCH_MS ||
+      to > ceilingMs(entry) ||
+      from < (series.range?.from.getTime() ?? from) ||
+      to > (series.range?.to.getTime() ?? to) ||
       cursor < Math.max(from, floor) ||
       cursor > to ||
       first.request_budget >
-        requestBudget(
-          planChunks(first.range_from, first.range_to, entry.chunk_ms).length,
-          probeYears(first.range_from, first.range_to),
-        )
+        jobBudget(first.range_from, first.range_to, entry.chunk_ms, provider.checkRequest !== undefined)
     )
       return finish('failed', 'invalid_job');
+    /**
+     * P14b `reuse`: the answers of this job by request (method, URL, body), each with its fetch times and checks. A
+     * request asked again is served from here: not paced, not counted, not sent. Gone with the job (or a kill).
+     */
+    const answered = new Map<string, { res: Answered; start: Date; end: Date; checked?: Checked }>();
+    const okStatus = provider.okStatus ?? OK_STATUS;
     let pacer = pacers.get(entry.host);
     if (pacer === undefined) {
       pacer = new Pacer(entry.limits, deps.now, deps.sleep);
@@ -198,7 +209,8 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
 
       // 3. The guard: wait for the loader and the source to be healthy. A finished job waits only for its last chunk
       // (review Q2): it is `done` once that chunk is in the ledger, or fails `unreconciled` if the loader set it aside.
-      const verdict = await deps.store.guard(entry.source);
+      // P14b: `stale` is judged on the target, whose series the rows go to (the loader's verdicts on the source).
+      const verdict = await deps.store.guard(entry.source, entry.target);
       if (verdict !== 'unloaded') unloadedSince = undefined;
       else {
         unloadedSince ??= now.getTime();
@@ -213,18 +225,27 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
       }
 
       // 4.–5. The probe or the chunk.
-      const probing = job.data_from === null;
+      // P14b: a provider without a probe starts at the range's start; data_from stays NULL.
+      const check = provider.checkRequest;
+      const probing = job.data_from === null && check !== undefined;
       const chunk = nextChunk(job.cursor_ts, job.range_to, spanMs);
       const probeTo = yearEnd(job.cursor_ts, job.range_to);
       const req: Req = probing
-        ? provider.checkRequest(entry, series, job.cursor_ts, probeTo)
+        ? check.call(provider, entry, series, job.cursor_ts, probeTo)
         : provider.chunkRequest(entry, series, chunk, now);
-      const step = await send(entry.source, entry.host, entry.max_bytes, req, deadline, pacer, id, result, why);
-      // 6. Truncation: nothing is committed; the chunk at this cursor is halved and asked again, down to a day.
+      const reuseKey = provider.reuse === true && !probing ? `${req.method}\n${req.url}\n${req.body ?? ''}` : undefined;
+      const kept = reuseKey === undefined ? undefined : answered.get(reuseKey);
+      const step: Step =
+        kept === undefined
+          ? await send(entry.source, entry.host, entry.max_bytes, req, deadline, pacer, id, result, why, okStatus)
+          : { kind: 'ok', res: kept.res, start: kept.start, end: kept.end };
+      // 6. Truncation: nothing is committed; the chunk at this cursor is halved and asked again, down to a day. A
+      // provider whose answer is not halvable (a decade file) fails the job `truncated` at once.
       const halve = () => {
         const len = chunk.to.getTime() - chunk.from.getTime();
-        if (probing || len <= MIN_CHUNK_MS) return false;
-        spanMs = Math.max(MIN_CHUNK_MS, Math.ceil(len / 2));
+        if (probing || provider.halvable === false || len <= MIN_CHUNK_MS) return false;
+        // Whole days (P14b): a provider asks by UTC day (FR-2), so a boundary at noon would ask its day in neither half.
+        spanMs = Math.max(MIN_CHUNK_MS, Math.ceil(len / 2 / MIN_CHUNK_MS) * MIN_CHUNK_MS);
         return true;
       };
       if (step.kind === 'truncated') {
@@ -243,7 +264,7 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
         if (res.status !== 200) return finish('failed', 'unexpected_status');
         let present: boolean;
         try {
-          present = provider.parseCheck(res.body);
+          present = provider.parseCheck?.(res.body) ?? true;
         } catch (err) {
           return finish('failed', 'schema_drift', driftCode(err));
         }
@@ -256,17 +277,29 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
         continue;
       }
 
-      // 8. 204 (and an empty list): no data in this chunk. The cursor moves; no manifest line.
-      let wrote = false;
-      if (res.status === 200) {
+      // 8. 204 (and an empty list): no data in this chunk. The cursor moves; no manifest line. Every other status
+      // send let through (the provider's okStatus: 200, FR-2's 206) is validated and inspected, once per answer.
+      let checked = kept?.checked;
+      if (res.status !== 204 && checked === undefined) {
         const v = await validate(provider.validity, res.status, res.body);
         if (!v.ok) return finish('failed', 'invalid');
-        const seen = provider.inspect(res.body);
+        const seen = await provider.inspect(res.body);
         if (!seen.ok && seen.code === 'truncated' && halve()) continue;
         if (!seen.ok) return finish('failed', seen.code, seen.code === 'schema_drift' ? seen.drift : undefined);
+        checked = { count: v.count, shape: v.shape };
+      }
+      if (reuseKey !== undefined && kept === undefined)
+        answered.set(reuseKey, { res, start, end, ...(checked === undefined ? {} : { checked }) });
+      // The lease, renewed before every commit too: a reused answer sends nothing, so a job of many slices would
+      // otherwise let it lapse (LEASE_MS) and a second runner take the host.
+      if (!(await deps.store.lease(entry.host, holder))) return stop('busy');
+      let wrote = false;
+      if (checked !== undefined) {
+        const v = checked;
         if (v.count !== 0) {
           wrote = true;
-          // 9. The commit: (a) put, (b) append, (c) cursor.
+          // 9. The commit: (a) put, (b) append, (c) cursor. A reused answer keeps its first fetch's `end`, so the put
+          // finds the object it stored (`created: false`) and each slice gets its own line on that one key.
           const hash = sha256(res.body);
           let put: Awaited<ReturnType<Archive['put']>>;
           try {
@@ -277,7 +310,8 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
               source: entry.source,
               spec: entry.id,
               spec_version: entry.version,
-              variant: '',
+              // P14b: the request's variant where the payload does not name its series (CH-9's dataset).
+              variant: provider.lineVariant === true ? (req.variant ?? '') : '',
               request: {
                 method: req.method,
                 url: redactUrl(req.url),
@@ -311,8 +345,6 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
             return finish('failed', 'archive');
           }
         }
-      } else if (res.status !== 204) {
-        return finish('failed', 'unexpected_status');
       }
       await deps.store.advance(id, { cursor_ts: chunk.to, chunk: true, data: wrote });
       result.chunks += 1;
@@ -331,6 +363,7 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
     id: number,
     result: JobResult,
     why: () => Stopped,
+    okStatus: readonly number[],
   ): Promise<Step> {
     if (!(await pacer.wait(deadline))) return { kind: 'stop', stopped: why() };
     // The lease, renewed before every request: lost to another runner (it lapsed during a long wait), this one stops.
@@ -359,7 +392,7 @@ export async function runBackfill(deps: RunDeps, opts: RunOptions = {}): Promise
     if (status === 429 || status === 403 || status === 451) return transient('throttled');
     if (status >= 500) return transient('upstream_error');
     failing = false;
-    if (status === 200 || status === 204) return { kind: 'ok', res: r.res, start, end };
+    if (okStatus.includes(status)) return { kind: 'ok', res: r.res, start, end };
     return { kind: 'fail', code: status >= 200 && status < 300 ? 'unexpected_status' : 'client_error' };
   }
 

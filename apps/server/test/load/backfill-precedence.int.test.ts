@@ -1,5 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { type ObsRow, QC } from '@rws/core';
 import fc from 'fast-check';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bareLine, writePayload } from '../../../../scripts/fixture-archive.ts';
 import type { ManifestLine } from '../../src/archive/manifest.ts';
@@ -622,5 +624,330 @@ describe('audience (invariant 11)', { timeout: 60_000 }, () => {
       expect([family, await count(v.obs1h, 'bucket')]).toEqual([family, want]);
       expect([family, await count(v.obs1d, 'bucket')]).toEqual([family, want]);
     }
+  });
+});
+
+// ------------------------------------------------------------------- P14b: the open archives through the real wires
+// Criterion "[CI] backfill never changes a live row unless the provider-validated flag is set, and every such change
+// is in obs_revision" for DE-8 (every row validated), FR-2 (code_statut 16 validated, 4 raw) and CH-9 (always raw):
+// each payload goes through the real loader, its real wire and its target's registry (DE-7, FR-1, CH-1), as a
+// backfill line of a job. A live row of the target series is stored first through the live path. No row of any of
+// the three reaches DATA_FLOOR, whatever the line's chunk says, and every line's ledger row reconciles.
+
+const FLOOR = '2026-08-01T00:00:00.000Z';
+const STAH = '2829100000100/W';
+const UCKANGE_QMNJ = 'A850061001/QmnJ';
+const BASEL_W = '2289/W';
+const BASEL_Q = '2289/Q';
+const P14B_LIVE = new Date('2026-10-01T06:00:00Z');
+let p14bAt = Date.parse('2026-10-18T22:30:00Z');
+const P14B_NOW = new Date('2026-10-19T04:00:00Z');
+const p14bJobs: number[] = [];
+
+const fixtureBody = (id: string, name: string) =>
+  readFileSync(new URL(`../../src/adapters/${id}/fixtures/${name}.raw`, import.meta.url));
+
+/** A live row of a target series, stored as its source's own payload would store it. */
+async function liveRow(source: string, spec: string, key: string, ts: string, value: number, qc: number) {
+  const series = await seriesOf(h.load.db, source);
+  return h.load.db.transaction().execute(async (tx) => {
+    await lock(tx);
+    const b = await openBatch(
+      tx,
+      { source, spec, key: nextKey(), sha256: null, fetchedAt: P14B_LIVE, status: 200, bytes: null, adapterVersion: 1 },
+      'ok',
+    );
+    const w = await upsertObs(tx, [{ series: key, ts, value, qc }], series, b.id, P14B_LIVE, 'live', []);
+    expect(w.inserted).toBe(1);
+    return b.id;
+  });
+}
+
+/** A job of the backfill spec, so that its lines get ledger rows (`recordChunk` names the job). */
+async function p14bJob(source: string, spec: string, unit: string, from: string, to: string): Promise<number> {
+  const { rows } = await h.t.admin.query<{ id: string }>(
+    `INSERT INTO backfill_job (spec_id, source_id, series_key, range_from, range_to, chunk, cursor_ts, request_budget,
+                               status)
+     VALUES ($1, $2, $3, $4, $5, interval '30 days', $4, 10, 'running') RETURNING id`,
+    [spec, source, unit, from, to],
+  );
+  const id = Number(rows[0]?.id);
+  p14bJobs.push(id);
+  return id;
+}
+
+type Ledger = {
+  provider_values: number;
+  kept: number;
+  inserted: number;
+  revised: number;
+  skipped: number;
+  dropped: number;
+  reconciled: boolean;
+};
+
+/** A backfill line as the runner writes it, for one chunk, loaded by the real loader with the real adapters. */
+async function p14bLoad(
+  o: { source: string; spec: string; url: string; variant?: string; job: number },
+  body: Buffer,
+  chunk: [string, string],
+): Promise<{ batch: string; ledger: Ledger }> {
+  p14bAt += 60_000;
+  const at = new Date(p14bAt);
+  const hash = sha256(body);
+  const { key, stored: bytes } = await h.archive.put(o.source, o.spec, at, body, hash);
+  await h.archive.append(
+    bareLine(o.source, o.spec, at, {
+      variant: o.variant ?? '',
+      request: { method: 'GET', url: o.url },
+      sha256: hash,
+      bytes: body.length,
+      stored_bytes: bytes,
+      key,
+      gate: { kind: 'hash', key: null, open: true },
+      validity: { ok: true, reason: null, count: 1 },
+      retention: 'backfill',
+      backfill: { job: o.job, chunk: 0, from: chunk[0], to: chunk[1] },
+    }),
+  );
+  const alerts = h.alerts.length;
+  expect(await h.loader({ now: P14B_NOW }).tick()).toEqual({ lines: 1, loaded: 1 });
+  expect(h.alerts.slice(alerts)).toEqual([]);
+  const { rows: batch } = await h.t.admin.query<{ parse_status: string; origin: string; id: string }>(
+    'SELECT parse_status, origin, id::text FROM ingest_batch WHERE archive_key = $1',
+    [key],
+  );
+  expect(batch).toEqual([{ parse_status: 'ok', origin: 'backfill', id: expect.any(String) }]);
+  const { rows: ledger } = await h.t.admin.query<Ledger>(
+    `SELECT provider_values::int, kept::int, inserted::int, revised::int, skipped::int, dropped::int, reconciled
+     FROM backfill_chunk WHERE archive_key = $1`,
+    [key],
+  );
+  expect(ledger).toHaveLength(1);
+  const l = ledger[0] as Ledger;
+  expect(l.reconciled).toBe(true);
+  expect(l.provider_values).toBe(l.kept + l.dropped);
+  expect(l.kept).toBe(l.inserted + l.revised + l.skipped);
+  return { batch: (batch[0] as { id: string }).id, ledger: l };
+}
+
+const rowAt = async (key: string, ts: string) =>
+  (
+    await h.t.admin.query<{ value: number; qc: number; batch_id: string }>(
+      `SELECT o.value, o.qc, o.batch_id::text FROM obs o JOIN series s ON s.id = o.series_id
+       WHERE s.provider_key = $1 AND o.ts = $2`,
+      [key, ts],
+    )
+  ).rows;
+const revisionsAt = async (key: string, ts: string) =>
+  (
+    await h.t.admin.query<{ old_value: number; new_value: number; old_qc: number; new_qc: number; batch_id: string }>(
+      `SELECT r.old_value, r.new_value, r.old_qc, r.new_qc, r.batch_id::text FROM obs_revision r
+       JOIN series s ON s.id = r.series_id WHERE s.provider_key = $1 AND r.ts = $2`,
+      [key, ts],
+    )
+  ).rows;
+const rowsIn = async (key: string, from: string, to: string) =>
+  (
+    await h.t.admin.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM obs o JOIN series s ON s.id = o.series_id
+       WHERE s.provider_key = $1 AND o.ts >= $2 AND o.ts < $3`,
+      [key, from, to],
+    )
+  ).rows[0]?.n;
+
+/** The value a DE-8 decade member holds at grid point `g` (ms): the last row at or before it, not NA, within 24 h. */
+function heldAt(zip: Buffer, station: string, g: number): number {
+  const files = unzipSync(zip);
+  const name = Object.keys(files).find((n) => n.startsWith(`${station}_`)) as string;
+  let value = Number.NaN;
+  let at = Number.NEGATIVE_INFINITY;
+  for (const line of strFromU8(files[name] as Uint8Array)
+    .split('\n')
+    .slice(1)) {
+    const [, , time, v] = line.split(';');
+    if (time === undefined || Date.parse(time) > g) continue;
+    at = Date.parse(time);
+    value = v === 'NA' ? Number.NaN : Number(v);
+  }
+  if (Number.isNaN(value) || g - at > 86_400_000) throw new Error('no held value');
+  return value;
+}
+
+/** An obs_elab record in the recorded form (the 14 keys of fr-2-uckange-qmnj-2026), for one day and statut. */
+function elab(day: string, value: number, statut: 16 | 4): Record<string, unknown> {
+  const [template] = JSON.parse(fixtureBody('fr-2', 'fr-2-elab-uckange-qmnj-2026').toString('utf8')).data;
+  return {
+    ...template,
+    date_obs_elab: day,
+    resultat_obs_elab: value,
+    code_statut: statut,
+    libelle_statut: statut === 16 ? 'Donnée validée' : 'Donnée brute',
+    code_qualification: 20,
+    libelle_qualification: 'Bonne',
+  };
+}
+const elabBody = (records: Record<string, unknown>[]) =>
+  Buffer.from(
+    JSON.stringify({ count: records.length, first: null, prev: null, next: null, api_version: '2.0.1', data: records }),
+  );
+
+const DE8 = {
+  source: 'DE-8',
+  spec: 'de-8-backfill-w',
+  url: 'https://www.opengeodata.nrw.de/produkte/umwelt_klima/wasser/oberflaechengewaesser/hydro/w/Rureinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip',
+};
+const FR2 = {
+  source: 'FR-2',
+  spec: 'fr-2-backfill-elab',
+  url: 'https://hubeau.eaufrance.fr/api/v2/hydrometrie/obs_elab?code_entite=A850061001&grandeur_hydro_elab=QmnJ',
+};
+const CH9 = {
+  source: 'CH-9',
+  spec: 'ch-9-backfill-bs',
+  url: 'https://data.bs.ch/api/explore/v2.1/catalog/datasets/100089/exports/json',
+  variant: '100089',
+};
+
+describe('P14b: no live change unless validated, each in obs_revision (DE-8, FR-2, CH-9)', { timeout: 120_000 }, () => {
+  it('DE-8 (validated): a raw live DE-7 row is replaced with one revision; a validated live row stays', async () => {
+    const raw = '2026-06-15T00:00:00.000Z';
+    const validated = '2026-06-16T00:00:00.000Z';
+    await liveRow('DE-7', 'de-7-messwerte', STAH, raw, 999, QC.RAW);
+    const liveValidated = await liveRow('DE-7', 'de-7-messwerte', STAH, validated, 999, QC.VALIDATED);
+    const body = fixtureBody('de-8', 'de-8-backfill-w-rur-2020');
+    const want = heldAt(body, '2829100000100', Date.parse(raw));
+    expect(want).not.toBe(999);
+    const job = await p14bJob('DE-8', DE8.spec, 'Rureinzugsgebiet/2020', '2026-03-03', '2026-08-01');
+    const { batch, ledger } = await p14bLoad({ ...DE8, job }, body, [
+      '2026-06-01T00:00:00.000Z',
+      '2026-07-01T00:00:00.000Z',
+    ]);
+
+    expect(await rowAt(STAH, raw)).toEqual([{ value: want, qc: QC.VALIDATED | QC.BACKFILLED, batch_id: batch }]);
+    expect(await revisionsAt(STAH, raw)).toEqual([
+      { old_value: 999, new_value: want, old_qc: QC.RAW, new_qc: QC.VALIDATED | QC.BACKFILLED, batch_id: batch },
+    ]);
+    expect(await rowAt(STAH, validated)).toEqual([{ value: 999, qc: QC.VALIDATED, batch_id: liveValidated }]);
+    expect(await revisionsAt(STAH, validated)).toEqual([]);
+    // One revised (the raw row), one skipped (the validated one), every other grid point of June new.
+    expect(ledger).toMatchObject({ revised: 1, skipped: 1, inserted: ledger.kept - 2 });
+    expect(await rowsIn(STAH, '2026-06-01', '2026-07-01')).toBe(ledger.kept);
+    console.info(`DE-8 precedence: ${JSON.stringify(ledger)}`);
+  });
+
+  it('CH-9 (raw): a raw live CH-1 row stays, counted skipped, no revision', async () => {
+    const ts = '2026-06-02T00:00:00.000Z';
+    const w = await liveRow('CH-1', 'ch-1-lindas', BASEL_W, ts, 99_999, QC.RAW);
+    const q = await liveRow('CH-1', 'ch-1-lindas', BASEL_Q, ts, 99_999, QC.RAW);
+    const job = await p14bJob('CH-9', CH9.spec, '100089', '2026-06-01', '2026-08-01');
+    const { ledger } = await p14bLoad({ ...CH9, job }, fixtureBody('ch-9', 'ch-9-backfill-100089'), [
+      '2026-06-01T00:00:00.000Z',
+      '2026-07-01T00:00:00.000Z',
+    ]);
+    expect(await rowAt(BASEL_W, ts)).toEqual([{ value: 99_999, qc: QC.RAW, batch_id: w }]);
+    expect(await rowAt(BASEL_Q, ts)).toEqual([{ value: 99_999, qc: QC.RAW, batch_id: q }]);
+    expect(await revisionsAt(BASEL_W, ts)).toEqual([]);
+    expect(await revisionsAt(BASEL_Q, ts)).toEqual([]);
+    expect(ledger).toMatchObject({ revised: 0, skipped: 2, inserted: ledger.kept - 2 });
+    expect(ledger.kept).toBeGreaterThan(1000);
+    console.info(`CH-9 precedence: ${JSON.stringify(ledger)}`);
+  });
+
+  it('FR-2 (statut 16 validated, 4 raw): over raw live rows of an aggregate twin, 16 replaces with a revision, 4 stays', async () => {
+    const d16 = '2010-05-01T00:00:00.000Z';
+    const d4 = '2010-05-02T00:00:00.000Z';
+    await liveRow('FR-1', 'fr-1-obs', UCKANGE_QMNJ, d16, 1.5, QC.RAW);
+    const live4 = await liveRow('FR-1', 'fr-1-obs', UCKANGE_QMNJ, d4, 1.5, QC.RAW);
+    const job = await p14bJob('FR-2', FR2.spec, UCKANGE_QMNJ, '1990-01-01', '2009-12-27');
+    const { batch, ledger } = await p14bLoad(
+      { ...FR2, job },
+      elabBody([elab('2010-05-01', 50_000, 16), elab('2010-05-02', 60_000, 4)]),
+      ['2010-01-01T00:00:00.000Z', '2011-01-01T00:00:00.000Z'],
+    );
+    // l/s × 0.001: 50 m³/s.
+    expect(await rowAt(UCKANGE_QMNJ, d16)).toEqual([{ value: 50, qc: QC.VALIDATED | QC.BACKFILLED, batch_id: batch }]);
+    expect(await revisionsAt(UCKANGE_QMNJ, d16)).toEqual([
+      { old_value: 1.5, new_value: 50, old_qc: QC.RAW, new_qc: QC.VALIDATED | QC.BACKFILLED, batch_id: batch },
+    ]);
+    expect(await rowAt(UCKANGE_QMNJ, d4)).toEqual([{ value: 1.5, qc: QC.RAW, batch_id: live4 }]);
+    expect(await revisionsAt(UCKANGE_QMNJ, d4)).toEqual([]);
+    expect(ledger).toEqual({
+      provider_values: 2,
+      kept: 2,
+      inserted: 0,
+      revised: 1,
+      skipped: 1,
+      dropped: 0,
+      reconciled: true,
+    });
+    // An aggregate series takes no rollup (plan §3.5).
+    expect(await h.count(`obs_1d WHERE series_id = ${await h.seriesId(UCKANGE_QMNJ)}`)).toBe(0);
+  });
+
+  it('no row of any of the three at or after DATA_FLOOR, even when a forged line’s chunk says so', async () => {
+    // DE-8: a decade member of Stah that runs past the floor (the recorded member format, values generated).
+    const rows = ['station_name;station_no;dateTime;value[cm]'];
+    for (let t = Date.parse('2026-07-30T00:00:00+01:00'); t < Date.parse('2026-08-03T00:00:00+01:00'); t += 900_000)
+      rows.push(
+        `Stah;2829100000100;${new Date(t + 3_600_000).toISOString().slice(0, 19)}+01:00;${100 + ((t / 900_000) % 7)}`,
+      );
+    const zip = Buffer.from(
+      zipSync({ '2829100000100_Stah_2020-2029_Wasserstand_cm.csv': strToU8(`${rows.join('\n')}\n`) }),
+    );
+    const de8 = await p14bJob('DE-8', DE8.spec, 'Rureinzugsgebiet/2020', '2026-07-01', '2026-08-01');
+    const a = await p14bLoad({ ...DE8, job: de8 }, zip, ['2026-07-01T00:00:00.000Z', '2026-09-01T00:00:00.000Z']);
+    // 2026-07-29T23:00Z .. the floor: 2 days and 1 hour of 15-minute grid points.
+    expect(await rowsIn(STAH, '2026-07-29T23:00:00Z', FLOOR)).toBe(2 * 96 + 4);
+    expect(await rowsIn(STAH, FLOOR, '2027-01-01')).toBe(0);
+
+    // FR-2: the days 2026-07-28 .. 2026-08-04, validated.
+    const days = Array.from({ length: 8 }, (_, i) => new Date(Date.UTC(2026, 6, 28 + i)).toISOString().slice(0, 10));
+    const fr2 = await p14bJob('FR-2', FR2.spec, UCKANGE_QMNJ, '2009-12-27', '2026-08-01');
+    const b = await p14bLoad({ ...FR2, job: fr2 }, elabBody(days.map((d, i) => elab(d, 40_000 + i, 16))), [
+      '2026-07-01T00:00:00.000Z',
+      '2026-09-01T00:00:00.000Z',
+    ]);
+    expect(await rowsIn(UCKANGE_QMNJ, '2026-07-28', FLOOR)).toBe(4);
+    expect(await rowsIn(UCKANGE_QMNJ, FLOOR, '2027-01-01')).toBe(0);
+    expect(b.ledger).toMatchObject({ provider_values: 8, kept: 4, dropped: 4 });
+
+    // CH-9: 5-minute records from 2026-07-31T22:00Z to 2026-08-01T02:00Z, pegel and pegelhoehe consistent.
+    const records = [];
+    for (let t = Date.parse('2026-07-31T22:00:00Z'); t < Date.parse('2026-08-01T02:00:00Z'); t += 300_000) {
+      const cm = 500 + ((t / 300_000) % 9);
+      records.push({
+        timestamp: new Date(t).toISOString().replaceAll('.000Z', '+00:00'),
+        abfluss: 900,
+        pegelhoehe: cm,
+        pegel: (24_000 + cm) / 100,
+      });
+    }
+    const ch9 = await p14bJob('CH-9', CH9.spec, '100089', '2026-07-01', '2026-08-01');
+    const c = await p14bLoad({ ...CH9, job: ch9 }, Buffer.from(JSON.stringify(records)), [
+      '2026-07-31T00:00:00.000Z',
+      '2026-08-02T00:00:00.000Z',
+    ]);
+    for (const key of [BASEL_W, BASEL_Q]) {
+      expect(await rowsIn(key, '2026-07-31T22:00:00Z', FLOOR), key).toBe(12);
+      expect(await rowsIn(key, FLOOR, '2027-01-01'), key).toBe(0);
+    }
+    expect(c.ledger).toMatchObject({ provider_values: 96, kept: 24 });
+    console.info(
+      `past the floor: DE-8 ${JSON.stringify(a.ledger)} FR-2 ${JSON.stringify(b.ledger)} CH-9 ${JSON.stringify(c.ledger)}`,
+    );
+
+    // Nothing of the three specs at or after the floor in any series, and every line of their jobs reconciles.
+    const { rows: late } = await h.t.admin.query<{ n: number }>(
+      `SELECT count(*)::int AS n FROM obs o JOIN ingest_batch b ON b.id = o.batch_id
+       WHERE b.spec_id = ANY($1) AND o.ts >= $2`,
+      [[DE8.spec, FR2.spec, CH9.spec], FLOOR],
+    );
+    expect(late).toEqual([{ n: 0 }]);
+    const { rows: ledger } = await h.t.admin.query<{ reconciled: boolean; n: number }>(
+      'SELECT reconciled, count(*)::int AS n FROM backfill_chunk WHERE job_id = ANY($1) GROUP BY 1',
+      [p14bJobs],
+    );
+    expect(ledger).toEqual([{ reconciled: true, n: p14bJobs.length }]); // one line per job
   });
 });

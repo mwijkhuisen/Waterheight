@@ -74,8 +74,8 @@ const grant = (source: string, over: Record<string, unknown> = {}) =>
 // registry/permissions/<ID>.md record (invariant 8).
 const OWNER = ['BE-3', 'LU-2', 'LU-3', 'LU-4', 'DE-2', 'DE-3'];
 const PUBLIC = [
-  ...['NL-1', 'NL-2', 'NL-4', 'DE-1', 'DE-6', 'DE-7', 'DE-8', 'FR-1', 'FR-3', 'FR-4', 'FR-5'],
-  ...['LU-1', 'LU-5', 'LU-6', 'CH-1', 'CH-2', 'CH-3', 'CH-4', 'CH-5'],
+  ...['NL-1', 'NL-2', 'NL-4', 'DE-1', 'DE-6', 'DE-7', 'DE-8', 'FR-1', 'FR-2', 'FR-3', 'FR-4', 'FR-5'],
+  ...['LU-1', 'LU-5', 'LU-6', 'CH-1', 'CH-2', 'CH-3', 'CH-4', 'CH-5', 'CH-9'],
 ];
 const PERMISSION_BASED = ['BE-1', 'DE-9', 'DE-10', 'DE-12', 'DE-13'];
 
@@ -350,10 +350,10 @@ describe('permission records and the baseline (invariant 8)', () => {
   });
 
   // The launch gate (P12b, catalogue §0.2): a gated source is public only with a record granting public.
-  it('gate none of the 19 open sources public since P0, and only registered sources', () => {
-    expect(PUBLIC).toHaveLength(19);
+  it('gate none of the 21 open sources public since P0, and only registered sources', () => {
+    expect(PUBLIC).toHaveLength(21);
     for (const id of PUBLIC) expect([id, GATED.has(id)]).toEqual([id, false]);
-    // all 19 have an open baseline licence, so the licence-kind rule does not touch them either
+    // all 21 have an open baseline licence, so the licence-kind rule does not touch them either
     for (const id of PUBLIC) {
       const kind = BASELINE[id]?.licence_kind ?? null;
       expect([id, kind !== null && OPEN_LICENCE_KINDS.includes(kind)]).toEqual([id, true]);

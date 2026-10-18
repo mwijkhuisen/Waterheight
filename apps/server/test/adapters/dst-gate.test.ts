@@ -35,7 +35,7 @@ import { TIME as NL2 } from '../../src/adapters/nl-2/normalise.ts';
 const ADAPTERS = new URL('../../src/adapters/', import.meta.url);
 
 /**
- * Every adapter's declared convention (its normalise.ts `TIME`; null: the adapter has no timestamps). Listed
+ * Every adapter's declared convention (its normalise.ts or parse.ts `TIME`; null: the adapter has no timestamps). Listed
  * by hand because module names may not be computed (scripts/check-boundaries.ts); the first test fails when an
  * adapter with a normalise.ts is missing here, so a new one cannot slip past the gate.
  */
@@ -51,8 +51,11 @@ const declared: Readonly<Record<string, TimeConvention | null>> = {
   'DE-3': DE3,
   'DE-6': DE6,
   'DE-7': DE7,
-  'DE-8': null,
+  // P14b: the backfill conventions, pinned here by value (their TIMEs live in the adapters and the wires).
+  'CH-9': { kind: 'iso-offset' },
+  'DE-8': { kind: 'fixed-offset', offset: '+01:00' },
   'FR-1': FR1,
+  'FR-2': { kind: 'naive-local', zone: 'Europe/Paris', dst: { gap: 'reject', overlap: 'earlier' } },
   'FR-3': FR3,
   'FR-4': FR4,
   'FR-5': FR5,
@@ -93,24 +96,28 @@ function proofProblems(
 }
 
 describe('DST gate', () => {
-  it("lists every adapter's convention: each normalise.ts, and whether it declares a TIME", () => {
+  it("lists every adapter's convention: each normalise.ts, and whether it or its parse.ts declares a TIME", () => {
     const folders = readdirSync(ADAPTERS)
       .filter((d) => existsSync(new URL(`${d}/normalise.ts`, ADAPTERS)))
       .map((d) => d.toUpperCase())
       .sort();
     expect(Object.keys(declared).sort()).toEqual(folders);
     for (const source of folders) {
-      const text = readFileSync(new URL(`${source.toLowerCase()}/normalise.ts`, ADAPTERS), 'utf8');
-      expect([source, /^export const TIME\b/m.test(text)]).toEqual([source, declared[source] !== null]);
+      // DE-8 states its CSV convention in parse.ts (P14b): the backfill parser and the gauge-zero normaliser share it.
+      const time = ['normalise.ts', 'parse.ts'].some((f) => {
+        const url = new URL(`${source.toLowerCase()}/${f}`, ADAPTERS);
+        return existsSync(url) && /^export const TIME\b/m.test(readFileSync(url, 'utf8'));
+      });
+      expect([source, time]).toEqual([source, declared[source] !== null]);
     }
   });
 
-  it('finds the offset-less adapters by their declared convention (today DE-3, DE-6, LU-1 and NL-2)', () => {
+  it('finds the offset-less adapters by their declared convention (today DE-3, DE-6, FR-2, LU-1 and NL-2)', () => {
     const gated = Object.entries(declared)
       .filter(([, t]) => isGated(t))
       .map(([s]) => s)
       .sort();
-    expect(gated).toEqual(['DE-3', 'DE-6', 'LU-1', 'NL-2']);
+    expect(gated).toEqual(['DE-3', 'DE-6', 'FR-2', 'LU-1', 'NL-2']);
   });
 
   it("each loaded source's declared convention is its adapter's TIME (null: no timestamps)", () => {
@@ -155,7 +162,9 @@ describe('DST gate', () => {
           ? 'DE-6'
           : id.startsWith('de-3')
             ? 'DE-3'
-            : 'NL-2';
+            : id.startsWith('fr-2')
+              ? 'FR-2'
+              : 'NL-2';
       for (const name of [...proof.fallBack, ...proof.springForward]) {
         const without = (url: URL) => !url.pathname.endsWith(`/${name}.raw`) && existsSync(url);
         expect(proofProblems(source, id, proof, without)).toEqual([`${name}.raw: missing`]);
@@ -169,6 +178,7 @@ describe('DST gate', () => {
       'de-3-files',
       'de-6-alerts',
       'de-6-stations',
+      'fr-2-backfill-elab',
       'lu-1-csv',
       'nl-2-wfs',
     ]);
@@ -176,6 +186,7 @@ describe('DST gate', () => {
       'de-3-files',
       'de-6-alerts',
       'de-6-stations',
+      'fr-2-backfill-elab',
       'nl-2-wfs',
     ]);
     const { 'DE-7': _, ...times } = ADAPTER_TIME;

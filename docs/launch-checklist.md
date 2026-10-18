@@ -22,6 +22,7 @@ Machine-checked by `test/launch-checklist.test.ts`: tables (a) and (c) below equ
 | DE-7 | dl-de-zero-2.0 | Datenquelle: LANUK NRW, Hochwasserportal.NRW | DABH |
 | DE-8 | dl-de-zero-2.0 | Datenquelle: LANUK NRW, Hochwasserportal.NRW | DABH |
 | FR-1 | etalab-2.0 | Données hydrométriques : Hub'Eau / SCV – réseau Vigicrues (PHyC), Licence Ouverte Etalab 2.0 – https://hubeau.eaufrance.fr/page/api-hydrometrie | DABH |
+| FR-2 | etalab-2.0 | Données hydrométriques : Hub'Eau / SCV – réseau Vigicrues (PHyC), Licence Ouverte Etalab 2.0 – https://hubeau.eaufrance.fr/page/api-hydrometrie | DABH |
 | FR-3 | etalab-2.0 | Source : © VIGICRUES – www.vigicrues.gouv.fr, [date de mise à jour], Licence Ouverte Etalab 2.0 | DABH |
 | FR-4 | etalab-2.0 | Source : © VIGICRUES – www.vigicrues.gouv.fr, [date de mise à jour], Licence Ouverte Etalab 2.0 | DABH |
 | FR-5 | etalab-2.0 | Source : © VIGICRUES – www.vigicrues.gouv.fr, [date de mise à jour], Licence Ouverte Etalab 2.0 | DABH |
@@ -33,6 +34,7 @@ Machine-checked by `test/launch-checklist.test.ts`: tables (a) and (c) below equ
 | CH-3 | ch-open-use | Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum) | DABH |
 | CH-4 | ch-open-use | Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum) | DABH |
 | CH-5 | ch-open-use | Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum) | DABH |
+| CH-9 | ch-open-use | Kanton Basel-Stadt, data.bs.ch | DABH |
 
 ### (b) Permission tracker C1 to C13
 

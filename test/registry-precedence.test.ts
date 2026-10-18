@@ -132,7 +132,8 @@ describe('the precedence rules of A§7.4 step 6', () => {
   });
 
   it('the §0.6 Belgian partner stations stay FR-1 primary in both audiences until a Belgian source is public (P13)', () => {
-    const partners = stations.filter((r) => r.source === 'FR-1' && r.country === 'BE');
+    // The series of the partners, not the FR-2 aggregate twins (P14b: Torgny, a tier-1 partner, has two).
+    const partners = stations.filter((r) => r.source === 'FR-1' && r.country === 'BE' && !('aggregate' in r));
     expect(new Set(partners.map((r) => r.provider_code)).size).toBe(18);
     for (const r of partners) expect([r.id, r.role, r.audience]).toEqual([r.id, 'primary', 'public']);
   });

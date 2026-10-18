@@ -84,6 +84,12 @@ export const PublicStation = z.strictObject({
   audience: z.enum(['public', 'off']),
   datum: z.enum(DATUMS).nullable(),
   gauge_zero: z.array(GaugeZero),
+  /**
+   * P14b: a provider's own aggregate over `expected_step` (FR-2 QmnJ `mean`, HIXnJ `max`), stamped at the interval
+   * start in UTC; absent means instantaneous. Optional, so the other files keep their bytes. An aggregate row is a
+   * tier-2 `twin` with native_step = expected_step = P1D (validateStations), so no view, state or rollup reads it.
+   */
+  aggregate: z.enum(['mean', 'max', 'min']).optional(),
 });
 
 /**
@@ -103,6 +109,16 @@ export type Station = z.infer<typeof Station>;
 
 export const StationsFile = z.strictObject({ stations: z.array(Station).min(1) });
 
+const DAY_MS = 86_400_000;
+
+/** An ISO duration of days, hours, minutes and seconds in ms; NaN for anything else (years, months, weeks). */
+function dayMs(iso: string): number {
+  const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(iso);
+  if (m === null) return Number.NaN;
+  const [d, h, min, sec] = [m[1], m[2], m[3], m[4]].map((v) => Number(v ?? 0)) as [number, number, number, number];
+  return ((d * 24 + h) * 60 + min) * 60_000 + sec * 1000;
+}
+
 /**
  * Cross-file rules: a row's source exists and allows the row's audience, a row
  * never names a threshold or forecast source narrower than itself (a public
@@ -112,7 +128,9 @@ export const StationsFile = z.strictObject({ stations: z.array(Station).min(1) }
  * is the factor of its native_unit). A provider_key is unique inside its
  * source, and a first-release row is a tier-1 row. A station has one row per
  * quantity, plus at most one more with role `twin`: the same gauge published
- * a second time (the Eijsden-grens TAW series beside its NAP one). Returns
+ * a second time (the Eijsden-grens TAW series beside its NAP one), and P14b one
+ * twin per provider aggregate (FR-2 QmnJ `mean`, HIXnJ `max`): role twin,
+ * native_step = expected_step = P1D, staleness_limit at most P1D. Returns
  * every problem found.
  */
 export function validateStations(
@@ -127,7 +145,8 @@ export function validateStations(
   const seenKeys = new Set<string>();
   for (const row of parsed.data.stations) {
     const at = `station ${row.id} (${row.quantity})`;
-    const key = `${row.id}/${row.quantity}${row.role === 'twin' ? '/twin' : ''}`;
+    const aggregate = 'aggregate' in row ? row.aggregate : undefined;
+    const key = `${row.id}/${row.quantity}${row.role === 'twin' ? '/twin' : ''}${aggregate === undefined ? '' : `/${aggregate}`}`;
     if (seen.has(key)) problems.push(`${at}: duplicate`);
     seen.add(key);
     const providerKey = `${row.source}/${row.provider_key}`;
@@ -147,6 +166,14 @@ export function validateStations(
       );
     }
     if (row.first_release && row.tier !== 1) problems.push(`${at}: first_release needs tier 1 (got tier ${row.tier})`);
+    // P14b: a provider's daily aggregate is a twin of one day's step, never stale for longer than its day.
+    if (aggregate !== undefined) {
+      if (row.role !== 'twin') problems.push(`${at}: an aggregate row needs role twin (got ${row.role})`);
+      if (row.native_step !== 'P1D' || row.expected_step !== 'P1D')
+        problems.push(`${at}: an aggregate row needs native_step and expected_step P1D`);
+      if (!(dayMs(row.staleness_limit) <= DAY_MS))
+        problems.push(`${at}: an aggregate row's staleness_limit exceeds P1D`);
+    }
     const source = byId.get(row.source);
     if (source === undefined) problems.push(`${at}: unknown source ${row.source}`);
     else if (!audienceWithin(row.audience, source.audience)) {
@@ -203,8 +230,9 @@ export type Twin = z.infer<typeof Twin>;
 export const TwinsFile = z.strictObject({ twins: z.array(Twin).max(300) });
 
 /**
- * A twin names two different registered series of one quantity, with the
- * relation in that quantity's canonical unit. Returns every problem found.
+ * A twin names two different registered series of one quantity, neither a
+ * provider aggregate (P14b), with the relation in that quantity's canonical
+ * unit. Returns every problem found.
  */
 export function validateTwins(
   twinsInput: unknown,
@@ -226,6 +254,12 @@ export function validateTwins(
     if (a === undefined || b === undefined) continue;
     if (a === b) problems.push(`${at}: a and b are the same series`);
     if (a.quantity !== b.quantity) problems.push(`${at}: a is ${a.quantity} and b is ${b.quantity}`);
+    // P14b: the twin check compares instants; a provider's daily aggregate states none.
+    for (const [side, row] of [
+      ['a', a],
+      ['b', b],
+    ] as const)
+      if ('aggregate' in row && row.aggregate !== undefined) problems.push(`${at}: ${side} is an aggregate series`);
     if (twin.relation.unit !== (a.quantity === 'Q' ? 'm³/s' : 'cm')) {
       problems.push(`${at}: the unit of a ${a.quantity} pair is not ${twin.relation.unit}`);
     }

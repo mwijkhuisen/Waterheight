@@ -1,0 +1,13 @@
+{
+  "spec": "ch-9-backfill-bs",
+  "variant": "100089",
+  "source": "CH-9",
+  "synthetic": false,
+  "from": "trimmed",
+  "recorded_at": "2026-10-18T11:36:17Z",
+  "status": 200,
+  "url": "https://data.bs.ch/api/explore/v2.1/catalog/datasets/100089/exports/json?where=timestamp%20%3E%3D%20%272026-06-01T00%3A00%3A00Z%27%20AND%20timestamp%20%3C%20%272026-07-01T00%3A00%3A00Z%27&order_by=timestamp",
+  "bytes": 33899,
+  "source_sha256": "440a21021b29123a334b179316d7a6007cfdbbc174ebaaed0b997de3827f00f1",
+  "trimmed": "the last 300 records of the 8,640 (up to 2026-06-30T23:55Z), each kept whole"
+}

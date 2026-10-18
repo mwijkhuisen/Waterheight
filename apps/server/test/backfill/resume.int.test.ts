@@ -1,16 +1,37 @@
 import { spawnSync } from 'node:child_process';
-import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { server } from '../../../../test/msw.setup.ts';
+import { dayInstant } from '../../src/adapters/fr-2/normalise.ts';
 import { type Job, SqlJobStore } from '../../src/backfill/job.ts';
-import { planChunks, probeYears, requestBudget } from '../../src/backfill/plan.ts';
+import { jobBudget, planChunks, probeYears, requestBudget } from '../../src/backfill/plan.ts';
 import { DB_BYTES_PER_ROW } from '../../src/backfill/project.ts';
 import { runBackfill } from '../../src/backfill/run.ts';
 import { type DbConfig, dbConfig, openDb } from '../../src/db/pool.ts';
+import { LOAD_ADAPTERS } from '../../src/load/adapters.ts';
+import { seriesOf } from '../../src/load/store.ts';
 import { sqlState } from '../db/testdb.ts';
 import { type Harness, harness } from '../load/harness.ts';
-import { type Call, Clock, fakeClient, history, historyBody, LOBITH_H, NIGHT, narrowed, SPEC } from './harness.ts';
+import {
+  type ArchiveName,
+  type ArchiveScenario,
+  archiveClient,
+  archiveScenario,
+  type Call,
+  Clock,
+  ch9Cm,
+  FR2_TRUNCATED_FROM,
+  fakeClient,
+  fr2Value,
+  history,
+  historyBody,
+  LOBITH_H,
+  NIGHT,
+  narrowed,
+  SPEC,
+} from './harness.ts';
 
 // P14a, kill -9 and resume (plan §3.3 step 10, §4): a runner process dies after the put, after the append, after the
 // cursor or in the middle of a later chunk's request; a restarted runner finishes the job, and the loader loads the
@@ -321,6 +342,334 @@ describe('kill -9 and resume (plan §3.3 step 10)', { timeout: 120_000 }, () => 
   });
 });
 
+// ----------------------------------------------------------- P14b: the open archives (DE-8, FR-2, CH-9)
+// The same kill -9 and resume, per committed open-archive spec, through the real Client over msw at the providers' real
+// URLs (archiveScenario in harness.ts): DE-8 dies on a slice after the first of a decade file that the first fetch
+// serves by reuse (after the restart the file is fetched once more, a second archive object); FR-2 dies during a
+// halving (a 206 page, then its halves); CH-9 dies on a chunk. After the restart every row the provider stated is in
+// obs once (the series of the target source), with no gap, every ledger row reconciles and its chunks tile the job's
+// range, and a second job over the same history writes 0 new and 0 revised.
+
+/** The target series a scenario's rows go to. */
+const TARGET_KEYS: Record<ArchiveName, readonly string[]> = {
+  'de-8': ['2829100000100/W'],
+  'fr-2': ['A850061001/QmnJ'],
+  'ch-9': ['2289/W', '2289/Q'],
+};
+
+/** What the provider stated for the job's range, as the target series would store it: key → [ts, value][]. */
+async function expectedRows(s: ArchiveScenario, to = s.to): Promise<Map<string, [number, number][]>> {
+  const out = new Map<string, [number, number][]>(TARGET_KEYS[s.name].map((k) => [k, []]));
+  const push = (k: string, ts: number, v: number) => out.get(k)?.push([ts, v]);
+  if (s.name === 'de-8') {
+    // The real wire over the decade file, windowed to the job (what every slice together states).
+    const wire = LOAD_ADAPTERS['DE-8']?.specs['de-8-backfill-w'];
+    const body = s.answer(new URL(`${s.spec.url}Rureinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip`)).body;
+    const res = await wire?.run(body, {
+      registry: await seriesOf(h.load.db, 'DE-7'),
+      fetchedAt: NIGHT,
+      variant: '',
+      unitMismatch: new Set(),
+      backfill: { from: s.from.getTime(), to: to.getTime() },
+    });
+    for (const r of res?.obs ?? []) push(r.series, Date.parse(r.ts), r.value);
+  } else if (s.name === 'fr-2') {
+    for (let t = s.from.getTime(); t < to.getTime(); t += 86_400_000) {
+      const d = new Date(t).toISOString().slice(0, 10);
+      push('A850061001/QmnJ', dayInstant(d), fr2Value(d) / 1000);
+    }
+  } else {
+    for (let t = s.from.getTime(); t < to.getTime(); t += 600_000) {
+      push('2289/W', t, 24_000 + ch9Cm(t));
+      push('2289/Q', t, 800 + ((t / 300_000) % 13));
+    }
+  }
+  return out;
+}
+
+/**
+ * The target series' rows in the job's range: key → [ts, value][], and how many are not backfill rows. From a day
+ * before it: an FR-2 day before 2007-03-23 starts at the Paris midnight, an hour or two before the UTC day asked.
+ */
+async function storedRows(s: ArchiveScenario) {
+  const out = new Map<string, [number, number][]>();
+  let live = 0;
+  for (const key of TARGET_KEYS[s.name]) {
+    const { rows } = await h.t.admin.query<{ ts: Date; value: number; qc: number }>(
+      `SELECT o.ts, o.value, o.qc FROM obs o JOIN series s ON s.id = o.series_id
+       WHERE s.provider_key = $1 AND o.ts >= $2 AND o.ts < $3 ORDER BY o.ts`,
+      [key, new Date(s.from.getTime() - 86_400_000), s.to],
+    );
+    out.set(
+      key,
+      rows.map((r) => [r.ts.getTime(), r.value]),
+    );
+    live += rows.filter((r) => (r.qc & 512) === 0).length;
+  }
+  return { rows: out, live };
+}
+
+/** The instants one side has and the other lacks, per series (ISO, at most 5 each): a readable failure. */
+const gapsBetween = (got: Map<string, [number, number][]>, want: Map<string, [number, number][]>) =>
+  Object.fromEntries(
+    [...want].map(([k, w]) => {
+      const g = new Set((got.get(k) ?? []).map(([ts]) => ts));
+      const e = new Set(w.map(([ts]) => ts));
+      const iso = (xs: number[]) => xs.slice(0, 5).map((t) => new Date(t).toISOString());
+      return [k, { missing: iso([...e].filter((t) => !g.has(t))), extra: iso([...g].filter((t) => !e.has(t))) }];
+    }),
+  );
+const NO_GAPS = (keys: readonly string[]) => Object.fromEntries(keys.map((k) => [k, { missing: [], extra: [] }]));
+
+/** float32, as obs.value holds it. */
+const f32 = (m: Map<string, [number, number][]>) =>
+  Object.fromEntries([...m].map(([k, v]) => [k, v.map(([ts, x]) => [ts, Math.fround(x)])]));
+
+/** A clean slate for the next case: the target series' rows and the scenario's jobs and ledger rows go. */
+async function clearArchive(s: ArchiveScenario) {
+  for (const table of ['obs_revision', 'obs_latest', 'obs_1h', 'obs_1d', 'obs'])
+    await h.t.admin.query(
+      `DELETE FROM ${table} WHERE series_id IN (SELECT id FROM series WHERE provider_key = ANY($1))`,
+      [TARGET_KEYS[s.name]],
+    );
+  await h.t.admin.query('DELETE FROM backfill_chunk WHERE job_id IN (SELECT id FROM backfill_job WHERE spec_id = $1)', [
+    s.spec.id,
+  ]);
+  await h.t.admin.query('DELETE FROM backfill_job WHERE spec_id = $1', [s.spec.id]);
+}
+
+const setHealth = (source: string) =>
+  h.t.admin.query(
+    `INSERT INTO source_health (source_id, status) VALUES ($1, 'ok')
+     ON CONFLICT (source_id) DO UPDATE SET status = EXCLUDED.status`,
+    [source],
+  );
+
+async function planArchive(s: ArchiveScenario, to = s.to): Promise<number> {
+  const { id } = await withStore((store) =>
+    store.insert({
+      spec_id: s.spec.id,
+      source_id: s.spec.source,
+      series_key: s.unit,
+      range_from: s.from,
+      range_to: to,
+      chunk_ms: s.spec.chunk_ms,
+      request_budget: jobBudget(s.from, to, s.spec.chunk_ms, false),
+    }),
+  );
+  return id;
+}
+
+/** The in-process runner of a scenario, the loader keeping up as in `run` above. */
+async function runArchive(s: ArchiveScenario, start: number): Promise<{ calls: Call[]; loaded: number }> {
+  await setGuard();
+  await setHealth(s.target);
+  const clock = new Clock(start);
+  const { client, calls, handlers } = archiveClient(clock, s);
+  server.use(...handlers);
+  let loaded = 0;
+  const out = await withStore((store) =>
+    runBackfill({
+      config: s.config,
+      store,
+      archive: h.archive,
+      client,
+      now: clock.now,
+      sleep: async (ms) => {
+        loaded += (await load()).loaded;
+        await clock.sleep(ms);
+      },
+      hooks: {
+        afterCursor: async () => {
+          loaded += (await load()).loaded;
+        },
+      },
+    }),
+  );
+  expect(out.stopped).toBe('done');
+  return { calls, loaded };
+}
+
+/** A job's manifest lines: their archive keys and chunks. */
+const jobLines = (id: number) =>
+  readdirSync(join(h.raw, '_manifest'))
+    .sort()
+    .flatMap((f) =>
+      readFileSync(join(h.raw, '_manifest', f), 'utf8')
+        .split('\n')
+        .filter((l) => l !== '')
+        .map((l) => JSON.parse(l))
+        .filter((l) => l.backfill?.job === id),
+    ) as { key: string; backfill: { from: string; to: string } }[];
+
+async function killAndResumeArchive(name: ArchiveName, point: Point, nth: number) {
+  const s = archiveScenario(name);
+  await clearArchive(s);
+  const id = await planArchive(s);
+  await setGuard();
+  await slotFree();
+  const child = spawnSync(
+    process.execPath,
+    ['--no-experimental-webstorage', CHILD, h.t.urlFor('rws_backfill'), h.raw, point, String(nth), String(NIGHT), name],
+    { timeout: 60_000 },
+  );
+  expect(child.signal, child.stderr.toString()).toBe('SIGKILL');
+  const before = JSON.parse(child.stdout.toString()) as Call[];
+  expect((await job(id)).status).toBe('running');
+  expect(await leaseHeld()).toBe(true);
+  await lapse();
+
+  const alerts = h.alerts.length;
+  const { calls: after, loaded } = await run2(s);
+  expect(loaded + (await load()).loaded).toBeGreaterThan(0);
+  expect(h.alerts.slice(alerts)).toEqual([]);
+
+  // Every row the provider stated, once, with no gap: the stored rows are exactly the expected ones, all backfill.
+  const want = await expectedRows(s);
+  const got = await storedRows(s);
+  expect(got.live).toBe(0);
+  expect(gapsBetween(got.rows, want)).toEqual(NO_GAPS(TARGET_KEYS[name]));
+  expect(f32(got.rows)).toEqual(f32(want));
+  const n = [...want.values()].reduce((a, v) => a + v.length, 0);
+  expect(n).toBeGreaterThan(0);
+
+  const done = await job(id);
+  expect(done).toMatchObject({ status: 'done', inserted: n, revised: 0, unreconciled: 0, last_error: null });
+  expect(done.cursor_ts).toEqual(s.to);
+  // Every request counted (the one a kill interrupts inside the fetch is not), within the budget, paced per host.
+  expect(done.requests).toBe(before.length + after.length - (point === 'fetch' ? 1 : 0));
+  expect(done.requests).toBeLessThanOrEqual(s.budget);
+  for (const g of [...gaps(before), ...gaps(after)]) expect(g).toBeGreaterThanOrEqual(s.spec.limits.min_interval_ms);
+
+  // The ledger: every row reconciled, and its distinct chunks tile the range with no gap and no overlap.
+  const l = await ledger(id);
+  expect(l.every((r) => r.reconciled)).toBe(true);
+  const { rows: chunks } = await h.t.admin.query<{ chunk_from: Date; chunk_to: Date }>(
+    'SELECT DISTINCT chunk_from, chunk_to FROM backfill_chunk WHERE job_id = $1 ORDER BY chunk_from',
+    [id],
+  );
+  expect(chunks[0]?.chunk_from).toEqual(s.from);
+  expect(chunks.at(-1)?.chunk_to).toEqual(s.to);
+  for (let i = 1; i < chunks.length; i += 1) expect(chunks[i]?.chunk_from).toEqual(chunks[i - 1]?.chunk_to);
+  console.info(
+    `${name} ${point} ${nth}: requests ${before.length} + ${after.length}, ledger ${l.length} rows over ${chunks.length} chunks, ${n} rows`,
+  );
+  return { s, id, before, after, ledger: l, chunks, lines: jobLines(id) };
+}
+const run2 = (s: ArchiveScenario) => runArchive(s, NIGHT + HOUR);
+
+/** A second job over the same history (a range of its own): 0 new, 0 revised, the same obs. */
+async function rerunArchive(s: ArchiveScenario) {
+  const to = new Date(s.to.getTime() - 1000);
+  const id = await planArchive(s, to);
+  const sums = await h.checksums();
+  const revisions = await h.count('obs_revision');
+  const { calls } = await runArchive(s, NIGHT + 3 * HOUR);
+  expect(await job(id)).toMatchObject({ status: 'done', inserted: 0, revised: 0, unreconciled: 0 });
+  const l = await ledger(id);
+  expect(l.length).toBeGreaterThan(0);
+  for (const r of l) expect(r).toMatchObject({ inserted: 0, revised: 0, skipped: r.kept, reconciled: true });
+  expect(await h.count('obs_revision')).toBe(revisions);
+  expect(await h.checksums()).toEqual(sums);
+  return { calls, ledger: l };
+}
+
+describe('kill -9 and resume of the open archives (P14b)', { timeout: 300_000 }, () => {
+  // The lease test below counts the lease rows of the RWS host alone.
+  afterAll(() =>
+    h.t.admin.query('DELETE FROM backfill_lease WHERE host = ANY($1)', [
+      ['www.opengeodata.nrw.de', 'hubeau.eaufrance.fr', 'data.bs.ch'],
+    ]),
+  );
+
+  it.each([
+    ['afterPut', 6],
+    ['afterAppend', 7],
+    ['afterCursor', 6],
+  ] as const)(
+    'DE-8 %s on the second slice of a reused decade file: one more fetch, a second object, rows once',
+    async (point, rows) => {
+      const r = await killAndResumeArchive('de-8', point, 2);
+      // The child's one fetch served slice 1 and 2 (reuse); the restarted runner has no answer kept and fetches again.
+      expect(r.before).toHaveLength(1);
+      expect(r.after).toHaveLength(1);
+      expect(r.chunks).toHaveLength(6);
+      expect(r.ledger).toHaveLength(rows);
+      // Two archive objects of the one file: the child's (its slices on one key) and the restart's.
+      const keys = [...new Set(r.lines.map((l) => l.key))];
+      expect(keys).toHaveLength(2);
+      for (const k of keys) expect(existsSync(join(h.raw, k.slice('raw/'.length)))).toBe(true);
+      if (point === 'afterAppend') {
+        const twice = r.ledger.filter((x) => x.chunk_from.getTime() === r.chunks[1]?.chunk_from.getTime());
+        expect(twice).toHaveLength(2);
+        expect(twice[1]).toMatchObject({ inserted: 0, revised: 0, skipped: twice[0]?.kept });
+      }
+    },
+  );
+
+  it('DE-8: a second job over the same history fetches the file once and changes nothing', async () => {
+    const { calls, ledger: l } = await rerunArchive(archiveScenario('de-8'));
+    expect(calls).toHaveLength(1);
+    expect(l).toHaveLength(6);
+  });
+
+  it('FR-2 killed inside the first half after a 206: the restart halves again and loads every day once', async () => {
+    const r = await killAndResumeArchive('fr-2', 'fetch', 21);
+    // 19 whole chunks and the 206 before the kill; after it the 206 again and both halves.
+    expect(r.before).toHaveLength(21);
+    expect(r.after).toHaveLength(3);
+    expect(new URL(r.after[0]?.url as string).searchParams.get('date_debut_obs_elab')).toBe(FR2_TRUNCATED_FROM);
+    expect(r.chunks).toHaveLength(21);
+    expect(r.ledger).toHaveLength(21);
+  });
+
+  it('FR-2 killed after the first half’s line: that half loads twice, the second time 0 new and 0 revised', async () => {
+    const r = await killAndResumeArchive('fr-2', 'afterAppend', 20);
+    expect(r.before).toHaveLength(21);
+    expect(r.after).toHaveLength(3);
+    expect(r.chunks).toHaveLength(21);
+    expect(r.ledger).toHaveLength(22);
+    const half = r.ledger.filter((x) => x.chunk_from.getTime() === Date.parse(`${FR2_TRUNCATED_FROM}T00:00:00Z`));
+    expect(half).toHaveLength(2);
+    expect(half[1]).toMatchObject({ inserted: 0, revised: 0, skipped: half[0]?.kept });
+  });
+
+  it('FR-2: a second job over the same history changes nothing', async () => {
+    const { calls } = await rerunArchive(archiveScenario('fr-2'));
+    expect(calls).toHaveLength(22);
+  });
+
+  it('FR-2: a halving of an odd number of days loses no day (the halves meet at a day boundary)', async () => {
+    // The last chunk is 201 days, so its halves are 100.5 days: the second starts at noon.
+    const base = archiveScenario('fr-2');
+    const s = { ...base, to: new Date(base.from.getTime() + (19 * 400 + 201) * 86_400_000) };
+    s.budget = jobBudget(s.from, s.to, s.spec.chunk_ms, false);
+    await clearArchive(s);
+    const id = await planArchive(s);
+    const { calls } = await runArchive(s, NIGHT + 2 * HOUR);
+    expect(calls).toHaveLength(22);
+    expect((await job(id)).status).toBe('done');
+    const want = await expectedRows(s);
+    const got = await storedRows(s);
+    expect(gapsBetween(got.rows, want)).toEqual(NO_GAPS(TARGET_KEYS['fr-2']));
+    expect(f32(got.rows)).toEqual(f32(want));
+    await clearArchive(s);
+  });
+
+  it('CH-9 killed after the second chunk’s line: fetched twice, loaded once', async () => {
+    const r = await killAndResumeArchive('ch-9', 'afterAppend', 2);
+    expect(r.before).toHaveLength(2);
+    expect(r.after).toHaveLength(2);
+    expect(r.chunks).toHaveLength(3);
+    expect(r.ledger).toHaveLength(4);
+  });
+
+  it('CH-9: a second job over the same history changes nothing', async () => {
+    const { calls } = await rerunArchive(archiveScenario('ch-9'));
+    expect(calls).toHaveLength(3);
+  });
+});
+
 describe('SqlJobStore as rws_backfill', { timeout: 60_000 }, () => {
   const from = new Date('1999-01-01T00:00:00Z');
   const to = new Date('1999-03-01T00:00:00Z');
@@ -405,6 +754,28 @@ describe('SqlJobStore as rws_backfill', { timeout: 60_000 }, () => {
     expect(await verdict()).toBe('stale');
     await setGuard();
     expect(await verdict()).toBe('ok');
+    // P14b: with a target (DE-8 → DE-7) `stale` judges the target's health; a missing row is stale, never ok.
+    const health = (id: string, status: string) =>
+      h.t.admin.query(
+        `INSERT INTO source_health (source_id, status) VALUES ($1, $2)
+         ON CONFLICT (source_id) DO UPDATE SET status = EXCLUDED.status`,
+        [id, status],
+      );
+    await h.t.admin.query("DELETE FROM source_health WHERE source_id IN ('DE-7', 'DE-8')");
+    const de8 = (target?: string) => withStore((s) => s.guard('DE-8', target));
+    expect(await de8('DE-7')).toBe('stale');
+    await health('DE-7', 'degraded');
+    expect(await de8('DE-7')).toBe('stale');
+    await health('DE-7', 'ok');
+    expect(await de8('DE-7')).toBe('ok');
+    expect(await de8()).toBe('stale');
+    await health('DE-8', 'ok');
+    await health('DE-7', 'down');
+    expect(await de8('DE-7')).toBe('stale');
+    await setGuard({ files: 4 });
+    expect(await de8('DE-7')).toBe('backlog');
+    await setGuard();
+    await h.t.admin.query("DELETE FROM source_health WHERE source_id IN ('DE-7', 'DE-8')");
     // Any chunk of an active job with data that the ledger does not hold yet (review C5/S6, N1; the P14a queue fix
     // lowered it from more than 30): its own verdict. A chunk the loader sets aside has a ledger row too.
     const { rows } = await h.t.admin.query<{ id: string; n: number; status: string }>(

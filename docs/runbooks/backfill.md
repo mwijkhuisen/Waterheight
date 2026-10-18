@@ -1,11 +1,11 @@
-# Runbook: history backfill (P14a)
+# Runbook: history backfill (P14a, P14b)
 
 **Trigger:**
-- the owner wants older history for a source that has a spec in `registry/backfill.yaml` (today `nl-1-backfill-obs`, NL-1);
+- the owner wants older history for a source that has a spec in `registry/backfill.yaml` (`nl-1-backfill-obs` for NL-1, and from P14b `de-8-backfill-w`, `fr-2-backfill-elab` and `ch-9-backfill-bs`, §8);
 - a backfill job is `paused`, `failed` or `aborted` and must be looked at, resumed or stopped;
 - the database grows faster than the projection of §7 says.
 
-The `backfill` role is a one-shot job. It plans one job per series, fetches the older observations in P40D chunks into the raw archive and lets the loader store them. It never runs by itself: nothing starts it, and it is not in the default `up`. **The go-live data is the only copy**, so the backfill is built to change a live row only for a provider-validated value (§1). Agents have no production access: every command here is run by the owner.
+The `backfill` role is a one-shot job. It plans one job per unit (a series for NL-1; a decade file for DE-8, a daily-aggregate series for FR-2, a dataset for CH-9), fetches the older observations in chunks of the spec's size (P40D for NL-1) into the raw archive and lets the loader store them. It never runs by itself: nothing starts it, and it is not in the default `up`. **The go-live data is the only copy**, so the backfill is built to change a live row only for a provider-validated value (§1); the P14b specs write into the series of **another source** (their `target`) and stop at `DATA_FLOOR` (§8). Agents have no production access: every command here is run by the owner.
 
 ## 1. What it does, and its rules
 
@@ -13,16 +13,17 @@ The `backfill` role is a one-shot job. It plans one job per series, fetches the 
 |---|---|
 | Fetch targets come only from `registry/` (invariant 1). The hosts of `registry/backfill.yaml` must be hosts of the same source in `registry/capture.yaml`; the body of every request is built from the registry row of the series, and the series is looked up in the registry again before **every** request | A job whose key the registry no longer selects fails as `unregistered`. No command line or database value reaches a URL |
 | **One runner per host.** At start a run takes the lease of every host its jobs use (a row of `backfill_lease`, owned by a random id per process), renews it to now + 2 minutes before every request, and gives it back at exit | A second `run` while one holds the lease exits 1 at once with `"stopped":"busy"` and sends nothing. After a `kill -9`, a reboot or a lost container the lease lapses **within 2 minutes**: a `run` started sooner is `busy`; wait 2 minutes and start it again |
-| It works only inside the off-peak window **22:00–05:00 UTC** and exits when the window closes or the jobs are done | Start it at about 22:00 UTC. A run that is stopped by the window is a success (exit 0); start it again the next evening |
-| Pacing: at least 1 s between two requests (probes included) and at most 3,600 an hour, on top of the live capture's 400 an hour for NL-1 (`registry/backfill.yaml`; the budget test asserts both) | About 4.2 hours of requests for NL-1 (§7), counted at one request a second. Since the P14a queue fix the runner also waits for the loader after every chunk with data (`unloaded`, below: one loader tick, up to about 10 seconds), so at the usual 2-second load a night does some 300 to 400 chunks an hour and the NL-1 history takes several nights. In a slow hour (2026-10-15, 23h: 57 seconds a chunk) it is a minute or more a chunk, and a load over 60 seconds ages the live lines past the `backlog` limit, which pauses the runner 5 minutes; a night in which the loader lags for good ends at the window |
+| It works only inside the off-peak window **22:00–05:00 UTC** (every host) and exits when the window closes or the jobs are done | Start it at about 22:00 UTC. A run that is stopped by the window is a success (exit 0); start it again the next evening |
+| Pacing: **per host**, `min_interval_ms` and `max_per_hour` of the host in `registry/backfill.yaml`: NL-1's host at least 1 s apart and at most 3,600 an hour, on top of the live capture's 1,000 an hour (P16a); P14b adds `www.opengeodata.nrw.de` (30 s, 20 an hour), `hubeau.eaufrance.fr` (2 s, 1,800 an hour, on top of FR-1's live 10) and `data.bs.ch` (1 s, 3,600 an hour). The budget test asserts every host | About 4.2 hours of requests for NL-1 (§7), counted at one request a second. Since the P14a queue fix the runner also waits for the loader after every chunk with data (`unloaded`, below: one loader tick, up to about 10 seconds), so at the usual 2-second load a night does some 300 to 400 chunks an hour and the NL-1 history takes several nights. In a slow hour (2026-10-15, 23h: 57 seconds a chunk) it is a minute or more a chunk, and a load over 60 seconds ages the live lines past the `backlog` limit, which pauses the runner 5 minutes; a night in which the loader lags for good ends at the window |
 | Each job has a **request budget** (planned chunks and probes plus 20 %) | A job that has used it is `paused` with `budget` (§5) |
 | **The job row is checked before any request** (review S2): its chunk must be the spec's, its range must lie in [the spec floor, the data epoch 2026-10-02], and its budget may not exceed what `plan` gives that range | A job row changed by hand or through the `rws_backfill` login fails as `invalid_job` before it sends anything |
-| The upper end of every range is at most the **data epoch, 2026-10-02T00:00:00Z** (`DATA_EPOCH`, the first production capture, app_meta `data_epoch`): `plan` defaults `--to` to it and refuses a later one, and the loader drops a backfill row at or after it | The history meets the live rows at the epoch and never reaches the newest live point, so `obs_latest` never needs a backfill (KG-345) |
-| **The loader's window** (review S3): a backfill row outside its manifest line's chunk `[from, to)`, below the spec floor (1990-01-01) or at or after the data epoch is dropped as `outside_backfill` and counted in `dropped` | A forged or misplaced line stores nothing outside its chunk, and the ledger identities still hold |
+| **A P14b spec (it has a `target`) ends at `DATA_FLOOR`, 2026-08-01T00:00:00Z, not at the epoch** (§8): `plan` caps `--to` there and refuses a later one, `invalid_job` re-checks it, and the loader drops a row at or after it | See §8: the days the site shows already belong to live rows |
+| For NL-1: the upper end of every range is at most the **data epoch, 2026-10-02T00:00:00Z** (`DATA_EPOCH`, the first production capture, app_meta `data_epoch`): `plan` defaults `--to` to it and refuses a later one, and the loader drops a backfill row at or after it | The history meets the live rows at the epoch and never reaches the newest live point, so `obs_latest` never needs a backfill (KG-345) |
+| **The loader's window** (review S3): a backfill row outside its manifest line's chunk `[from, to)`, below the spec floor (NL-1 1990-01-01; DE-8 and FR-2 1950-01-01; CH-9 2020-06-01) or at or after its ceiling (the data epoch, or `DATA_FLOOR` for a P14b spec) is dropped as `outside_backfill` and counted in `dropped` | A forged or misplaced line stores nothing outside its chunk, and the ledger identities still hold |
 | `backfill_guard` (a database function) answers whether the loader and the source are healthy; while it does not answer `ok` the runner sleeps and looks again: 2 seconds after `unloaded`, 5 minutes after any other answer | The backfill never competes with the live loader: it waits while the loader's health pass is older than **150 seconds** or has no time at all (`loader_lag`; 5 minutes until the P14a health-scan fix: the pass rewrites it every 60 to 90 seconds, so an older one is a stalled load loop), while the manifest backlog is over 3 files or older than **60 seconds** (`backlog`; 600 seconds, five times the 120-second freshness limit, until the P14a health-scan fix: the runner now stops starting chunks once live data is a minute behind), or an active job of the source (`planned`, `running` or `paused`; an aborted, failed or done one is not counted) has **any** chunk with data (`chunks_with_data`) that the loader's ledger does not hold yet (`unloaded`), or while the source is not healthy (`stale`). **Why no unloaded chunk at all** (the P14a queue fix; it allowed 30 before): backfill lines go into the same daily manifest as the live lines, and the loader reads a manifest in order, so every unloaded chunk sits in front of the live lines written after it. On the night of 2026-10-15/16 a chunk took 2 seconds to load at the median but up to about a minute at times, and 30 of them held live data back by up to 34 minutes. Now at most one chunk waits in front of a live line. A chunk the loader sets aside (quarantined or skipped) gets a ledger row too, with no counts and `reconciled` false, so the guard never waits for it; the runner then fails that job `unreconciled` (§5) and goes on with the next. The ledger is counted by distinct chunk start, so a chunk fetched again after a `kill -9` counts once, and a job is `done` only once its last chunk is in the ledger. **A chunk that never reaches the ledger** (a damaged manifest line, a line capture's recovery re-adopted, KG-341, or one set aside before this fix) would hold the runner all night: after **10 minutes** of `unloaded` in a row the run stops with `"stopped":"stuck"` and exits 1 (§5) |
-| A chunk is committed in this order: (a) the object in the archive, (b) a manifest line (`retention: backfill`, spec `nl-1-backfill-obs`, an empty `variant`), (c) the job's cursor | A `kill -9` or a reboot at any point resumes at the old cursor; the chunk is fetched again and the second line loads as a no-op. No duplicates, no gaps |
+| A chunk is committed in this order: (a) the object in the archive, (b) a manifest line (`retention: backfill`, the spec's id, an empty `variant` for NL-1 and the unit's key for the others), (c) the job's cursor. A DE-8 slice reuses its file's object (§8) | A `kill -9` or a reboot at any point resumes at the old cursor; the chunk is fetched again and the second line loads as a no-op. No duplicates, no gaps |
 | A chunk answered `204`, or with no value, moves the cursor and writes **no** manifest line | Fetch health does not see a `key: null` line |
-| The probe asks `CheckWaarnemingenAanwezig` year by year from the start of the range until the first year that has data under the series' own method; **probes are not archived** | `data_from` is that year. A series without data in the range ends `done` |
+| NL-1 only: the probe asks `CheckWaarnemingenAanwezig` year by year from the start of the range until the first year that has data under the series' own method; **probes are not archived** | `data_from` is that year. A series without data in the range ends `done` |
 | Truncation: a list at 90 % of the parser's cap (10,000 values), 144,000 values in all, a parser cap error or the client's size cap commits nothing; the runner **halves the chunk at that cursor** and asks again (40, 20, 10, 5, 2.5, 1.25, 1 day), and fails the job as `truncated` only when a one-day chunk is still too big. Every request counts against the budget | P40D holds 5,760 values per 10-minute list, so a chunk stays far below it. The next cursor asks a whole chunk again |
 | Throttling: a 403, 429, 451 or 5xx is retried after the client's backoff (`Retry-After` when the provider sends one), up to 5 attempts. When the backoff would end after the window, the run stops with `"stopped":"throttled"` and exits 1 | The backoff is kept in memory only: a restart forgets it. **Do not restart a throttled run at once**: wait for the `Retry-After` the provider sent, or for the next night |
 | Rows: every backfilled row gets qc bit 512; a live row is replaced **only** by a validated value (qc bit 2: RWS Gecontroleerd or Definitief) over an unvalidated one, and each such change writes one `obs_revision`; `obs_latest`, fetch health, outages and coverage never see a backfill (A§8 Q6) | A backfill cannot make a series look fresh or stale |
@@ -30,6 +31,8 @@ The `backfill` role is a one-shot job. It plans one job per series, fetches the 
 | The runner logs in as `rws_backfill`: `backfill_job`, `backfill_lease` and `backfill_guard` and nothing else, at most two connections (the running job and one status, pause or abort call beside it), 5 s per statement and 30 s idle in a transaction | A budget cannot be raised by the runner itself (§5) |
 | A request is counted once it went out: a backoff, an open breaker or a refused URL counts nothing; a request a `kill -9` interrupts is not counted either | `requests` may be one short after a crash |
 | `last_error` and every line of output hold fixed codes, never provider text | |
+
+**The order of the specs.** All jobs share one `run`, in job-id order; the P14b jobs get ids **after** the NL-1 ones. To run P14b first, `pause` the NL-1 jobs (§5) and `resume` them afterwards; there is no `run --spec`. A run takes the lease of every host its jobs use, so a job of another host never waits for an NL-1 job's host.
 
 Job states: `planned`, `running`, `paused`, `done`, `failed`, `aborted`. The fixed codes of `last_error`: `budget` (paused), `unregistered`, `invalid_job`, `truncated`, `unreconciled`, `invalid`, `schema_drift`, `archive`, `unexpected_status`, `client_error`, `upstream_error`, `throttled`, `network`, `timeout`, `dns`.
 
@@ -52,19 +55,19 @@ Exit codes of every subcommand: 0 done (also a run stopped by the window or `--u
 **Dry-run.** It needs neither the database nor the network, and writes nothing. It prints one line per series and a totals line:
 
 ```bash
-rwsc run --rm --no-deps -T backfill backfill plan --spec nl-1-backfill-obs --from 1990-01-01 --dry-run
+rwsc run --rm --no-deps -T backfill backfill plan --spec nl-1-backfill-obs --from 1990-01-01 --dry-run   # NL-1; the other specs in §8
 ```
 
 ```json
 {"totals":{"spec":"nl-1-backfill-obs","from":"1990-01-01T00:00:00.000Z","to":"2026-10-02T00:00:00.000Z","series":41,"chunks":13776,"requests":15293,"values":79249392,"bytes":22982323680,"db_bytes":7132445280,"archive_bytes":1532154912,"hours_at_pace":4.2}}
 ```
 
-(The figures are the ones of §7.) `--from` defaults to the spec's floor (1990-01-01), `--to` to the data epoch `2026-10-02` and may not be later (review C2): NL-1 has no seed, so the history runs up to the first production capture with no hole; where it overlaps live rows (August to October 2026) the row rules of §1 apply. `--series key,key` limits it to some series (keys of the spec's selection only). Read §7 and check `pg_database_size` **before** you choose `--from`.
+(The figures are the ones of §7; these are NL-1's of P14a, before P16b registered 71 series: today's dry-run says 12.35 GB.) `--from` defaults to the spec's floor (NL-1 1990-01-01), `--to` to the data epoch `2026-10-02` and may not be later (review C2): NL-1 has no seed, so the history runs up to the first production capture with no hole; where it overlaps live rows (August to October 2026) the row rules of §1 apply. `--series key,key` limits it to some series (keys of the spec's selection only). Read §7 and check `pg_database_size` **before** you choose `--from`.
 
 **Plan.** The same line without `--dry-run` creates one job per series. It is idempotent: a second `plan` of the same range creates nothing (`"created":false`).
 
 ```bash
-rwsc run --rm --no-deps -T backfill backfill plan --spec nl-1-backfill-obs --from 1990-01-01
+rwsc run --rm --no-deps -T backfill backfill plan --spec nl-1-backfill-obs --from 1990-01-01   # NL-1; the other specs in §8
 ```
 
 **Run.** Start it at about 22:00 UTC, inside a `tmux` or `screen` session. It works through the jobs in id order, one at a time, and prints one JSON line per job and a totals line at the end:
@@ -109,12 +112,15 @@ A running `run` notices a pause or abort before its next request and goes on to 
 
 | `status` / `error` | What it means and what to do |
 |---|---|
-| `paused` / `budget` | The job used its request budget (retries, halvings, or far more chunks than planned). **Look first** (`attempts`, `requests` against `chunks_done`): a runaway is a bug. If the use is explained, re-plan the rest (below). Raising `request_budget` by hand does not work: the runner refuses a budget above what `plan` gives the range (`invalid_job`) |
+| `paused` / `budget` | The job used its request budget (for FR-2 also a 206 that halved the chunk down to a day: §8) (retries, halvings, or far more chunks than planned). **Look first** (`attempts`, `requests` against `chunks_done`): a runaway is a bug. If the use is explained, re-plan the rest (below). Raising `request_budget` by hand does not work: the runner refuses a budget above what `plan` gives the range (`invalid_job`) |
 | `failed` / `unreconciled` | A chunk's counts do not add up (`provider_values = kept + dropped` and `kept = inserted + revised + skipped`): a bug; **or** the loader set a chunk aside (quarantined or skipped; since the P14a queue fix its ledger row has no counts and `reconciled` false, and the batch says why: `docs/runbooks/schema-drift.md`). Do not resume. Keep the output of `status` and the job number, and open an issue. For a set-aside chunk, once its cause is fixed: abort the job and re-plan it from that chunk's day (below). A `replay` of the day loads its rows but adds no counts to the job, which stays failed |
 | run `"stopped":"stuck"` (exit 1) | The guard said `unloaded` for 10 minutes while nothing else held the runner: a chunk of an active job will never reach the ledger (§1). Find the job: `sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c "SELECT j.id, j.status, j.chunks_with_data - count(DISTINCT c.chunk_from) AS unloaded FROM backfill_job j LEFT JOIN backfill_chunk c ON c.job_id = j.id WHERE j.status IN ('planned', 'running', 'paused') GROUP BY j.id HAVING j.chunks_with_data - count(DISTINCT c.chunk_from) > 0"`, then abort it and re-plan it from its cursor's day (below) |
 | `failed` / `truncated` | Even a one-day chunk reached 90 % of the parser's cap, or 144,000 values. Nothing was committed for it. Report it (KG-339) |
 | `failed` / `invalid_job` | The job row is not one `plan` makes: another chunk, a range outside [floor, data epoch] or a budget above the plan's. Someone changed it by hand or through the runner's login: find out who, then `abort` it and plan again |
 | `failed` / `unregistered` | The registry no longer selects the series. Restore the registry row or `abort` the job |
+| `failed` / `schema_drift` with `drift` `zip_*`, `csv_header`, `csv_rows`, `backfill_window` (DE-8) | The ZIP is not what the spec's caps and header allow: see §8. The object is not archived. `zip_name` is a member name outside the anchored pattern or a station twice; `backfill_window` is a line with no `backfill` window (a forged or damaged line) |
+| `failed` / `truncated` (DE-8) | Never for DE-8: a file is a file and is never halved (`halvable: false`); a `truncated` there is a bug, open an issue |
+| `failed` / `schema_drift` with `drift` `unknown_variant` (CH-9) | The manifest line's variant is not one of the spec's dataset ids, or the record keys are not the dataset's. Look at the line (§8) |
 | `failed` / `upstream_error`, `throttled`, `network`, `timeout`, `dns` | Five failed attempts in a row. Wait, check `docs/runbooks/provider-outage.md`, then `resume` |
 | `failed` / `schema_drift`, `invalid`, `unexpected_status`, `client_error` | The provider changed or refused. Look at `docs/runbooks/schema-drift.md`; the object is not archived. Since the P14a queue fix the run's job line (the night's journal, `sudo journalctl -u rws-backfill-nl1`) carries `drift`, the parser's fixed code, for a `schema_drift`; `status` does not. `resume` after a fix, or `abort` (KG-355) |
 | `failed` / `archive` | The archive write failed (disk full? `docs/runbooks/disk-full.md`). `resume` after the cause is gone |
@@ -123,7 +129,7 @@ A running `run` notices a pause or abort before its next request and goes on to 
 
 ```bash
 rwsc run --rm --no-deps -T backfill backfill abort --job <job>
-rwsc run --rm --no-deps -T backfill backfill plan --spec nl-1-backfill-obs --series <series> --from <cursor day, YYYY-MM-DD>
+rwsc run --rm --no-deps -T backfill backfill plan --spec <spec> --series <series> --from <cursor day, YYYY-MM-DD>   # <series>: the job's `series` in status
 ```
 
 ## 6. Verify
@@ -188,21 +194,66 @@ The year-1 budget gives the observations **at most 23 GB** (`docs/plan/ARCHITECT
 
 | Provider | Series | Range | Chunks | Requests | Time at 1/s | Values (at most) | Database (at most) | Archive |
 |---|---|---|---|---|---|---|---|---|
-| NL-1 (28 H, 13 Q) | 41 | 1990-01-01 to 2026-10-02 | 13,776 | 15,293 | about 4.2 h | 79.2 M | about 7.1 GB (31 % of 23 GB) | about 1.5 GB |
-| DE-8, BE-3, BE-1/2, FR-2, CH-8, CH-9, LU-7, others | – | – | – | – | – | – | – | later P14 PRs add their own row |
+| NL-1 (28 H, 13 Q; P14a) | 41 | 1990-01-01 to 2026-10-02 | 13,776 | 15,293 | about 4.2 h | 79.2 M | about 7.1 GB (31 % of 23 GB) | about 1.5 GB |
+| NL-1 (**today**, 71 series since P16b) | 71 | 1990-01-01 to 2026-10-02 | – | 26,483 | about 7.4 h | – | **about 12.35 GB** (54 % of 23 GB) | – |
+| DE-8 (`hydro/w`, 9 tier-1 gauges) | 32 units | 1950-01-01 to 2026-08-01 | 3,740 | 32 | 16 min of requests at 30 s, but about 8.6 h with the loads (`hours_with_loads`: every slice waits for its load, about 8 s) | 24.2 M grid points | about 2.18 GB | about 157 MB (ZIPs do not compress) |
+| FR-2 (QmnJ 31, HIXnJ 40) | 71 | 1950-01-01 to 2026-08-01 | 284 (with halvings) | 284 | about 10 min at 2 s | 1,985,941 daily values | about 0.18 GB | about 17 MB |
+| CH-9 (2289 W and Q, 2106 W) | 2 datasets | 2020-06-01 to 2026-08-01 | 152 | 152 | about 3 min at 1 s | 2,594,304 values (1,297,152 records; half on the 10-minute grid) | about 0.09 GB | about 10 MB |
+| BE-3, BE-1/2, CH-8, LU-7, others | – | – | – | – | – | – | – | later P14 PRs add their own row |
 
 These are **upper bounds**:
 - the dry-run counts duration divided by the native step (10 minutes), but the history is coarser: Lobith H in 1995 is hourly, in 1960 daily (KG-340);
 - rows under another method than the registered one are dropped: for example, Q history at Lobith in 2010 is method F216, not the registered F230, so a Q series gets little or nothing for such years (KG-342);
 - the figure is the sum over all series; a `--series` or `--from` that is later cuts it in proportion.
 
-Per row, the database constant is 90 bytes; the kill -9 integration test measured about 102 bytes a row (95 for a clean insert), so the per-row part may be 10 to 15 % off. The two effects above are far larger, and they push the other way. So the real growth is far lower. The owner picks `--from` from the dry-run and checks the current size first:
+The three P14b rows are 2,441,317,410 B together, about 2.44 GB (a test holds the sum under 3 GB); the DE-8 count is grid points of the selected stations, the FR-2 and CH-9 counts are the dry-run's. Per row, the database constant is 90 bytes; the kill -9 integration test measured about 102 bytes a row (102.1 in the NL-1 resume test; 95 for a clean insert), so the per-row part may be 10 to 15 % off. The two effects above are far larger, and they push the other way. So the real growth is far lower. The owner picks `--from` from the dry-run and checks the current size first:
 
 ```bash
 sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c "SELECT pg_size_pretty(pg_database_size('rws')) AS rws, pg_size_pretty(pg_total_relation_size('obs')) AS obs"
 ```
 
 Run `backfill plan --dry-run` again with the `--from` you choose; if the total plus `pg_database_size` is not comfortably inside the 200 GB disk and the 23 GB obs line, take a later `--from` or fewer series. After the first night, compare `pg_database_size` with the dry-run and write the measured figure into `docs/capacity.md` (KG-344). Partitions: `obs` gets one yearly partition per year below 2026-01-01 (`docs/runbooks/partition-maintenance.md`); a restore drill (≤ 4 h) is the phase-close [owner] check.
+
+## 8. The P14b providers: DE-8, FR-2, CH-9
+
+The three specs write into the series of **another source** (`target` in `registry/backfill.yaml`): DE-8 into the DE-7 `<no>/W` series, FR-2 into the FR-1 aggregate twin series `<code>/QmnJ` and `<code>/HIXnJ`, CH-9 into the CH-1 series `2289/W`, `2289/Q` and `2106/W`. They have no live capture, so `/api/v1/health/sources` shows DE-8's, FR-2's and CH-9's `status` as `unknown` (KG-388). Rules that hold for all three:
+
+- **Ceiling.** A job ends at **`DATA_FLOOR` (2026-08-01T00:00Z)**, not at the data epoch; `plan` caps `--to` and refuses a later one; a manifest line that reaches past it stores nothing at or after it. The history therefore stops short of every day the site shows (A§8 Q6, KG-390).
+- **Guard.** `backfill_guard` judges `stale` on the **target's** health (DE-7, FR-1 or CH-1 must be `ok`), and `loader_lag`, `backlog` and `unloaded` on the job's own source. A `stale` run sleeps 5 minutes and looks again.
+- **Rows.** DE-8 and FR-2 statut 16 are validated (qc bit 2), FR-2 statut 4 is raw, CH-9 is raw. A validated archive value replaces a live raw row with one `obs_revision`; a raw value never replaces a live row (counted `skipped`). Aggregate series have no `obs_1h` or `obs_1d` rows.
+- **Ledger.** Reconciled per line: `provider_values = kept + dropped` and `kept = inserted + revised + skipped`. The key is `(job_id, archive_key, chunk_from)`. The status output and the totals are the ones of §4.
+- **Log line `backfill_raw_dropped`** (DE-8): the rows of members nobody selected (`unselected`), placeholders, WSV duplicates and unregistered stations that a file carried, by code. It is a count for review, not a drop to chase: the file holds 27 stations and the spec selects the tier-1 ones.
+- **Order with NL-1.** See §3 ("The order of the specs").
+
+### 8.1 DE-8 (`de-8-backfill-w`, host `www.opengeodata.nrw.de`)
+
+32 decade files (1950 to 2020 of the Rur, Niers-u-Schwalm, Ems and Issel-Berkel-Vechte catchments), 20 requests an hour at most, 30 s apart. A job is one decade file: it is fetched **once** and cut into P30D slices of the stations' grid; the later slices send nothing (the lease is renewed before each commit). Dry-run, plan and run as in §3, with `--spec de-8-backfill-w`:
+
+```bash
+rwsc run --rm --no-deps -T backfill backfill plan --spec de-8-backfill-w --dry-run
+rwsc run --rm --no-deps -T backfill backfill plan --spec de-8-backfill-w
+rwsc run --rm --no-deps -T backfill backfill run
+```
+
+Expected dry-run totals: 32 series (units), 3,740 chunks, 32 requests, 24,166,944 values, 2.18 GB database, 157 MB archive. A 20 MB file (Rur 2020) holds 27 members and inflates to 292 MB; the loader needs about 311 MB resident for it (the container has 768 MB). The first slice of a file takes about 2.4 s to parse, the others read the memo (about 2 ms).
+
+**Verify.** Besides §6: a done job's ledger has one row per slice of its file, all `reconciled`. The hold means a 1950s series has a grid point every 15 minutes while its last row is at most 24 h old, and none after longer silence (KG-385). The archive ends **2026-07-01**, so the last decade's final slices are empty grid points, not failures.
+
+**Failure codes (all `schema_drift` with a `drift` code in the run's job line).** `zip_eocd`, `zip_cd`, `zip_members`, `zip_total`, `zip_ratio`, `zip_name`, `zip_method`, `zip_encrypted`, `zip_symlink`, `zip_multidisk` (the ZIP guard: more than 200 members, more than 640 MiB inflated, ratio above 50, a member name outside the anchored pattern `^\d{13}_…_Wasserstand_cm\.csv$`, a station twice); `encoding` (not UTF-8); `csv_header` (a member whose first line is not `station_name;station_no;dateTime;value[cm]`: NRW changed the layout, or this is a Q member); `csv_rows` (a member over 2,000,000 rows); `backfill_window` (a line with no `backfill` window); `truncated` never (not halvable). The object is **not** archived for a drift found in `validity`. Do not raise a cap by hand: it is a `caps` entry with a measured `justification`, reviewed.
+
+**A DE-8 file fetched again after a kill.** A `kill -9` between the put, the append and the cursor makes the next run fetch the file once more (`reuse` memoises per run, not across runs). The second object is **a second archive object of the same file, never pruned** (class `backfill`, 20 MB); its slices load as no-ops (0 new, 0 revised) and the ledger counts each slice once (KG-391). Nothing to do; it is the price of the resume.
+
+### 8.2 FR-2 (`fr-2-backfill-elab`, host `hubeau.eaufrance.fr`)
+
+71 units (31 `QmnJ`, 40 `HIXnJ`), one request per series and up to P7300D (20 years, at most about 7,300 records of a page of 20,000). Pacing: 2 s apart, 1,800 an hour at most; FR-1's live capture keeps its own 10 an hour (the budget test asserts the sum stays under 3,600). Plan and run with `--spec fr-2-backfill-elab`; expected dry-run: 71 units, 284 requests, 0.18 GB database, 17 MB archive.
+
+**A 206 halves the chunk.** A page with a `next` (or a `count` above the page) is `truncated`: the runner halves the chunk in **whole days** and asks again, down to one day (every halving counts against the budget). A job that exhausts its budget in halvings is `paused` / `budget` (KG-395): read `status` (`attempts` against `chunks_done`), then re-plan from the cursor's day (§5). The day rule of the dates is A§7.4 (Europe/Paris midnight before 2007-03-23, UTC from it: KG-383). A statut other than 0, 4, 8, 12 or 16, or a qualification other than 12, 16, 20, is a retained `unknown_quality`. A revised daily value is not re-synced (`date_debut_prod`, KG-389): re-plan the last months.
+
+### 8.3 CH-9 (`ch-9-backfill-bs`, host `data.bs.ch`)
+
+Two datasets, `100089` (Rhine at Basel, station 2289: W and Q) and `100236` (Birs at Münchenstein, 2106: W only), P30D chunks from 2020-06-01, 1 request a second (25,200 a night at most, under 10 % of the portal's 500,000 a day). The request is `…/<dataset>/exports/json` with a `where` on the chunk (never `/records`, which stops at offset + limit 10,000), and the manifest line's **variant is the dataset id** (`lineVariant`). Plan and run with `--spec ch-9-backfill-bs`; expected dry-run: 2 units, 152 requests, 0.09 GB database, 10 MB archive (the dry-run counts the 5-minute records, though only the 10-minute grid instants load). Raw only (KG-387); 2106 Q is not loaded (`q_not_twin`, KG-393).
+
+**Failure codes.** `unknown_variant` (`schema_drift`): the line's variant is not `100089` or `100236`, or the record's keys are not the dataset's (a renamed field). Anything else is the generic list of §5.
 
 ## What not to do
 
@@ -215,3 +266,4 @@ Run `backfill plan --dry-run` again with the `--from` you choose; if the total p
 - Do not restart `capture` (a deploy) during a run if you can avoid it: its start-up recovery can race with a backfill line on the shared day manifest (KG-341; the object is still loaded, only its ledger row is added by the next fetch).
 - Do not resume a job that failed as `unreconciled`.
 - Do not paste an owner-audience value into an issue. An owner source's backfill (later P14 PRs) shows only in the owner channel.
+- Do not move a P14b ceiling or `display_start` without reading KG-390: `FILLED_BY` and `dataSince` do not know a cross-source spec yet.

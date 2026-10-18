@@ -9,13 +9,12 @@ import { BYTES_PER_VALUE } from '../../src/backfill/project.ts';
 import { BackfillSpec, loadBackfill } from '../../src/backfill/spec.ts';
 import { NL1_BACKFILL_FLOOR } from '../../src/load/adapters.ts';
 import { DATA_EPOCH } from '../../src/load/dirty.ts';
-import { config, fixtureText, LOBITH_H, registry, SPEC } from './harness.ts';
+import { config, fixtureText, LOBITH_H, nl1Spec, registry } from './harness.ts';
 
 // registry/backfill.yaml: strict schema, hosts inside capture.yaml's allowlist (invariant 1), the series selection
 // and the cap arithmetic that keeps a P40D chunk inside the parser's caps (owner answer 2, 2026-10-12).
 
-const spec = config.specs.find((s) => s.id === SPEC);
-if (spec === undefined) throw new Error('no spec');
+const spec = nl1Spec();
 const raw = parse(readFileSync(new URL('../../../../registry/backfill.yaml', import.meta.url), 'utf8')) as {
   specs: Record<string, unknown>[];
 };
@@ -24,7 +23,8 @@ describe('hosts (invariant 1)', () => {
   it('every host of every backfill spec is in capture.yaml hosts for its source', () => {
     for (const s of config.specs) {
       const allowed = registry.hosts.get(s.source) ?? [];
-      for (const u of [s.url, s.check_url]) expect(allowed, `${s.id} ${u}`).toContain(new URL(u).hostname);
+      for (const u of s.source === 'NL-1' ? [s.url, s.check_url] : [s.url])
+        expect(allowed, `${s.id} ${u}`).toContain(new URL(u).hostname);
     }
     for (const host of Object.keys(config.hosts)) expect([...registry.hosts.values()].flat()).toContain(host);
   });

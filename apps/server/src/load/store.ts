@@ -111,6 +111,8 @@ export type SeriesRow = SeriesDecl & {
   staleness_ms: number;
   /** primary, twin or mirror: only a primary series takes gap-fill rows (FR-3, CH-3). */
   role: 'primary' | 'twin' | 'mirror';
+  /** P14b: a provider's own aggregate (series.aggregate; absent: instantaneous). In no rollup and no dirty row. */
+  aggregate?: 'mean' | 'max' | 'min';
   /** Its station's registered position (a drift report compares it with what a payload states). */
   lon: number | null;
   lat: number | null;
@@ -136,6 +138,7 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
     lon: number | null;
     lat: number | null;
     station: string;
+    aggregate: 'mean' | 'max' | 'min' | null;
   }>`
     SELECT s.id, s.station_id AS station, s.provider_key AS key, s.quantity, s.native_unit, s.to_canonical, s.value_kind,
            (EXTRACT(EPOCH FROM s.native_step) * 1000)::double precision AS native_step_ms,
@@ -143,7 +146,8 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
            LEAST(src.audience, COALESCE(s.audience, src.audience)) = 'off' AS off,
            COALESCE(s.audience, src.audience) = src.audience AS same_audience,
            LEAST(src.audience, COALESCE(s.audience, src.audience))::text AS audience,
-           (EXTRACT(EPOCH FROM s.staleness_limit) * 1000)::double precision AS staleness_ms, s.role, st.lon, st.lat
+           (EXTRACT(EPOCH FROM s.staleness_limit) * 1000)::double precision AS staleness_ms, s.role, st.lon, st.lat,
+           s.aggregate
     FROM series s JOIN station st ON st.id = s.station_id JOIN source src ON src.id = s.source_id
     WHERE s.source_id = ${source} AND s.active`.execute(db);
   return new Map(
@@ -167,6 +171,7 @@ export async function seriesOf(db: Kysely<DB>, source: string): Promise<Map<stri
         role: r.role,
         lon: r.lon,
         lat: r.lat,
+        ...(r.aggregate === null ? {} : { aggregate: r.aggregate }),
       },
     ]),
   );
@@ -195,7 +200,7 @@ export type Written = {
 /** Which loader path the rows come through (P14a): a source's own payload, a gap-fill, or a backfill payload. */
 export type UpsertMode = 'live' | 'fill' | 'backfill';
 
-type Series = Pick<SeriesRow, 'id' | 'off' | 'sameAudience' | 'staleness_ms'>;
+type Series = Pick<SeriesRow, 'id' | 'off' | 'sameAudience' | 'staleness_ms' | 'aggregate'>;
 
 /**
  * Q6: the idempotent upsert with its revision log, plus obs_latest and the
@@ -386,12 +391,17 @@ export async function upsertObs(
   if (changed.length === 0) return { ...none, writes: written.length, skipped };
   // P9a: a changed value at ts is what every bucket up to ts + the staleness limit shows (LOCF).
   const staleness = new Map([...ids.values()].map((s) => [s.id, s.staleness_ms]));
+  // P14b: an aggregate series (role twin) is in no published file, so its change dirties nothing.
+  const aggregates = new Set([...ids.values()].flatMap((s) => (s.aggregate === undefined ? [] : [s.id])));
   for (const w of changed) {
+    if (aggregates.has(w.series_id)) continue;
     const at = w.ts.getTime();
     touched.push({ series: w.series_id, from: at, to: at + (staleness.get(w.series_id) ?? 0) });
   }
 
   const wSid = changed.map((w) => w.series_id);
+  // P14b: a provider's daily aggregate (FR-2 QmnJ, HIXnJ) is in no rollup of ours.
+  const notAggregate = sql`NOT EXISTS (SELECT 1 FROM series s WHERE s.id = w.series_id AND s.aggregate IS NOT NULL)`;
   const wTs = changed.map((w) => w.ts);
   // The rollups of every (series, bucket) this batch touched, recomputed from obs (catalogue §6.4 query 3).
   await sql`
@@ -399,7 +409,8 @@ export async function upsertObs(
     SELECT o.series_id, t.bucket, min(o.value), max(o.value), avg(o.value)::real,
            (array_agg(o.value ORDER BY o.ts DESC))[1], count(*)::int, bit_or(o.qc)
     FROM (SELECT DISTINCT w.series_id, date_bin('1 hour', w.ts, ${ORIGIN}) AS bucket
-          FROM unnest(${wSid}::int[], ${wTs}::timestamptz[]) AS w(series_id, ts)) t
+          FROM unnest(${wSid}::int[], ${wTs}::timestamptz[]) AS w(series_id, ts)
+          WHERE ${notAggregate}) t
     JOIN obs o ON o.series_id = t.series_id AND o.ts >= t.bucket AND o.ts < t.bucket + interval '1 hour'
     GROUP BY o.series_id, t.bucket
     ON CONFLICT (series_id, bucket) DO UPDATE
@@ -414,7 +425,8 @@ export async function upsertObs(
     SELECT o.series_id, t.bucket, min(o.value), max(o.value), avg(o.value)::real,
            (array_agg(o.value ORDER BY o.ts DESC))[1], count(*)::int, bit_or(o.qc)
     FROM (SELECT DISTINCT w.series_id, date_bin('1 day', w.ts, ${ORIGIN}) AS bucket
-          FROM unnest(${wSid}::int[], ${wTs}::timestamptz[]) AS w(series_id, ts)) t
+          FROM unnest(${wSid}::int[], ${wTs}::timestamptz[]) AS w(series_id, ts)
+          WHERE ${notAggregate}) t
     JOIN obs o ON o.series_id = t.series_id AND o.ts >= t.bucket AND o.ts < t.bucket + interval '1 day'
     GROUP BY o.series_id, t.bucket
     ON CONFLICT (series_id, bucket) DO UPDATE

@@ -433,17 +433,20 @@ export async function syncRegistry(
             : row.value_kind === 'level'
               ? (OWNER_LEVEL_DATUM[row.source] ?? null)
               : 'LOCAL';
+      // P14b: a provider's own aggregate (FR-2 QmnJ, HIXnJ); only a public row can state one.
+      const aggregate = 'aggregate' in row ? (row.aggregate ?? null) : null;
       const { rows } = await sql<{ id: number }>`
         INSERT INTO series (station_id, source_id, quantity, value_kind, provider_key, native_unit, to_canonical, datum,
-                            native_step, expected_step, staleness_limit, audience, role, active)
+                            native_step, expected_step, staleness_limit, audience, role, active, aggregate)
         VALUES (${row.id}, ${row.source}, ${row.quantity}, ${row.value_kind}, ${row.provider_key}, ${row.native_unit},
                 ${row.to_canonical}, ${datum}, ${row.native_step}::interval, ${row.expected_step}::interval,
-                ${row.staleness_limit}::interval, ${narrowed}::audience, ${row.role}, true)
+                ${row.staleness_limit}::interval, ${narrowed}::audience, ${row.role}, true, ${aggregate})
         ON CONFLICT (source_id, provider_key) DO UPDATE SET
           station_id = EXCLUDED.station_id, quantity = EXCLUDED.quantity, value_kind = EXCLUDED.value_kind,
           native_unit = EXCLUDED.native_unit, to_canonical = EXCLUDED.to_canonical, datum = EXCLUDED.datum,
           native_step = EXCLUDED.native_step, expected_step = EXCLUDED.expected_step,
-          staleness_limit = EXCLUDED.staleness_limit, audience = EXCLUDED.audience, role = EXCLUDED.role, active = true
+          staleness_limit = EXCLUDED.staleness_limit, audience = EXCLUDED.audience, role = EXCLUDED.role, active = true,
+          aggregate = EXCLUDED.aggregate
         RETURNING id`.execute(tx);
       const { id } = rows[0] as { id: number };
       kept.push(id);

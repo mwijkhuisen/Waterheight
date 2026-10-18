@@ -1,0 +1,12 @@
+{
+  "spec": "de-8-w-index",
+  "source": "DE-8",
+  "synthetic": false,
+  "recorded_at": "2026-10-18T11:30:55Z",
+  "status": 200,
+  "content_type": "application/json; charset=utf-8",
+  "url": "https://www.opengeodata.nrw.de/produkte/umwelt_klima/wasser/oberflaechengewaesser/hydro/w/index.json",
+  "bytes": 19246,
+  "source_sha256": "613e40c985870d8fa106a9e89058caaf81b66a1784bc62cab712ca803668bbba",
+  "trimmed": false
+}

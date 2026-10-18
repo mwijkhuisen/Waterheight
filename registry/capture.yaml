@@ -36,6 +36,7 @@ hosts:
   DE-8: [www.opengeodata.nrw.de]
   BE-3: [hydrometrie.wallonie.be]
   FR-1: [hubeau.eaufrance.fr]
+  FR-2: [hubeau.eaufrance.fr]
   FR-3: [www.vigicrues.gouv.fr]
   FR-4: [www.vigicrues.gouv.fr]
   FR-5: [www.vigicrues.gouv.fr]
@@ -50,6 +51,7 @@ hosts:
   CH-3: [www.hydrodaten.admin.ch]
   CH-4: [www.hydrodaten.admin.ch]
   CH-5: [www.hydrodaten.admin.ch]
+  CH-9: [data.bs.ch]
 
 # Header → file under /run/secrets (never in git, logs or the manifest).
 secret_headers:

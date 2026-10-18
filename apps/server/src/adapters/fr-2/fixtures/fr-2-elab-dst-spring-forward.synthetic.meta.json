@@ -1,0 +1,9 @@
+{
+  "spec": "fr-2-backfill-elab",
+  "variant": "",
+  "source": "FR-2",
+  "synthetic": true,
+  "derived_from": "hand-made: the days around the spring-forward night of 2006-03-26 (before the cutover: +01:00 up to 2006-03-26, +02:00 from 2006-03-27)",
+  "values": "every value generated (no recorded payload)",
+  "status": 200
+}

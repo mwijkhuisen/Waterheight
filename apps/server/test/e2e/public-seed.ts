@@ -97,7 +97,8 @@ export async function seedPublic(admin: Client, now: string): Promise<void> {
   // Classes and areas count at the current bucket only while their source was fetched lately; and every public source
   // whose licence asks for a date (catalogue 1b) needs the row the publisher reads it from (attribution.ts
   // `sourceDates`), or its sources.json date is null and the Sources page says "datum onbekend":
-  //   `update` (FR-1, FR-3, FR-4, FR-5): `newest_ts`, the newest value we hold (the provider's own date is DE-6's only);
+  //   `update` (FR-1, FR-2, FR-3, FR-4, FR-5): `newest_ts`, the newest value we hold (the provider's own date is DE-6's
+  //   only; P14b: FR-2 is backfill-only, so in production its date stays unknown until a live spec feeds it, KG-388);
   //   `update` of DE-6: `detail.provider_updated`, shown as "Stand: TT.MM.JJJJ hh:mm" in Berlin time;
   //   `retrieval` (CH-1 .. CH-5): `last_fetch_ok`, the last successful fetch.
   // The dates are fixed relative to NOW and on different Amsterdam days, so a spec sees which column fed which source:
@@ -106,7 +107,7 @@ export async function seedPublic(admin: Client, now: string): Promise<void> {
   type Health = [source: string, fetched: string, newest: string | null, detail: object];
   const rows: Health[] = [
     ['DE-6', now, null, { provider_updated: '2026-10-26T08:30:00Z' }],
-    ...['FR-1', 'FR-3', 'FR-4', 'FR-5'].map((id): Health => [id, now, '2026-10-25T20:00:00Z', {}]),
+    ...['FR-1', 'FR-2', 'FR-3', 'FR-4', 'FR-5'].map((id): Health => [id, now, '2026-10-25T20:00:00Z', {}]),
     ...['CH-1', 'CH-2', 'CH-3', 'CH-4', 'CH-5'].map((id): Health => [id, '2026-10-26T11:55:00Z', null, {}]),
   ];
   for (const [source, fetched, newest, detail] of rows)

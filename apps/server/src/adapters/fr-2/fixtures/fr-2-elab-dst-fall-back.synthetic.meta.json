@@ -1,0 +1,9 @@
+{
+  "spec": "fr-2-backfill-elab",
+  "variant": "",
+  "source": "FR-2",
+  "synthetic": true,
+  "derived_from": "hand-made: the days around the fall-back night of 2006-10-29 (before the 2007-03-23 cutover: each day starts at its Europe/Paris midnight, +02:00 up to 2006-10-29, +01:00 from 2006-10-30)",
+  "values": "every value generated (no recorded payload)",
+  "status": 200
+}

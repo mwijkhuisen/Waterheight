@@ -52,8 +52,11 @@ const Meting = z.strictObject({
   Tijdstip: text(40),
   WaarnemingMetadata: z.strictObject({
     Bemonsteringshoogte: text(40),
-    /** Two digits; what each code means to us is the normaliser's table, never inferred here. */
-    Kwaliteitswaardecode: z.string().regex(/^\d{2}$/),
+    /**
+     * Two to four digits (older history carries 1004, KG-355). What each code means to us is the normaliser's
+     * table, never inferred here: a code it lacks is the retained drop `unknown_quality` (alerted, kept for a replay).
+     */
+    Kwaliteitswaardecode: z.string().regex(/^\d{2,4}$/),
     OpdrachtgevendeInstantie: text(80),
     Referentievlak: text(40),
     /** The catalogue's `StatuswaardeLijst`. */

@@ -1,0 +1,12 @@
+{
+  "spec": "de-8-backfill-w",
+  "source": "DE-8",
+  "synthetic": false,
+  "recorded_at": "2026-10-18T11:32:05Z",
+  "status": 200,
+  "content_type": "application/zip",
+  "url": "https://www.opengeodata.nrw.de/produkte/umwelt_klima/wasser/oberflaechengewaesser/hydro/q/Erfteinzugsgebiet-NRW-Q_1930-1939_EPSG25832_CSV.zip",
+  "bytes": 5427,
+  "source_sha256": "a8b2d98e6aadfd1692b5ee10f2285dfc2d9b274532b69ffc2b9e175c39224412",
+  "trimmed": false
+}

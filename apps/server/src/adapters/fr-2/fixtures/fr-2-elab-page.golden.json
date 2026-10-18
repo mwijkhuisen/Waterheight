@@ -1,0 +1,27 @@
+{
+ "obs": [
+  {
+   "series": "A850061001/QmnJ",
+   "ts": "1999-12-31T23:00:00.000Z",
+   "value": 525.733,
+   "qc": 2
+  },
+  {
+   "series": "A850061001/QmnJ",
+   "ts": "2000-01-01T23:00:00.000Z",
+   "value": 447.116,
+   "qc": 2
+  },
+  {
+   "series": "A850061001/QmnJ",
+   "ts": "2000-01-02T23:00:00.000Z",
+   "value": 395.023,
+   "qc": 2
+  }
+ ],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0,
+ "provider_values": 3,
+ "unknown_values": 0
+}

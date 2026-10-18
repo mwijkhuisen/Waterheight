@@ -1,0 +1,1 @@
+The twin test's references, recorded 2026-10-18: `ch-9-twin-ch1-<id>.json` are raw answers of our own public API (`/api/v1/series/ch.bafu.<…>`, 2026-10-10, series 2399 = 2289/W, 2400 = 2289/Q, 2281 = 2106/W, 2282 = 2106/Q) and the two `.raw` files are data.bs.ch `/exports/json` answers for that day; not adapter fixtures.

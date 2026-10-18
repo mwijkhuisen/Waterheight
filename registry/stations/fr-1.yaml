@@ -17,6 +17,9 @@
 # whole §3.1 Swiss table); every other row is tier 2. native_step = expected_step = the modal gap of the series in the
 # recording (PT1H for a series with one point); staleness_limit = max(3 x step, PT90M). expected_forecast_source FR-4 =
 # the Vigicrues forecast stations (§3 "F"); no thresholds.
+# P14b: after the primary rows, two aggregate twins of each tier-1 station (the FR-2 backfill, Hub'Eau obs_elab):
+# <code>/QmnJ (aggregate mean, l/s) beside a Q row and <code>/HIXnJ (aggregate max, mm, stage, LOCAL) beside an H row;
+# role twin, tier 2, P1D, never first_release, the station's other fields. They are never a primary series.
 # country by commune: 99131 BE, 99109 DE, 99140 CH, otherwise FR. The 18 Belgian partners (registry/seed/fr-1-be.csv)
 # are primary rows, country BE (A§7.2 exception until a Belgian source is public, P13); Torgny B422431101 is bold: tier 1.
 # role mirror = a gauge another agency operates (never published), with its primary:
@@ -16532,3 +16535,2204 @@ stations:
     audience: public
     datum: null
     gauge_zero: []
+  - id: fr.sandre.A061005051
+    source: FR-1
+    provider_code: A061005051
+    provider_key: A061005051/HIXnJ
+    name: Le Rhin à Strasbourg [sémaphore nord]
+    water_name: Le Rhin
+    country: FR
+    lon: 7.802870979
+    lat: 48.592540377
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.A228003001
+    source: FR-1
+    provider_code: A228003001
+    provider_key: A228003001/HIXnJ
+    name: L'Ill à Strasbourg [Chasseur Froid]
+    water_name: L'Ill
+    country: FR
+    lon: 7.7858512
+    lat: 48.621901523
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.A228003001
+    source: FR-1
+    provider_code: A228003001
+    provider_key: A228003001/QmnJ
+    name: L'Ill à Strasbourg [Chasseur Froid]
+    water_name: L'Ill
+    country: FR
+    lon: 7.7858512
+    lat: 48.621901523
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.A302009050
+    source: FR-1
+    provider_code: A302009050
+    provider_key: A302009050/HIXnJ
+    name: Le Rhin à Lauterbourg
+    water_name: Le Rhin
+    country: FR
+    lon: 8.195814153
+    lat: 48.958117782
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.A302009050
+    source: FR-1
+    provider_code: A302009050
+    provider_key: A302009050/QmnJ
+    name: Le Rhin à Lauterbourg
+    water_name: Le Rhin
+    country: FR
+    lon: 8.195814153
+    lat: 48.958117782
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.A443064001
+    source: FR-1
+    provider_code: A443064001
+    provider_key: A443064001/HIXnJ
+    name: La Moselle à Épinal
+    water_name: La Moselle
+    country: FR
+    lon: 6.45298063
+    lat: 48.165666233
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.A443064001
+    source: FR-1
+    provider_code: A443064001
+    provider_key: A443064001/QmnJ
+    name: La Moselle à Épinal
+    water_name: La Moselle
+    country: FR
+    lon: 6.45298063
+    lat: 48.165666233
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.A573061001
+    source: FR-1
+    provider_code: A573061001
+    provider_key: A573061001/HIXnJ
+    name: La Moselle à Toul
+    water_name: La Moselle
+    country: FR
+    lon: 5.896401748
+    lat: 48.66976408
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.A573061001
+    source: FR-1
+    provider_code: A573061001
+    provider_key: A573061001/QmnJ
+    name: La Moselle à Toul
+    water_name: La Moselle
+    country: FR
+    lon: 5.896401748
+    lat: 48.66976408
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.A692101001
+    source: FR-1
+    provider_code: A692101001
+    provider_key: A692101001/HIXnJ
+    name: La Meurthe à Laneuveville-devant-Nancy [la Madeleine]
+    water_name: La Meurthe
+    country: FR
+    lon: 6.272227226
+    lat: 48.642507126
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.A692101001
+    source: FR-1
+    provider_code: A692101001
+    provider_key: A692101001/QmnJ
+    name: La Meurthe à Laneuveville-devant-Nancy [la Madeleine]
+    water_name: La Meurthe
+    country: FR
+    lon: 6.272227226
+    lat: 48.642507126
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.A701061001
+    source: FR-1
+    provider_code: A701061001
+    provider_key: A701061001/HIXnJ
+    name: La Moselle à Custines
+    water_name: La Moselle Canalisee
+    country: FR
+    lon: 6.121750416
+    lat: 48.789667836
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.A701061001
+    source: FR-1
+    provider_code: A701061001
+    provider_key: A701061001/QmnJ
+    name: La Moselle à Custines
+    water_name: La Moselle Canalisee
+    country: FR
+    lon: 6.121750416
+    lat: 48.789667836
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.A743061001
+    source: FR-1
+    provider_code: A743061001
+    provider_key: A743061001/HIXnJ
+    name: La Moselle à Metz [Pont des Morts]
+    water_name: La Moselle
+    country: FR
+    lon: 6.167185612
+    lat: 49.122321571
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.A793061002
+    source: FR-1
+    provider_code: A793061002
+    provider_key: A793061002/HIXnJ
+    name: La Moselle à Hagondange
+    water_name: La Moselle
+    country: FR
+    lon: 6.184817563
+    lat: 49.25589423
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.A793061002
+    source: FR-1
+    provider_code: A793061002
+    provider_key: A793061002/QmnJ
+    name: La Moselle à Hagondange
+    water_name: La Moselle
+    country: FR
+    lon: 6.184817563
+    lat: 49.25589423
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.A850061001
+    source: FR-1
+    provider_code: A850061001
+    provider_key: A850061001/HIXnJ
+    name: La Moselle à Uckange
+    water_name: La Moselle
+    country: FR
+    lon: 6.172718737
+    lat: 49.316716181
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.A850061001
+    source: FR-1
+    provider_code: A850061001
+    provider_key: A850061001/QmnJ
+    name: La Moselle à Uckange
+    water_name: La Moselle
+    country: FR
+    lon: 6.172718737
+    lat: 49.316716181
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.A920107050
+    source: FR-1
+    provider_code: A920107050
+    provider_key: A920107050/HIXnJ
+    name: La Sarre à Sarralbe [centre]
+    water_name: La Sarre
+    country: FR
+    lon: 7.033830464
+    lat: 49.005196888
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.A920107050
+    source: FR-1
+    provider_code: A920107050
+    provider_key: A920107050/QmnJ
+    name: La Sarre à Sarralbe [centre]
+    water_name: La Sarre
+    country: FR
+    lon: 7.033830464
+    lat: 49.005196888
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.A930108040
+    source: FR-1
+    provider_code: A930108040
+    provider_key: A930108040/HIXnJ
+    name: La Sarre à Wittring
+    water_name: La Sarre
+    country: FR
+    lon: 7.150065622
+    lat: 49.053225227
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.A930108040
+    source: FR-1
+    provider_code: A930108040
+    provider_key: A930108040/QmnJ
+    name: La Sarre à Wittring
+    water_name: La Sarre
+    country: FR
+    lon: 7.150065622
+    lat: 49.053225227
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.B222001001
+    source: FR-1
+    provider_code: B222001001
+    provider_key: B222001001/HIXnJ
+    name: La Meuse à Saint-Mihiel
+    water_name: La Meuse
+    country: FR
+    lon: 5.53063369
+    lat: 48.870992372
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B222001001
+    source: FR-1
+    provider_code: B222001001
+    provider_key: B222001001/QmnJ
+    name: La Meuse à Saint-Mihiel
+    water_name: La Meuse
+    country: FR
+    lon: 5.53063369
+    lat: 48.870992372
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.B315002001
+    source: FR-1
+    provider_code: B315002001
+    provider_key: B315002001/HIXnJ
+    name: La Meuse à Stenay
+    water_name: La Meuse
+    country: FR
+    lon: 5.178850491
+    lat: 49.494346826
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B315002001
+    source: FR-1
+    provider_code: B315002001
+    provider_key: B315002001/QmnJ
+    name: La Meuse à Stenay
+    water_name: La Meuse
+    country: FR
+    lon: 5.178850491
+    lat: 49.494346826
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.B402101001
+    source: FR-1
+    provider_code: B402101001
+    provider_key: B402101001/HIXnJ
+    name: La Chiers à Longwy
+    water_name: La Chiers
+    country: FR
+    lon: 5.766603965
+    lat: 49.510941115
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B402101001
+    source: FR-1
+    provider_code: B402101001
+    provider_key: B402101001/QmnJ
+    name: La Chiers à Longwy
+    water_name: La Chiers
+    country: FR
+    lon: 5.766603965
+    lat: 49.510941115
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.B403101001
+    source: FR-1
+    provider_code: B403101001
+    provider_key: B403101001/HIXnJ
+    name: La Chiers à Montigny-sur-Chiers
+    water_name: La Chiers
+    country: FR
+    lon: 5.657260509
+    lat: 49.475285856
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B403101001
+    source: FR-1
+    provider_code: B403101001
+    provider_key: B403101001/QmnJ
+    name: La Chiers à Montigny-sur-Chiers
+    water_name: La Chiers
+    country: FR
+    lon: 5.657260509
+    lat: 49.475285856
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.B422431101
+    source: FR-1
+    provider_code: B422431101
+    provider_key: B422431101/HIXnJ
+    name: La Chiers en Belgique [Torgny]
+    water_name: La Chiers
+    country: BE
+    lon: 5.46588626
+    lat: 49.508744903
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B422431101
+    source: FR-1
+    provider_code: B422431101
+    provider_key: B422431101/QmnJ
+    name: La Chiers en Belgique [Torgny]
+    water_name: La Chiers
+    country: BE
+    lon: 5.46588626
+    lat: 49.508744903
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.B460101001
+    source: FR-1
+    provider_code: B460101001
+    provider_key: B460101001/HIXnJ
+    name: La Chiers à Chauvency-le-Château
+    water_name: La Chiers
+    country: FR
+    lon: 5.312743043
+    lat: 49.516132934
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B460101001
+    source: FR-1
+    provider_code: B460101001
+    provider_key: B460101001/QmnJ
+    name: La Chiers à Chauvency-le-Château
+    water_name: La Chiers
+    country: FR
+    lon: 5.312743043
+    lat: 49.516132934
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.B463101001
+    source: FR-1
+    provider_code: B463101001
+    provider_key: B463101001/HIXnJ
+    name: La Chiers à Carignan
+    water_name: La Chiers
+    country: FR
+    lon: 5.158859906
+    lat: 49.629367897
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B463101001
+    source: FR-1
+    provider_code: B463101001
+    provider_key: B463101001/QmnJ
+    name: La Chiers à Carignan
+    water_name: La Chiers
+    country: FR
+    lon: 5.158859906
+    lat: 49.629367897
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.B466010101
+    source: FR-1
+    provider_code: B466010101
+    provider_key: B466010101/HIXnJ
+    name: La Chiers à Brévilly
+    water_name: La Chiers
+    country: FR
+    lon: 5.084206019
+    lat: 49.668721571
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B502001001
+    source: FR-1
+    provider_code: B502001001
+    provider_key: B502001001/HIXnJ
+    name: La Meuse à Sedan
+    water_name: La Meuse
+    country: FR
+    lon: 4.936060665
+    lat: 49.701334161
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B502001001
+    source: FR-1
+    provider_code: B502001001
+    provider_key: B502001001/QmnJ
+    name: La Meuse à Sedan
+    water_name: La Meuse
+    country: FR
+    lon: 4.936060665
+    lat: 49.701334161
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.B540001001
+    source: FR-1
+    provider_code: B540001001
+    provider_key: B540001001/HIXnJ
+    name: La Meuse à Charleville-Mézières
+    water_name: La Meuse
+    country: FR
+    lon: 4.715855889
+    lat: 49.75966562
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B611101001
+    source: FR-1
+    provider_code: B611101001
+    provider_key: B611101001/HIXnJ
+    name: La Semoy à Haulmé
+    water_name: La Semoy
+    country: FR
+    lon: 4.786287894
+    lat: 49.862932676
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B611101001
+    source: FR-1
+    provider_code: B611101001
+    provider_key: B611101001/QmnJ
+    name: La Semoy à Haulmé
+    water_name: La Semoy
+    country: FR
+    lon: 4.786287894
+    lat: 49.862932676
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.B700001002
+    source: FR-1
+    provider_code: B700001002
+    provider_key: B700001002/HIXnJ
+    name: La Meuse à Monthermé - Limnimètre
+    water_name: La Meuse
+    country: FR
+    lon: 4.730564947
+    lat: 49.880313503
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B720000001
+    source: FR-1
+    provider_code: B720000001
+    provider_key: B720000001/HIXnJ
+    name: La Meuse à Chooz - Trou du Diable "DREAL"
+    water_name: La Meuse
+    country: FR
+    lon: 4.782579717
+    lat: 50.089049099
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.B720000001
+    source: FR-1
+    provider_code: B720000001
+    provider_key: B720000001/QmnJ
+    name: La Meuse à Chooz - Trou du Diable "DREAL"
+    water_name: La Meuse
+    country: FR
+    lon: 4.782579717
+    lat: 50.089049099
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.D016221001
+    source: FR-1
+    provider_code: D016221001
+    provider_key: D016221001/HIXnJ
+    name: La Sambre canalisée à Berlaimont
+    water_name: La Sambre Canalisée
+    country: FR
+    lon: 3.817308485
+    lat: 50.201465601
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.D019223001
+    source: FR-1
+    provider_code: D019223001
+    provider_key: D019223001/HIXnJ
+    name: La Sambre canalisée à Marpent
+    water_name: La Sambre Canalisée
+    country: FR
+    lon: 4.076967684
+    lat: 50.294406085
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.D019223001
+    source: FR-1
+    provider_code: D019223001
+    provider_key: D019223001/QmnJ
+    name: La Sambre canalisée à Marpent
+    water_name: La Sambre Canalisée
+    country: FR
+    lon: 4.076967684
+    lat: 50.294406085
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.D019801101
+    source: FR-1
+    provider_code: D019801101
+    provider_key: D019801101/HIXnJ
+    name: La Sambre canalisée à Maubeuge [aval écluse]
+    water_name: La Sambre Canalisée
+    country: FR
+    lon: 3.975125657
+    lat: 50.275198215
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E131000202
+    source: FR-1
+    provider_code: "E131000202"
+    provider_key: E131000202/HIXnJ
+    name: L'Escaut canalisée à Iwuy
+    water_name: L'Escaut Canalisée
+    country: FR
+    lon: 3.309357499
+    lat: 50.237393972
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E131000202
+    source: FR-1
+    provider_code: "E131000202"
+    provider_key: E131000202/QmnJ
+    name: L'Escaut canalisée à Iwuy
+    water_name: L'Escaut Canalisée
+    country: FR
+    lon: 3.309357499
+    lat: 50.237393972
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.E171551101
+    source: FR-1
+    provider_code: "E171551101"
+    provider_key: E171551101/HIXnJ
+    name: L'Escaut canalisée à Neuville-sur-Escaut
+    water_name: L'Escaut Canalisée
+    country: FR
+    lon: 3.350308756
+    lat: 50.301626776
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E171551101
+    source: FR-1
+    provider_code: "E171551101"
+    provider_key: E171551101/QmnJ
+    name: L'Escaut canalisée à Neuville-sur-Escaut
+    water_name: L'Escaut Canalisée
+    country: FR
+    lon: 3.350308756
+    lat: 50.301626776
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.E172751201
+    source: FR-1
+    provider_code: "E172751201"
+    provider_key: E172751201/HIXnJ
+    name: L'Escaut canalisée à Trith-Saint-Léger
+    water_name: L'Escaut Canalisée
+    country: FR
+    lon: 3.481344882
+    lat: 50.318576432
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E172751201
+    source: FR-1
+    provider_code: "E172751201"
+    provider_key: E172751201/QmnJ
+    name: L'Escaut canalisée à Trith-Saint-Léger
+    water_name: L'Escaut Canalisée
+    country: FR
+    lon: 3.481344882
+    lat: 50.318576432
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.E201000501
+    source: FR-1
+    provider_code: "E201000501"
+    provider_key: E201000501/HIXnJ
+    name: La Scarpe à Anzin-Saint-Aubin
+    water_name: Rivière Scarpe
+    country: FR
+    lon: 2.720930195
+    lat: 50.311499131
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E201000501
+    source: FR-1
+    provider_code: "E201000501"
+    provider_key: E201000501/QmnJ
+    name: La Scarpe à Anzin-Saint-Aubin
+    water_name: Rivière Scarpe
+    country: FR
+    lon: 2.720930195
+    lat: 50.311499131
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.E207111003
+    source: FR-1
+    provider_code: "E207111003"
+    provider_key: E207111003/HIXnJ
+    name: La Scarpe canalisée à Brebières - Station partenaire VNF
+    water_name: La Scarpe Canalisée
+    country: FR
+    lon: 3.032065792
+    lat: 50.334505039
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E207111003
+    source: FR-1
+    provider_code: "E207111003"
+    provider_key: E207111003/QmnJ
+    name: La Scarpe canalisée à Brebières - Station partenaire VNF
+    water_name: La Scarpe Canalisée
+    country: FR
+    lon: 3.032065792
+    lat: 50.334505039
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.E223000101
+    source: FR-1
+    provider_code: "E223000101"
+    provider_key: E223000101/HIXnJ
+    name: La Scarpe canalisée [Scarpe moyenne] à Courchelettes - La Scarpe moyenne à Couteau
+    water_name: La Scarpe Canalisée
+    country: FR
+    lon: 3.060924863
+    lat: 50.344256366
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E223000101
+    source: FR-1
+    provider_code: "E223000101"
+    provider_key: E223000101/QmnJ
+    name: La Scarpe canalisée [Scarpe moyenne] à Courchelettes - La Scarpe moyenne à Couteau
+    water_name: La Scarpe Canalisée
+    country: FR
+    lon: 3.060924863
+    lat: 50.344256366
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.E237110501
+    source: FR-1
+    provider_code: "E237110501"
+    provider_key: E237110501/HIXnJ
+    name: La Scarpe canalisée à Mortagne-du-Nord
+    water_name: La Scarpe Canalisée
+    country: FR
+    lon: 3.452443839
+    lat: 50.494255647
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E237110501
+    source: FR-1
+    provider_code: "E237110501"
+    provider_key: E237110501/QmnJ
+    name: La Scarpe canalisée à Mortagne-du-Nord
+    water_name: La Scarpe Canalisée
+    country: FR
+    lon: 3.452443839
+    lat: 50.494255647
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.E240041101
+    source: FR-1
+    provider_code: "E240041101"
+    provider_key: E240041101/HIXnJ
+    name: L'Escaut canalisée à Maulde
+    water_name: L'Escaut Canalisée
+    country: FR
+    lon: 3.43678603
+    lat: 50.506079616
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E240041101
+    source: FR-1
+    provider_code: "E240041101"
+    provider_key: E240041101/QmnJ
+    name: L'Escaut canalisée à Maulde
+    water_name: L'Escaut Canalisée
+    country: FR
+    lon: 3.43678603
+    lat: 50.506079616
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.E364121001
+    source: FR-1
+    provider_code: "E364121001"
+    provider_key: E364121001/HIXnJ
+    name: La Lys à Merville - VNF
+    water_name: La Lys
+    country: FR
+    lon: 2.64112707
+    lat: 50.6392431
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E364121002
+    source: FR-1
+    provider_code: "E364121002"
+    provider_key: E364121002/HIXnJ
+    name: La Lys à Merville - DREAL
+    water_name: La Lys
+    country: FR
+    lon: 2.641054043
+    lat: 50.639293787
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E367125002
+    source: FR-1
+    provider_code: "E367125002"
+    provider_key: E367125002/HIXnJ
+    name: La Lys à Armentières - Station partenaire VNF
+    water_name: La Lys
+    country: FR
+    lon: 2.897874189
+    lat: 50.692898689
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E367125002
+    source: FR-1
+    provider_code: "E367125002"
+    provider_key: E367125002/QmnJ
+    name: La Lys à Armentières - Station partenaire VNF
+    water_name: La Lys
+    country: FR
+    lon: 2.897874189
+    lat: 50.692898689
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: fr.sandre.E381126501
+    source: FR-1
+    provider_code: "E381126501"
+    provider_key: E381126501/HIXnJ
+    name: La Lys à Bousbecque
+    water_name: La Lys
+    country: FR
+    lon: 3.073795618
+    lat: 50.77586443
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: mm
+    to_canonical: 0.1
+    value_kind: stage
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: LOCAL
+    gauge_zero: []
+    aggregate: max
+  - id: fr.sandre.E381126501
+    source: FR-1
+    provider_code: "E381126501"
+    provider_key: E381126501/QmnJ
+    name: La Lys à Bousbecque
+    water_name: La Lys
+    country: FR
+    lon: 3.073795618
+    lat: 50.77586443
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: null
+      impounded: null
+    native_unit: l/s
+    to_canonical: 0.001
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean

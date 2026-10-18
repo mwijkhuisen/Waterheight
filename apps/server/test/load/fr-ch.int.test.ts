@@ -101,7 +101,9 @@ describe('the FR-1, FR-3, CH-1, CH-2 and CH-3 fixtures', () => {
     expect(neg.length).toBeGreaterThan(0);
     for (const x of neg) expect(x.qc & QC.RANGE).toBe(QC.RANGE);
     const { rows: keys } = await h.t.admin.query(
-      `SELECT count(*)::int AS n FROM series WHERE source_id = 'FR-1' AND provider_key NOT LIKE '_%/_'`,
+      // P14b: the FR-2 daily aggregates (`<code>/QmnJ`, `<code>/HIXnJ`) are FR-1 twin rows of their own.
+      `SELECT count(*)::int AS n FROM series
+       WHERE source_id = 'FR-1' AND provider_key NOT LIKE '_%/_' AND aggregate IS NULL`,
     );
     expect(keys).toEqual([{ n: 0 }]);
   });

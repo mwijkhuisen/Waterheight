@@ -4,12 +4,12 @@ import { captureEnv, captureUserAgent, EXIT_CONFIG, readSecret } from '../captur
 import { loadRegistry, type Registry } from '../capture/specs.ts';
 import { dbConfig, errorCode, openDb } from '../db/pool.ts';
 import { Client } from '../http/client.ts';
-import { DATA_EPOCH } from '../load/dirty.ts';
 import { type Job, type JobStatus, type JobStore, SqlJobStore } from './job.ts';
-import { planChunks, probeYears, requestBudget } from './plan.ts';
-import { project, totals } from './project.ts';
+import { jobBudget, planChunks, unitRange } from './plan.ts';
+import { NL1_DRY_RUN, project, totals } from './project.ts';
+import { PROVIDERS, type Provider } from './provider.ts';
 import { type RunResult, runBackfill } from './run.ts';
-import { type LoadedBackfill, type LoadedBackfillSpec, loadBackfill } from './spec.ts';
+import { ceilingMs, type LoadedBackfill, type LoadedBackfillSpec, loadBackfill, type Unit } from './spec.ts';
 
 // `backfill plan|run|status|pause|resume|abort` (P14a, plan §3.3): the history runner's command line. Arguments are
 // hand-rolled like replay's; every value is checked against a fixed pattern. Output is one JSON line per job and a
@@ -34,7 +34,10 @@ const isDay = (v: string) =>
 const INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/;
 const isInstant = (v: string) =>
   INSTANT.test(v) && !Number.isNaN(Date.parse(v)) && new Date(v).toISOString() === `${v.slice(0, 19)}.000Z`;
-/** A provider key: `<code>/<Grootheid>/<Hoedanigheid>/<method>`; nothing outside this alphabet. */
+/**
+ * A unit key: an NL-1 provider key `<code>/<Grootheid>/<Hoedanigheid>/<method>`, a DE-8 `<dataset>/<decade>`, an
+ * FR-2 `<code>/<aggregate>` or a CH-9 dataset id; nothing outside this alphabet.
+ */
 const SERIES_KEY = /^[A-Za-z0-9._:/-]{1,300}$/;
 
 /** The arguments, or a usage error text. */
@@ -88,6 +91,11 @@ export function parseBackfillArgs(argv: readonly string[]): BackfillArgs | strin
 }
 
 const print = (o: unknown) => console.log(JSON.stringify(o));
+/**
+ * A rough wait per committed chunk until the loader has it (UNLOADED_SLEEP_MS 2 s plus a loader tick of up to 10 s; a
+ * warm DE-8 slice loads in milliseconds): the dry-run's estimate for a reuse provider, never a limit.
+ */
+const SLICE_WAIT_MS = 8_000;
 
 const jobLine = (j: Job) => ({
   job: j.id,
@@ -113,32 +121,47 @@ const jobLine = (j: Job) => ({
 });
 
 /**
- * The plan's range: --from (default the spec floor) up to --to (default and at most DATA_EPOCH, the first production
- * capture: the history meets the live rows there and never reaches past them), or a usage error.
+ * The plan's range: --from (default the spec floor) up to --to (default and at most the spec's ceiling: DATA_EPOCH,
+ * the first production capture, where the history meets the live rows and never reaches past them; P14b: DATA_FLOOR
+ * for a spec with a target, the start of the target's display window), or a usage error.
  */
 export function planRange(
   spec: LoadedBackfillSpec,
   from: string | null,
   to: string | null,
 ): { from: Date; to: Date } | string {
+  const ceiling = new Date(ceilingMs(spec));
   const a = new Date(`${from ?? spec.floor}T00:00:00Z`);
-  const b = to === null ? new Date(DATA_EPOCH) : new Date(`${to}T00:00:00Z`);
+  const b = to === null ? ceiling : new Date(`${to}T00:00:00Z`);
   if (a < new Date(`${spec.floor}T00:00:00Z`)) return 'backfill plan: --from is before the spec floor';
-  if (b > new Date(DATA_EPOCH)) return 'backfill plan: --to is after the data epoch';
+  if (b > ceiling)
+    return spec.target === undefined
+      ? 'backfill plan: --to is after the data epoch'
+      : 'backfill plan: --to is after the data floor (a spec with a target stops there)';
   if (!(a < b)) return 'backfill plan: --from must be before --to';
   return { from: a, to: b };
 }
 
-/** Plan: the dry-run needs neither the database nor the network. */
-async function plan(
+/**
+ * Plan: one job per unit of the spec (P14b: its range cut to the unit's own), or with `--dry-run` one projection per
+ * job. The dry-run needs neither the database nor the network. `providers` is a test seam.
+ */
+export async function plan(
   args: Extract<BackfillArgs, { cmd: 'plan' }>,
   config: LoadedBackfill,
   jobs: JobStore | undefined,
   log: (line: string) => void,
+  providers: Readonly<Record<string, Provider>> = PROVIDERS,
 ): Promise<number> {
   const spec = config.specs.find((s) => s.id === args.spec);
-  if (spec === undefined) {
-    log('backfill plan: --spec is not in registry/backfill.yaml');
+  const provider = spec === undefined ? undefined : providers[spec.source];
+  if (spec === undefined || provider === undefined) {
+    const skipped = config.skipped?.some((s) => s.startsWith(`backfill spec ${args.spec}: `)) === true;
+    log(
+      skipped
+        ? 'backfill plan: --spec has no provider built yet'
+        : 'backfill plan: --spec is not in registry/backfill.yaml',
+    );
     return EXIT_USAGE;
   }
   const range = planRange(spec, args.from, args.to);
@@ -146,42 +169,57 @@ async function plan(
     log(range);
     return EXIT_USAGE;
   }
-  const chosen = args.series === null ? spec.series : spec.series.filter((s) => args.series?.includes(s.series_key));
+  const units: readonly Unit[] = spec.series;
+  const chosen = args.series === null ? units : units.filter((s) => args.series?.includes(s.series_key));
   if (args.series !== null && chosen.length !== new Set(args.series).size) {
     log('backfill plan: --series names a key the spec does not select');
     return EXIT_USAGE;
   }
-  const rows = chosen.map((s) => project(s, range.from, range.to, spec.chunk_ms));
+  // One job per unit, over the range cut to the unit's own (DE-8: its decade); a unit outside the range has none.
+  const planned = chosen.flatMap((unit) => {
+    const r = unitRange(unit, range.from, range.to);
+    return r === null ? [] : [{ unit, ...r }];
+  });
   if (args.dryRun) {
+    const rows = planned.map((j) => project(j.unit, j.from, j.to, spec.chunk_ms, provider));
     for (const r of rows) print(r);
+    const ratio = (provider.dryRun ?? NL1_DRY_RUN).zstd_ratio;
+    const t = totals(rows, spec.limits.min_interval_ms);
     print({
       totals: {
         spec: spec.id,
         from: range.from.toISOString(),
         to: range.to.toISOString(),
-        ...totals(rows, spec.limits.min_interval_ms),
+        ...t,
+        // P14b (review C4): a reused answer sends nothing, but every slice still waits for its load (the guard's
+        // `unloaded`), so the night is the slices', not the requests'.
+        ...(provider.reuse === true
+          ? { hours_with_loads: Math.round(t.hours_at_pace * 10 + (t.chunks * SLICE_WAIT_MS) / 360_000) / 10 }
+          : {}),
+        zstd_ratio: ratio,
+        ...(ratio === 1 ? { note: 'the archive grows by the bytes: a ZIP does not compress' } : {}),
       },
     });
     return 0;
   }
   if (jobs === undefined) return 1;
-  const chunks = planChunks(range.from, range.to, spec.chunk_ms).length;
-  const budget = requestBudget(chunks, probeYears(range.from, range.to));
   let created = 0;
-  for (const s of chosen) {
+  for (const j of planned) {
+    const chunks = planChunks(j.from, j.to, spec.chunk_ms).length;
+    const budget = jobBudget(j.from, j.to, spec.chunk_ms, provider.checkRequest !== undefined);
     const made = await jobs.insert({
       spec_id: spec.id,
       source_id: spec.source,
-      series_key: s.series_key,
-      range_from: range.from,
-      range_to: range.to,
+      series_key: j.unit.series_key,
+      range_from: j.from,
+      range_to: j.to,
       chunk_ms: spec.chunk_ms,
       request_budget: budget,
     });
     if (made.created) created += 1;
-    print({ job: made.id, series: s.series_key, created: made.created, chunks, request_budget: budget });
+    print({ job: made.id, series: j.unit.series_key, created: made.created, chunks, request_budget: budget });
   }
-  print({ totals: { spec: spec.id, jobs: chosen.length, created } });
+  print({ totals: { spec: spec.id, jobs: planned.length, created } });
   return 0;
 }
 

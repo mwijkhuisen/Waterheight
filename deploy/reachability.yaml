@@ -91,6 +91,9 @@
     { "id": "ch-2-pq", "source": "CH-2", "required": true, "method": "GET",
       "url": "https://www.hydrodaten.admin.ch/web-hydro-maps/hydro_sensor_pq.geojson",
       "sig": "\"features\"", "fixture": "apps/server/src/adapters/ch-2/fixtures/ch-2-pq.raw" },
+    { "id": "ch-9-records", "source": "CH-9", "required": true, "method": "GET",
+      "url": "https://data.bs.ch/api/explore/v2.1/catalog/datasets/100089/records?limit=1",
+      "sig": "\"results\"", "fixture": "apps/server/src/adapters/ch-9/fixtures/ch-9-records-100089.raw" },
 
     { "id": "github-releases", "source": "deploy", "required": true, "method": "GET",
       "url": "https://github.com/mwijkhuisen/Waterheight/releases",

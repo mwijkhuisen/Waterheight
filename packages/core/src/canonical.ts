@@ -117,6 +117,8 @@ export type SeriesDecl = {
   value_kind: 'stage' | 'level' | null;
   native_step_ms: number;
   expected_step_ms: number;
+  /** P14b: its station's tier (1: first-release key gauge), where the loader passes it (load/store.ts seriesOf). */
+  tier?: number;
 };
 
 export type Registry = ReadonlyMap<string, SeriesDecl>;

@@ -553,6 +553,34 @@ function build(inputs: Inputs): { fr1: PublicStation[]; fr3: PublicStation[]; sk
     }
   }
 
+  // P14b: the FR-2 daily aggregates of each tier-1 station, appended after every primary row (so the FR-3 twins above
+  // and every earlier row keep their bytes): `<code>/QmnJ` beside a Q primary and `<code>/HIXnJ` beside an H primary.
+  const aggregates: PublicStation[] = [];
+  for (const base of fr1.filter((r) => r.tier === 1 && r.role === 'primary' && r.audience === 'public')) {
+    const q = base.quantity === 'Q';
+    const unit: NativeUnit = q ? 'l/s' : 'mm';
+    const grandeur = q ? 'QmnJ' : 'HIXnJ';
+    aggregates.push({
+      ...base,
+      // Copies, so that the YAML dump writes no anchors.
+      flags: { ...base.flags },
+      gauge_zero: [...base.gauge_zero],
+      provider_key: `${base.provider_code}/${grandeur}`,
+      tier: 2,
+      role: 'twin',
+      aggregate: q ? 'mean' : 'max',
+      native_unit: unit,
+      to_canonical: TO_CANONICAL[unit],
+      native_step: 'P1D',
+      expected_step: 'P1D',
+      staleness_limit: 'P1D',
+      expected_threshold_source: null,
+      expected_forecast_source: null,
+      first_release: false,
+    });
+  }
+  fr1.push(...aggregates);
+
   // Duplicates, unit declarations and the schema; the test repeats this against the real sources.yaml.
   const sources = [
     { id: 'FR-1', audience: 'public' },
@@ -596,6 +624,9 @@ function header(inputs: Inputs, file: 'FR-1' | 'FR-3', skips: Skips): string {
           '# whole §3.1 Swiss table); every other row is tier 2. native_step = expected_step = the modal gap of the series in the',
           '# recording (PT1H for a series with one point); staleness_limit = max(3 x step, PT90M). expected_forecast_source FR-4 =',
           '# the Vigicrues forecast stations (§3 "F"); no thresholds.',
+          "# P14b: after the primary rows, two aggregate twins of each tier-1 station (the FR-2 backfill, Hub'Eau obs_elab):",
+          '# <code>/QmnJ (aggregate mean, l/s) beside a Q row and <code>/HIXnJ (aggregate max, mm, stage, LOCAL) beside an H row;',
+          "# role twin, tier 2, P1D, never first_release, the station's other fields. They are never a primary series.",
           '# country by commune: 99131 BE, 99109 DE, 99140 CH, otherwise FR. The 18 Belgian partners (registry/seed/fr-1-be.csv)',
           '# are primary rows, country BE (A§7.2 exception until a Belgian source is public, P13); Torgny B422431101 is bold: tier 1.',
           '# role mirror = a gauge another agency operates (never published), with its primary:',

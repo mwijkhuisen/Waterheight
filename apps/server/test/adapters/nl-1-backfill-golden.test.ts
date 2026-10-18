@@ -64,6 +64,18 @@ describe('backfill golden files (real payloads)', () => {
   });
 });
 
+describe('KG-355: older history carries a 4-digit quality code', () => {
+  it('Lith H 2003-01-29 .. 03-10: 5,801 provider values: 5,724 stored (Gecontroleerd), 10 code 1004 unknown_quality, 52 conflict, 14 duplicate, 1 outside_backfill', () => {
+    const win = { from: Date.parse('2003-01-29T00:00:00Z'), to: Date.parse('2003-03-10T00:00:00Z') };
+    const out = run('nl-1-backfill-lith-h-20030129', win);
+    expect(out).toEqual(golden('nl-1-backfill-lith-h-20030129', out));
+    expect(out.obs).toHaveLength(5724);
+    expect(out.obs.every((o) => (o.qc & 2) === 2)).toBe(true);
+    expect(out.provider_values).toBe(5801);
+    expect(out.dropped).toEqual({ unknown_quality: 10, conflict: 52, duplicate: 14, outside_backfill: 1 });
+  });
+});
+
 describe('the load window (review S3)', () => {
   const H95 = 'nl-1-backfill-lobith-h-19950125';
   const balanced = (out: ReturnType<typeof run>) => {

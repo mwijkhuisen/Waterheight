@@ -24,6 +24,9 @@
 //    - LU-6, from `lu-6-geo.raw`: `lu-6-geo-subset`, the features of `LU6_CODES` (both Kautenbach and both
 //      Niederfeulen among them), and `lu-6-geo-empty` (`features: []`, the counts 0).
 //
+//  - P14b, the backfill recordings of the lead (too large to commit whole, kept in the git-ignored `.smoke/`):
+//    `node scripts/trim-fixtures.ts --p14b <de-8|fr-2|ch-9>` runs that source's rules (scripts/lib/trim-<id>.ts).
+//
 // Each gets a .meta.json (`from: 'trimmed'`, the sha256 of the recording it was
 // cut from, the rule): the rule is the only way a body is cut, never by hand.
 // The adapter tests read the metas back and check every kept feature or point
@@ -45,6 +48,9 @@ import {
   type ZipEntry,
   zip,
 } from './import-fixtures.ts';
+import { trim as trimCh9 } from './lib/trim-ch-9.ts';
+import { trim as trimDe8 } from './lib/trim-de-8.ts';
+import { trim as trimFr2 } from './lib/trim-fr-2.ts';
 
 const adapters = join(import.meta.dirname, '..', 'apps/server/src/adapters');
 
@@ -97,7 +103,24 @@ function cutBytes(source: string, recording: string, cuts: (raw: Buffer) => [str
 
 // ---------------------------------------------------------------- P5b: text and ZIP rules
 
+const P14B: Readonly<Record<string, (smoke: string, fixtures: string) => void>> = {
+  'de-8': trimDe8,
+  'fr-2': trimFr2,
+  'ch-9': trimCh9,
+};
+
 function main(): void {
+  const at = process.argv.indexOf('--p14b');
+  if (at !== -1) {
+    const id = process.argv[at + 1] ?? '';
+    const rule = Object.hasOwn(P14B, id) ? P14B[id] : undefined;
+    if (rule === undefined) {
+      console.error('usage: node scripts/trim-fixtures.ts --p14b <de-8|fr-2|ch-9>');
+      process.exit(64);
+    }
+    rule(join(import.meta.dirname, '..', '.smoke'), join(adapters, id, 'fixtures'));
+    return;
+  }
   cut('ch-2', 'ch-2-pq', (doc: Ch2) => [
     ['ch-2-pq-relative', { ...doc, features: doc.features.filter(keep) }, RELATIVE],
     ['ch-2-pq-empty', { ...doc, features: [] }, EMPTY],

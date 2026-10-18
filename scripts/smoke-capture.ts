@@ -14,6 +14,13 @@
 // the whole PR) and starts them at least 1 s apart. Its payloads are written whole (never trimmed): choose short
 // windows. --no-hoedanigheid leaves the Hoedanigheid out of the body (the NVT test for Q).
 //
+// The --get mode (P14b; the lead records history payloads with it): RWS_LIVE=1, never under CI,
+//     --get <https url> --source <ID> --out <name> [--max-mib <n, default 25, at most 64>]   (triples repeat)
+// GET only, at most 5 requests per process 1.1 s apart, the host must be in that source's registry/capture.yaml
+// hosts (no credentials, no port), redirects as the client allows. The body is written whole to
+// .smoke/<name>.raw with .smoke/<name>.meta.json; a <name> that is not ^[a-z0-9][a-z0-9.-]{0,80}$ or exists
+// already is refused before any request.
+//
 // Every payload goes to the git-ignored .smoke/ first. A public spec's payload
 // is also written to apps/server/src/adapters/<id>/fixtures/<spec>.raw (with
 // --row: <spec>-<variant as a slug>.raw, so it never replaces the spec's own; JSON
@@ -31,6 +38,7 @@
 // never trimmed, to fixtures/<spec>-<name>.raw, and only when the status is 200 and the spec's validity
 // check passed. It never touches <spec>.raw, and it refuses (exit 1, before any request) when
 // fixtures/<spec>-<name>.raw already exists.
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { redactUrl } from '../apps/server/src/archive/manifest.ts';
@@ -47,7 +55,11 @@ const BACKFILL_MAX_REQUESTS = 5;
 const BACKFILL_GAP_MS = 1100;
 const TRIM_BYTES = 1024 * 1024;
 const KEEP_AS = /^[a-z0-9][a-z0-9-]{0,39}$/;
+const GET_NAME = /^[a-z0-9][a-z0-9.-]{0,80}$/;
+const GET_MAX_MIB = 64;
 const root = join(import.meta.dirname, '..');
+
+type Get = { url: string; source: string; out: string };
 
 type Item = {
   kind: 'backfill' | 'check';
@@ -65,6 +77,8 @@ export function args(argv: string[]) {
   let infoUrl = '';
   let discover: [string, string] | undefined;
   const items: Item[] = [];
+  const gets: Get[] = [];
+  let maxMib = 25;
   // --from/--to belong to whichever of --spec or --backfill/--check came last.
   let lastIsSpec = false;
   const lastItem = () => {
@@ -104,10 +118,16 @@ export function args(argv: string[]) {
     else if (a === '--to') lastItem().to = argv[++i] ?? '';
     else if (a === '--year') lastItem().year = argv[++i] ?? '';
     else if (a === '--no-hoedanigheid') lastItem().noHoedanigheid = true;
+    else if (a === '--get') gets.push({ url: argv[++i] ?? '', source: '', out: '' });
+    else if (a === '--source' || a === '--out') {
+      const last = gets.at(-1);
+      if (last === undefined) throw new Error(`${a} follows the --get it belongs to`);
+      last[a === '--source' ? 'source' : 'out'] = argv[++i] ?? '';
+    } else if (a === '--max-mib') maxMib = Number(argv[++i]);
     else if (a === '--discover') discover = [argv[++i] ?? '', argv[++i] ?? ''];
     else throw new Error(`unknown argument ${a}`);
   }
-  return { specs, contact, infoUrl, discover, items };
+  return { specs, contact, infoUrl, discover, items, gets, maxMib };
 }
 
 /**
@@ -127,6 +147,39 @@ export function keepAsProblem(
         return { code: 1, message: `${spec}: fixtures/${spec}-${name}.${ext} exists; --keep-as never replaces a file` };
       }
     }
+  }
+  return null;
+}
+
+/**
+ * The --get pre-check, pure: a fixed message (exit 64) or null. Every URL is https with no credentials and no port
+ * and a host of its source's capture hosts; every name matches GET_NAME, is unique and does not exist yet.
+ */
+export function getProblem(
+  gets: Get[],
+  hosts: ReadonlyMap<string, readonly string[]>,
+  exists: (name: string) => boolean,
+  maxMib = 25,
+): string | null {
+  if (gets.length > BACKFILL_MAX_REQUESTS) return `at most ${BACKFILL_MAX_REQUESTS} --get requests per process`;
+  if (!Number.isInteger(maxMib) || maxMib < 1 || maxMib > GET_MAX_MIB) return `--max-mib takes 1 to ${GET_MAX_MIB}`;
+  const seen = new Set<string>();
+  for (const { url, source, out } of gets) {
+    let u: URL;
+    try {
+      u = new URL(url);
+    } catch {
+      return '--get takes an absolute https URL';
+    }
+    if (u.protocol !== 'https:') return `${out}: --get is https only`;
+    if (u.username !== '' || u.password !== '' || u.port !== '')
+      return `${out}: no credentials and no port in a --get URL`;
+    if (!(hosts.get(source) ?? []).includes(u.hostname))
+      return `${out}: host is not in ${source || '(no --source)'}'s hosts`;
+    if (!GET_NAME.test(out)) return `--out takes a name ${GET_NAME.source}`;
+    if (seen.has(out)) return `${out}: --out is given twice`;
+    seen.add(out);
+    if (exists(out)) return `${out}: .smoke/${out}.raw or .meta.json exists; --get never replaces a file`;
   }
   return null;
 }
@@ -212,9 +265,21 @@ async function backfill(client: Client, items: Item[], now: Date): Promise<numbe
   }
   const day = /^\d{4}-\d{2}-\d{2}$/;
   const loaded = loadBackfill(loadRegistry().hosts);
+  const noProbe = items.some(
+    (it) =>
+      it.kind === 'check' &&
+      PROVIDERS[loaded.specs.find((s) => s.id === it.spec)?.source ?? '']?.checkRequest === undefined,
+  );
+  if (noProbe) {
+    console.error("smoke-capture: --check: this spec's provider has no yearly probe");
+    return 64;
+  }
   // Resolve and build everything before the first request, so a mistake costs nothing.
   const plan = items.map((it) => {
     const spec = loaded.specs.find((s) => s.id === it.spec);
+    // P14b: --backfill and --check build NL-1 series requests; the other archives are recorded with --get.
+    if (spec !== undefined && spec.source !== 'NL-1')
+      throw new Error(`${it.spec}: --backfill and --check are NL-1 only`);
     const base = spec?.series.find((s) => s.series_key === it.series);
     if (spec === undefined || base === undefined)
       throw new Error(`${it.spec} / ${it.series}: not in registry/backfill.yaml`);
@@ -225,6 +290,7 @@ async function backfill(client: Client, items: Item[], now: Date): Promise<numbe
     if (it.kind === 'check') {
       if (!/^\d{4}$/.test(it.year ?? '')) throw new Error('--check needs --year YYYY');
       const y = Number(it.year);
+      if (provider.checkRequest === undefined) throw new Error('unreachable: pre-checked');
       const req = provider.checkRequest(spec, series, new Date(Date.UTC(y, 0, 1)), new Date(Date.UTC(y + 1, 0, 1)));
       return { it, spec, req, id: `${spec.source.toLowerCase()}-check-${slug}-${y}` };
     }
@@ -274,6 +340,39 @@ async function backfill(client: Client, items: Item[], now: Date): Promise<numbe
   return failed === 0 ? 0 : 1;
 }
 
+/** The P14b --get requests: plain GETs of allowlisted URLs into .smoke/ only, 1.1 s apart. */
+async function getMode(client: Client, gets: Get[], maxMib: number, now: Date): Promise<number> {
+  let failed = 0;
+  for (const [n, { url, source, out }] of gets.entries()) {
+    if (n > 0) await new Promise((r) => setTimeout(r, BACKFILL_GAP_MS));
+    const r = await client.fetch(
+      source,
+      { url, method: 'GET', variant: 'get' },
+      { maxBytes: maxMib * 1024 * 1024, timeoutMs: TOTAL_TIMEOUT_MS },
+    );
+    if (!r.ok) {
+      console.log(`${out}: FAILED ${r.error} (${n + 1}/${gets.length})`);
+      failed += 1;
+      continue;
+    }
+    const { res } = r;
+    const sha = createHash('sha256').update(res.body).digest('hex');
+    // 'wx': a file that appeared since the pre-check is never replaced.
+    writeFileSync(join(root, '.smoke', `${out}.raw`), res.body, { flag: 'wx' });
+    const meta = {
+      url: res.url,
+      status: res.status,
+      'content-type': res.headers['content-type'] ?? null,
+      bytes: res.body.length,
+      sha256: sha,
+      fetched_at: now.toISOString().replace(/\.\d{3}Z$/, 'Z'),
+    };
+    writeFileSync(join(root, '.smoke', `${out}.meta.json`), `${JSON.stringify(meta, null, 2)}\n`, { flag: 'wx' });
+    console.log(`${out}: ${res.status} ${res.body.length} B sha256 ${sha.slice(0, 12)} (${n + 1}/${gets.length})`);
+  }
+  return failed === 0 ? 0 : 1;
+}
+
 const fixturesDir = (source: string) => join(root, 'apps/server/src/adapters', source.toLowerCase(), 'fixtures');
 
 async function main(): Promise<number> {
@@ -281,7 +380,7 @@ async function main(): Promise<number> {
     console.error('smoke-capture: refuses to run under CI (live requests are opt-in and manual)');
     return 2;
   }
-  const { specs, contact, infoUrl, discover, items } = args(process.argv.slice(2));
+  const { specs, contact, infoUrl, discover, items, gets, maxMib } = args(process.argv.slice(2));
   if (!/^[^@\s]+@[^@\s]+\.[a-z]{2,}$/.test(contact) || !infoUrl.startsWith('https://')) {
     console.error('smoke-capture: --contact <e-mail> and --info-url <https url> are required');
     return 64;
@@ -290,6 +389,21 @@ async function main(): Promise<number> {
   const client = new Client({ hosts: registry.hosts, userAgent: userAgent(infoUrl, contact) });
   mkdirSync(join(root, '.smoke'), { recursive: true });
   const now = new Date();
+
+  if (gets.length > 0) {
+    if (process.env.RWS_LIVE !== '1') {
+      console.error('smoke-capture: the --get mode needs RWS_LIVE=1');
+      return 2;
+    }
+    const smoke = (name: string) =>
+      existsSync(join(root, '.smoke', `${name}.raw`)) || existsSync(join(root, '.smoke', `${name}.meta.json`));
+    const bad = getProblem(gets, registry.hosts, smoke, maxMib);
+    if (bad !== null) {
+      console.error(`smoke-capture: ${bad}`);
+      return 64;
+    }
+    return getMode(client, gets, maxMib, now);
+  }
 
   if (items.length > 0) return backfill(client, items, now);
 

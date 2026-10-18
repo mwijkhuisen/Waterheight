@@ -163,7 +163,10 @@ function build(inputs: Inputs): { rows: Row[]; twins: Row[] } {
   const pairs: Row[] = [];
   for (const g of SAME_GAUGE) {
     const spw = byStation.get(g.spw);
-    const pub = inputs.publicRows.filter((r) => r.source === g.source && r.provider_code === g.code);
+    // The series of the station, not its FR-2 aggregate twins (P14b: Torgny has two).
+    const pub = inputs.publicRows.filter(
+      (r) => r.source === g.source && r.provider_code === g.code && r.aggregate === undefined,
+    );
     if (spw === undefined || pub.length === 0) throw new Error(`SAME_GAUGE ${g.source} ${g.code} ~ ${g.spw}: missing`);
     for (const r of pub.filter((x) => g.quantity === undefined || x.quantity === g.quantity)) {
       if (r.role === 'twin' && g.source === 'NL-1') continue; // eijsden.grens's TAW copy: already a twin

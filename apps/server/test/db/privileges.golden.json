@@ -404,7 +404,7 @@
     }
   },
   "functions": {
-    "backfill_guard(text)": [
+    "backfill_guard(text,text)": [
       "rws_backfill"
     ],
     "ensure_history_partitions(timestamp with time zone,timestamp with time zone)": [

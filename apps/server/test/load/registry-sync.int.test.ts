@@ -123,8 +123,8 @@ describe('registry sync', { timeout: 60_000 }, () => {
       { source_id: 'NL-1', n: 18 },
     ]);
     // DE-1 238, NL-1 85, FR-1 550, FR-3 26, CH-1 412, CH-2 380, DE-7 251 and LU-1 42 series, and from P5c the owner
-    // audience's BE-3 607 and LU-2 39 (registry/stations/*.yaml).
-    expect(await h.count('series')).toBe(2974);
+    // audience's BE-3 607 and LU-2 39 (registry/stations/*.yaml); P14b: + 71 FR-1 aggregate twins (FR-2 QmnJ, HIXnJ).
+    expect(await h.count('series')).toBe(3045);
     // A cm series without a published gauge zero has a local datum: 8 before P5b, and the 41 LU-1 gauges in cm
     // (their zeros are LU-4's, an owner source; Esch-Sure is a level in m NG95). The 251 DE-7 gauges are NHN.
     const local = (
@@ -234,7 +234,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     const result = await syncRegistry(owner.db, readRegistry());
     await owner.close();
     // P5c: 332 BE-3 and 39 LU-2 stations; 7 public twin pairs, 38 BE-3 and 39 LU-1/LU-2 owner pairs.
-    expect(result).toMatchObject({ stations: 2007, series: 2974, deactivated: 0, twins: 84, references: 2311 });
+    expect(result).toMatchObject({ stations: 2007, series: 3045, deactivated: 0, twins: 84, references: 2311 });
     expect((await h.t.admin.query('SELECT id, provider_key, active FROM series ORDER BY id')).rows).toEqual(before);
   });
 
@@ -540,7 +540,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     const dir = mkdtempSync(`${tmpdir()}/rws-registry-`);
     cpSync(new URL('../../../../registry/', import.meta.url), dir, { recursive: true });
     const url = pathToFileURL(`${dir}/`);
-    expect(readRegistry(url).stations).toHaveLength(2974);
+    expect(readRegistry(url).stations).toHaveLength(3045);
     // An owner source that loses its private_basis.
     const sources = read(`${dir}/sources.yaml`, 'utf8');
     writeFileSync(
@@ -555,7 +555,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     writeFileSync(`${dir}/permissions/BE-3.md`, '---\nsource: BE-3\n---\n');
     expect(() => readRegistry(url)).toThrow(/permissions/);
     rmSync(`${dir}/permissions/BE-3.md`);
-    expect(readRegistry(url).stations).toHaveLength(2974);
+    expect(readRegistry(url).stations).toHaveLength(3045);
     // A withholding record names registered series that are audience off, else the sync refuses it.
     const record = read(`${dir}/permissions/LU-1.md`, 'utf8');
     writeFileSync(`${dir}/permissions/LU-1.md`, record.replace('[Bollendorf, Gemünd_Our]', '[Bollendorf, Diekirch]'));

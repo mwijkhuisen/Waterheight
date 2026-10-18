@@ -283,6 +283,7 @@ export interface River {
 
 export interface Series {
   active: Generated<boolean>;
+  aggregate: string | null;
   audience: Audience | null;
   datum: string | null;
   expected_step: string;
