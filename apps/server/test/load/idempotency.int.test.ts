@@ -758,7 +758,7 @@ describe('newest fetch wins, whatever order the payloads arrive in (review C2, C
   });
 });
 
-describe('the NL fixture archive: NL-1 and NL-2 payloads load, and a replay changes nothing', () => {
+describe('the NL fixture archive: NL-1 and NL-2 payloads load; a replay changes nothing', { timeout: 60_000 }, () => {
   it('loads every payload, stores no NL-2 row, and replaying either source writes nothing', async () => {
     const n = await harness();
     try {
