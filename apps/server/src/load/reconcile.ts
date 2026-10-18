@@ -10,6 +10,8 @@ import { lock } from './store.ts';
 
 const ORIGIN = sql`timestamptz '2000-01-01 00:00:00+00'`;
 export const RECONCILE_DAYS = 40;
+// P14b: a provider's daily aggregate (series.aggregate) has no rollup, as in upsertObs.
+const notAggregate = sql`NOT EXISTS (SELECT 1 FROM series s WHERE s.id = o.series_id AND s.aggregate IS NOT NULL)`;
 
 export async function reconcileRollups(
   db: Kysely<DB>,
@@ -27,7 +29,7 @@ export async function reconcileRollups(
         INSERT INTO obs_1h AS r (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
         SELECT o.series_id, date_bin('1 hour', o.ts, ${ORIGIN}), min(o.value), max(o.value), avg(o.value)::real,
                (array_agg(o.value ORDER BY o.ts DESC))[1], count(*)::int, bit_or(o.qc)
-        FROM obs o WHERE o.ts >= ${from} AND o.ts < ${to}
+        FROM obs o WHERE o.ts >= ${from} AND o.ts < ${to} AND ${notAggregate}
         GROUP BY 1, 2
         ON CONFLICT (series_id, bucket) DO UPDATE
           SET vmin = EXCLUDED.vmin, vmax = EXCLUDED.vmax, vavg = EXCLUDED.vavg, vlast = EXCLUDED.vlast,
@@ -40,7 +42,7 @@ export async function reconcileRollups(
         INSERT INTO obs_1d AS r (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
         SELECT o.series_id, date_bin('1 day', o.ts, ${ORIGIN}), min(o.value), max(o.value), avg(o.value)::real,
                (array_agg(o.value ORDER BY o.ts DESC))[1], count(*)::int, bit_or(o.qc)
-        FROM obs o WHERE o.ts >= ${from} AND o.ts < ${to}
+        FROM obs o WHERE o.ts >= ${from} AND o.ts < ${to} AND ${notAggregate}
         GROUP BY 1, 2
         ON CONFLICT (series_id, bucket) DO UPDATE
           SET vmin = EXCLUDED.vmin, vmax = EXCLUDED.vmax, vavg = EXCLUDED.vavg, vlast = EXCLUDED.vlast,

@@ -40,14 +40,24 @@ export const ValiditySpec = z.strictObject({
     .optional(),
   zip: z
     .strictObject({
-      members: z.array(z.string()).min(1),
+      members: z.array(z.string()).default([]),
+      /**
+       * P14b: members allowed by an anchored pattern as well (the DE-8 decade files: one member per station), in
+       * code only (a provider's ValiditySpec), never from data. `header_all`: the first line every member must have.
+       */
+      member_pattern: z.string().startsWith('^').endsWith('$').optional(),
+      header_all: z.string().optional(),
       /** Expected first line per member. */
       header: z.record(z.string(), z.string()).default({}),
       encoding: z.enum(['utf-8', 'latin1']).default('utf-8'),
       /** 0-based column of an ISO time in the counted member, for seed coverage. */
       time_column: z.number().int().nonnegative().optional(),
       max_members: z.number().int().positive().optional(),
+      /** P14b: per-spec caps above the §6.7 ZIP defaults (a backfill spec's, with its justification). */
+      max_total: z.number().int().positive().optional(),
+      max_ratio: z.number().int().positive().optional(),
     })
+    .refine((z) => z.members.length > 0 || z.member_pattern !== undefined, 'zip: members or member_pattern')
     .optional(),
   /** HTML/text: a pattern the body must contain (bounded regex on ≤ 5 MB). */
   pattern: z.string().optional(),
@@ -152,9 +162,13 @@ export async function validate(spec: ValiditySpec, status: number, body: Buffer)
         let lines = 0;
         let min: string | undefined;
         let max: string | undefined;
+        const exact = flatNames(z.members);
+        const pattern = z.member_pattern === undefined ? undefined : new RegExp(z.member_pattern);
         const members = await checkZip(body, {
-          names: flatNames(z.members),
+          names: (n) => exact(n) || (pattern !== undefined && !n.includes('/') && pattern.test(n)),
           ...(z.max_members === undefined ? {} : { maxMembers: z.max_members }),
+          ...(z.max_total === undefined ? {} : { maxTotal: z.max_total }),
+          ...(z.max_ratio === undefined ? {} : { maxRatio: z.max_ratio }),
           onMember: (name) => {
             let first = true;
             const split = lineSplitter((line) => {
@@ -181,6 +195,8 @@ export async function validate(spec: ValiditySpec, status: number, body: Buffer)
         const names = members.map((m) => m.name);
         for (const m of spec.required) if (!names.includes(m)) return invalid('required');
         for (const [m, h] of Object.entries(z.header)) if (firstLines.get(m) !== h) return invalid('header');
+        if (z.header_all !== undefined && names.some((m) => firstLines.get(m) !== z.header_all))
+          return invalid('header');
         if (spec.count !== undefined && lines < spec.min) return invalid('count', lines);
         return {
           ok: true,

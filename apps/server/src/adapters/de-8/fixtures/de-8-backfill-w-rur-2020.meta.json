@@ -1,0 +1,13 @@
+{
+  "spec": "de-8-backfill-w",
+  "source": "DE-8",
+  "synthetic": false,
+  "from": "trimmed",
+  "recorded_at": "2026-10-18T11:32:05Z",
+  "status": 200,
+  "content_type": "application/zip",
+  "url": "https://www.opengeodata.nrw.de/produkte/umwelt_klima/wasser/oberflaechengewaesser/hydro/w/Rureinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip",
+  "bytes": 20222118,
+  "source_sha256": "a11853d19b4040356fe969c25a6c0a8526eb92014003f82af806815a54ead7dd",
+  "trimmed": "the member of Stah (2829100000100, tier 1) cut to its header and its rows from 2026-04-01T00:00:00+01:00 on (whole lines, the final NA row kept), the member of Süsterseel (2818100000200) cut to its header and its first 200 rows, every other member dropped; re-zipped with the recorded member names and times"
+}

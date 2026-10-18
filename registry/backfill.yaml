@@ -4,6 +4,18 @@ hosts:
     min_interval_ms: 1000        # ≤ 1 request/s (runner pacer)
     max_per_hour: 3600           # on top of the live ≤ 1,000/h (P16a); the budget test asserts both
     window_utc: { from: "22:00", to: "05:00" }
+  www.opengeodata.nrw.de:
+    min_interval_ms: 30000       # P14b DE-8: 32 decade files of ≤ 21 MB, one every 30 s at most
+    max_per_hour: 20
+    window_utc: { from: "22:00", to: "05:00" }
+  hubeau.eaufrance.fr:
+    min_interval_ms: 2000        # P14b FR-2: one series of ≤ 20 years a request; live FR-1 shares the host
+    max_per_hour: 1800
+    window_utc: { from: "22:00", to: "05:00" }
+  data.bs.ch:
+    min_interval_ms: 1000        # P14b CH-9: ≤ 1 request/s
+    max_per_hour: 3600
+    window_utc: { from: "22:00", to: "05:00" }
 specs:
   - id: nl-1-backfill-obs
     source: NL-1
@@ -13,5 +25,65 @@ specs:
     select: { first_release: true, quantities: [WATHTE, Q], role: primary }
     chunk: P40D
     floor: "1990-01-01"
+    max_bytes: 4194304
+    retention: backfill
+  # P14b: the NRW verified archive (hydro/w, one ZIP per catchment and decade, one CSV member per gauge) into the
+  # DE-7 W series of the tier-1 gauges. A job is one decade file, fetched once and sliced into P30D chunks; it stops
+  # at DATA_FLOOR (the archive ends 2026-07-01). The decades are the ones the recorded index lists with data.
+  - id: de-8-backfill-w
+    source: DE-8
+    target: DE-7
+    version: 1
+    url: https://www.opengeodata.nrw.de/produkte/umwelt_klima/wasser/oberflaechengewaesser/hydro/w/
+    select: { first_release: true }
+    chunk: P30D
+    floor: "1950-01-01"
+    max_bytes: 26214400
+    retention: backfill
+    caps:
+      zip_members: 200
+      zip_total: 671088640
+      csv_rows: 2000000
+      justification: >-
+        Measured on the recording de-8-w-rur-2020: Rur 2020-2029 is 27 members and 292 MB inflated at 6.8 years of
+        10 (the 200 MiB default would refuse it); its Stah member has 221,281 rows (the 100,000 default).
+    datasets:
+      - name: Rureinzugsgebiet
+        decades: [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020]
+        stations: ["2829100000100"]
+      - name: Niers-u-Schwalmeinzugsgebiet
+        decades: [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020]
+        stations: ["2849900000100", "2869500000200"]
+      - name: Emseinzugsgebiet
+        decades: [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020]
+        stations: ["3190000000100"]
+      - name: Issel-Berkel-Vechteeinzugsgebiet
+        decades: [1950, 1960, 1970, 1980, 1990, 2000, 2010, 2020]
+        stations: ["9281700000200", "9282570000100", "9284730000100", "9286190000100", "9286455000200"]
+  # P14b: Hub'Eau obs_elab, the daily aggregates (QmnJ mean discharge, HIXnJ daily maximum stage) of the FR-1 tier-1
+  # stations into their FR-1 aggregate twin series. One request per series and 20 years (at most 7,300 records of the
+  # page's 20,000); a 206 (a page with a `next`) halves the chunk. Stops at DATA_FLOOR.
+  - id: fr-2-backfill-elab
+    source: FR-2
+    target: FR-1
+    version: 1
+    url: https://hubeau.eaufrance.fr/api/v2/hydrometrie/obs_elab
+    select: { aggregates: [QmnJ, HIXnJ] }
+    chunk: P7300D
+    floor: "1950-01-01"
+    max_bytes: 16777216
+    retention: backfill
+  # P14b: data.bs.ch (Kanton Basel-Stadt), the JSON export of the Rhine at Basel (2289) and the Birs at Münchenstein
+  # (2106) into their CH-1 series. 30 days a request (8,640 records, about 1 MB). Stops at DATA_FLOOR.
+  - id: ch-9-backfill-bs
+    source: CH-9
+    target: CH-1
+    version: 1
+    url: https://data.bs.ch/api/explore/v2.1/catalog/datasets/
+    datasets:
+      - { id: "100089", station: "2289" }
+      - { id: "100236", station: "2106" }
+    chunk: P30D
+    floor: "2020-06-01"
     max_bytes: 4194304
     retention: backfill

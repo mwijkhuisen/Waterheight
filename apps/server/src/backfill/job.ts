@@ -66,7 +66,11 @@ export interface JobStore {
    * `done`, `failed` and `aborted` set `finished_at`; `planned` clears `attempts` and `last_error`.
    */
   setStatus(id: number, to: JobStatus, error: string | null, only: readonly JobStatus[]): Promise<boolean>;
-  guard(source: string): Promise<GuardVerdict>;
+  /**
+   * backfill_guard: the loader's verdicts (`loader_lag`, `backlog`, `unloaded`) on `source`, and `stale` on `target`
+   * when there is one (P14b: the source whose series the rows go to), else on `source`.
+   */
+  guard(source: string, target?: string): Promise<GuardVerdict>;
   /**
    * The lease of a host (one runner per host, review C1/S1): taken when free, expired or already `holder`'s, and set
    * to now + LEASE_MS. False when another runner holds it. `renew` is the same call before every request.
@@ -186,8 +190,10 @@ export class SqlJobStore implements JobStore {
     return Number(r.numAffectedRows ?? 0) > 0;
   }
 
-  async guard(source: string): Promise<GuardVerdict> {
-    const r = await sql<{ v: GuardVerdict }>`SELECT backfill_guard(${source}) AS v`.execute(this.db);
+  async guard(source: string, target?: string): Promise<GuardVerdict> {
+    const r = await sql<{ v: GuardVerdict }>`SELECT backfill_guard(${source}, ${target ?? null}::text) AS v`.execute(
+      this.db,
+    );
     const v = r.rows[0]?.v;
     // A verdict this code does not know is a stop, never an ok.
     return v === 'ok' || v === 'loader_lag' || v === 'backlog' || v === 'unloaded' || v === 'stale' ? v : 'stale';

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { args, keepAsProblem, windowProblem } from '../../../../scripts/smoke-capture.ts';
+import { args, getProblem, keepAsProblem, windowProblem } from '../../../../scripts/smoke-capture.ts';
 import { requestFor } from '../../src/capture/adapters.ts';
 import { loadRegistry } from '../../src/capture/specs.ts';
 
@@ -216,4 +216,57 @@ else process.exit(live ? ${liveExit} : 2);
     expect(r.status).toBe(1);
     expect(r.stderr).toContain('role capture exited 124');
   }, 40_000);
+
+  describe('--get (P14b)', () => {
+    const hosts = new Map([
+      ['FR-2', ['hubeau.eaufrance.fr']],
+      ['CH-9', ['data.bs.ch']],
+    ]);
+    const ok = { url: 'https://data.bs.ch/api/x?a=1', source: 'CH-9', out: 'ch-9-x.1' };
+    const none = () => false;
+
+    it('accepts an allowlisted https URL and parses triples', () => {
+      expect(getProblem([ok], hosts, none)).toBeNull();
+      const a = args(['--get', ok.url, '--source', 'CH-9', '--out', 'ch-9-x', '--max-mib', '64']);
+      expect(a.gets).toEqual([{ url: ok.url, source: 'CH-9', out: 'ch-9-x' }]);
+      expect(a.maxMib).toBe(64);
+    });
+
+    it('refuses http, a foreign host, credentials, a port, a bad, repeated or existing name, a big cap, a sixth', () => {
+      const bad = (g: object, exists = none, mib = 25) => getProblem([{ ...ok, ...g }], hosts, exists, mib);
+      expect(bad({ url: 'http://data.bs.ch/x' })).toMatch(/https only/);
+      expect(bad({ url: 'https://example.org/x' })).toMatch(/not in CH-9/);
+      expect(bad({ source: 'FR-2' })).toMatch(/not in FR-2/);
+      expect(bad({ url: 'https://u:p@data.bs.ch/x' })).toMatch(/credentials/);
+      expect(bad({ url: 'https://data.bs.ch:8443/x' })).toMatch(/port/);
+      for (const out of ['Up', '-x', '../x', 'a'.repeat(82)]) expect(bad({ out }), out).toMatch(/--out takes/);
+      expect(bad({}, () => true)).toMatch(/exists/);
+      expect(bad({}, none, 65)).toMatch(/--max-mib/);
+      expect(getProblem([ok, ok], hosts, none)).toMatch(/twice/);
+      const six = Array.from({ length: 6 }, (_, i) => ({ ...ok, out: `n${i}` }));
+      expect(getProblem(six, hosts, none)).toMatch(/at most 5/);
+    });
+
+    it('needs RWS_LIVE=1 and refuses under CI', () => {
+      const argv = [
+        '--contact',
+        'a@b.nl',
+        '--info-url',
+        'https://x.nl',
+        '--get',
+        ok.url,
+        '--source',
+        'CH-9',
+        '--out',
+        'ch-9-t',
+      ];
+      const run = (env: Record<string, string>) =>
+        spawnSync(process.execPath, [script, ...argv], {
+          env: { ...process.env, CI: '', RWS_LIVE: '', ...env },
+          encoding: 'utf8',
+        });
+      expect(run({}).status).toBe(2);
+      expect(run({ CI: 'true', RWS_LIVE: '1' }).status).toBe(2);
+    }, 30_000);
+  });
 });

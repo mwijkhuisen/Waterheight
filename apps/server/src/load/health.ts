@@ -370,8 +370,10 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
     outageOf.set(source, { from: from.toISOString(), to: to.toISOString(), missing_buckets: rows[0]?.missing ?? 0 });
   }
 
+  // P14b: only live batches judge the source; a backfill payload set aside is `detail.backfill.quarantined`.
   const batches = await sql<{ source_id: string; quarantined: number; last_ok: Date | null }>`
-    SELECT b.source_id, (count(*) FILTER (WHERE b.parse_status = 'quarantined'))::int AS quarantined,
+    SELECT b.source_id,
+           (count(*) FILTER (WHERE b.parse_status = 'quarantined' AND b.origin = 'live'))::int AS quarantined,
            max(b.fetched_at) FILTER (WHERE b.parse_status = 'ok' AND b.origin = 'live') AS last_ok
     FROM ingest_batch b GROUP BY b.source_id`.execute(db);
 

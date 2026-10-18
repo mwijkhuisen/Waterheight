@@ -1,0 +1,12 @@
+{
+  "spec": "de-8-backfill-w",
+  "source": "DE-8",
+  "synthetic": false,
+  "recorded_at": "2026-10-18T11:32:05Z",
+  "status": 200,
+  "content_type": "application/zip",
+  "url": "https://www.opengeodata.nrw.de/produkte/umwelt_klima/wasser/oberflaechengewaesser/hydro/w/Issel-Berkel-Vechteeinzugsgebiet-NRW-W_1950-1959_EPSG25832_CSV.zip",
+  "bytes": 115038,
+  "source_sha256": "131a87912a858fde15e5757557456c8db5a521b25bfe1a6d7843dfd8875b55c4",
+  "trimmed": false
+}

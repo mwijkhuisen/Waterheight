@@ -78,9 +78,12 @@ import { DATA_EPOCH } from './dirty.ts';
 import type { SeriesRow } from './store.ts';
 import * as wireCh4 from './wire/ch-4.ts';
 import * as wireCh5 from './wire/ch-5.ts';
+import * as wireCh9 from './wire/ch-9.ts';
 import * as wireDe2 from './wire/de-2.ts';
 import * as wireDe3 from './wire/de-3.ts';
 import * as wireDe6 from './wire/de-6.ts';
+import * as wireDe8 from './wire/de-8-backfill.ts';
+import * as wireFr2 from './wire/fr-2.ts';
 import * as wireFr4 from './wire/fr-4.ts';
 import * as wireFr5 from './wire/fr-5.ts';
 import * as wireLu3 from './wire/lu-3.ts';
@@ -118,6 +121,11 @@ export type LoadContext = {
    * (when it has one) cut at DATA_EPOCH. Set by the pipeline for a `backfill` spec only; the adapter adds its floor.
    */
   backfill?: { from: number; to: number };
+  /**
+   * P14b: for a backfill line, its archive key and the adapter version: equal keys are the same body parsed the same
+   * way, so a wire may keep one parse across the slice lines of one object (DE-8: a decade file, many slices).
+   */
+  memoKey?: string;
 };
 
 /**
@@ -185,6 +193,12 @@ export type SpecLoader = {
    */
   backfill?: true;
   /**
+   * P14b: the source whose series the payload's `obs` rows belong to, when it is not the payload's own (DE-8 → DE-7,
+   * FR-2 → FR-1, CH-9 → CH-1): the loader binds that source's registry for the rows (the upsert, the counters, the
+   * dirty rows), while the batch, the ledger and the health stay the payload's own source's. Backfill specs only.
+   */
+  obsTarget?: string;
+  /**
    * P16b: a catch-up seed (nl-1-obs-*-catchup): each payload revises every settled day from DATA_EPOCH on, so its day
    * bumps are deferred into app_meta `bump_pending` and flushed by the loader's tick with one bumpDays per family, an
    * hour after the set's first deferral or once none came for 15 minutes (dirty.ts `bumpsDue`), not once per payload.
@@ -198,7 +212,15 @@ export type SpecLoader = {
  * the values of every list; `unknown_values`, those of the lists the registry does not know (Normalised.unknown
  * counts lists, and stays so: it feeds the batch's n_skipped).
  */
-export type Backfilled = Normalised & { provider_values: number; unknown_values: number };
+export type Backfilled = Normalised & {
+  provider_values: number;
+  unknown_values: number;
+  /**
+   * P14b: drops of raw provider rows before a payload's values are formed (DE-8: a step-held grid), by fixed code.
+   * Logged with the batch, never part of the ledger's identities (`provider_values` counts grid points there).
+   */
+  raw_dropped?: Record<string, number>;
+};
 
 export type LoadAdapter = {
   /** Bumped when parse or normalise changes what is stored; recorded on every batch. */
@@ -403,7 +425,20 @@ const nl1Catchup: SpecLoader = {
 };
 
 /** P7a: the sources wired in load/wire/ (one file each, so their adapters are built side by side). */
-const WIRED = [wireDe6, wireFr5, wireCh5, wireLu5, wireLu4, wireDe2, wireLu3, wireCh4, wireFr4, wireDe3] as const;
+const WIRED = [
+  wireDe6,
+  wireFr5,
+  wireCh5,
+  wireLu5,
+  wireLu4,
+  wireDe2,
+  wireLu3,
+  wireCh4,
+  wireFr4,
+  wireDe3,
+  wireFr2,
+  wireCh9,
+] as const;
 
 /** Every source the loader can parse; `LOAD_ADAPTERS` is this list after the DST gate. */
 const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
@@ -555,6 +590,8 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
         },
         zeroTarget: 'DE-7',
       },
+      // P14b: the verified decade ZIPs (load/wire/de-8-backfill.ts).
+      ...wireDe8.SPECS,
     },
   },
   // The CC0 wide CSV: naive Europe/Luxembourg labels (their offset, 0 since 2026-09-30, is measured daily against
@@ -653,7 +690,7 @@ export const ADAPTER_TIME: Readonly<Record<string, TimeConvention | null>> = {
   'CH-3': CH3_TIME,
   'NL-2': NL2_TIME,
   'DE-7': DE7_TIME,
-  'DE-8': null,
+  'DE-8': wireDe8.TIME,
   'LU-1': LU1_TIME,
   'LU-2': LU2_TIME,
   'LU-6': null,

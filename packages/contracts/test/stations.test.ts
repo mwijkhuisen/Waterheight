@@ -222,6 +222,38 @@ describe('station declarations (tier, role, provider_key, units, steps)', () => 
     expect(validateStations(withSecond(1, 'twin'), sources).problems).toEqual([]);
     expect(validateStations(withSecond(2, 'twin'), sources).problems.join('\n')).toMatch(/duplicate$/);
   });
+
+  /** P14b: the sample with provider aggregate rows on the Lobith station (a daily mean, a daily maximum). */
+  const withAggregates = (rows: Record<string, unknown>[]) => {
+    const copy = structuredClone(sample);
+    for (const [i, over] of rows.entries())
+      copy.stations.push({
+        ...structuredClone(sample.stations[lobith]),
+        provider_key: `lobith.bovenrijn.tolkamer/aggregate/${i}`,
+        role: 'twin',
+        tier: 2,
+        first_release: false,
+        native_step: 'P1D',
+        expected_step: 'P1D',
+        staleness_limit: 'P1D',
+        ...over,
+      });
+    return validateStations(copy, sources).problems.join('\n');
+  };
+
+  it('a provider aggregate is a twin of one day: P1D steps, stale within a day, one per aggregate', () => {
+    expect(withAggregates([{ aggregate: 'mean' }, { aggregate: 'max' }])).toBe('');
+    // Beside the station's own twin row, and with a shorter staleness limit.
+    expect(withAggregates([{ aggregate: 'max', staleness_limit: 'PT12H' }, {}])).toBe('');
+    expect(withAggregates([{ aggregate: 'mean' }, { aggregate: 'mean' }])).toMatch(/duplicate$/);
+    expect(withAggregates([{ aggregate: 'mean', role: 'primary' }])).toMatch(/an aggregate row needs role twin/);
+    expect(withAggregates([{ aggregate: 'mean', role: 'mirror' }])).toMatch(/an aggregate row needs role twin/);
+    for (const step of [{ native_step: 'PT1H' }, { expected_step: 'PT24H' }])
+      expect(withAggregates([{ aggregate: 'mean', ...step }])).toMatch(/needs native_step and expected_step P1D/);
+    for (const staleness_limit of ['PT25H', 'P2D', 'P1W'])
+      expect(withAggregates([{ aggregate: 'mean', staleness_limit }])).toMatch(/staleness_limit exceeds P1D/);
+    expect(withAggregates([{ aggregate: 'sum' }])).not.toBe('');
+  });
 });
 
 describe('twin registry', () => {
@@ -261,6 +293,19 @@ describe('twin registry', () => {
     const pair = { id: 't', a: taw, b: nap, relation };
     expect(problems([pair, pair])).toMatch(/duplicate/);
     expect(problems([{ ...pair, relation: { ...relation, unit: 'm³/s' } }])).toMatch(/unit of a H pair/);
+  });
+
+  it('fails a side that is a provider aggregate (P14b: it states days, not instants)', () => {
+    const daily = stations.map((r) =>
+      r.provider_key === taw.provider_key
+        ? { ...r, aggregate: 'max' as const, native_step: 'P1D', expected_step: 'P1D', staleness_limit: 'P1D' }
+        : r,
+    );
+    const pair = { id: 't', a: taw, b: nap, relation };
+    expect(validateTwins({ twins: [pair] }, daily).problems.join('\n')).toMatch(/a is an aggregate series/);
+    expect(validateTwins({ twins: [{ ...pair, a: nap, b: taw }] }, daily).problems.join('\n')).toMatch(
+      /b is an aggregate series/,
+    );
   });
 
   it('is strict: an unknown relation kind, a bad id or an extra key fails', () => {

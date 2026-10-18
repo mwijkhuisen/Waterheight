@@ -1,0 +1,11 @@
+{
+  "spec": "ch-9-records",
+  "source": "CH-9",
+  "synthetic": false,
+  "recorded_at": "2026-10-18T11:35:55Z",
+  "status": 200,
+  "url": "https://data.bs.ch/api/explore/v2.1/catalog/datasets/100089/records?limit=100&offset=9900",
+  "bytes": 11570,
+  "source_sha256": "d95b4f971db574f854ad97d88bae7050e96f671c21e12b47b91df93039507eaf",
+  "trimmed": false
+}

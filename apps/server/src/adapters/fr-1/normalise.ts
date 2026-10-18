@@ -13,6 +13,7 @@ import {
   TimeError,
   toIso,
 } from '@rws/core';
+import { QUALIFICATION, STATUT } from '../_shared/hubeau/quality.ts';
 import type { Observation, Station } from './parse.ts';
 
 // FR-1 Hub'Eau → canonical rows (catalogue §2.5, §4.2, §4.4, §4.5, §4.8).
@@ -47,18 +48,6 @@ export type Context = {
 };
 
 // Maps, not objects: a provider value must not find an inherited property.
-const STATUT: ReadonlyMap<number, number> = new Map([
-  [0, QC.RAW],
-  [4, QC.RAW],
-  [8, QC.RAW],
-  [12, QC.RAW],
-  [16, QC.VALIDATED],
-]);
-const QUALIFICATION: ReadonlyMap<number, number> = new Map([
-  [12, QC.PROVIDER_SUSPECT],
-  [16, 0],
-  [20, 0],
-]);
 const ZERO_DATUM: ReadonlyMap<number, Datum> = new Map([
   [2, 'NGF1884'],
   [3, 'IGN69'],

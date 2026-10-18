@@ -1,0 +1,13 @@
+{
+  "spec": "fr-2-backfill-elab",
+  "variant": "A850061001/QmnJ",
+  "source": "FR-2",
+  "synthetic": false,
+  "recorded_at": "2026-10-18T11:34:52Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://hubeau.eaufrance.fr/api/v2/hydrometrie/obs_elab?code_entite=A850061001&grandeur_hydro_elab=QmnJ&date_debut_obs_elab=2026-06-01&date_fin_obs_elab=2026-10-17&size=20000",
+  "bytes": 53864,
+  "source_sha256": "e8ce177cc7e65d3c2b224593c3a0504f61d549347e13e798cc605a0a4ea2d8a4",
+  "trimmed": false
+}

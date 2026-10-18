@@ -29,7 +29,11 @@ const run = (change: Partial<Inputs> = {}) => generate({ ...inputs, ...change })
 const sources = SourcesFile.parse(parse(readFileSync(`${repoRoot}registry/sources.yaml`, 'utf8'))).sources;
 const rowsOf = (text: string) =>
   StationsFile.parse(parse(text)).stations.filter((s): s is PublicStation => s.audience !== 'owner');
-const fr1 = rowsOf(committed.fr1);
+// P14b: the file also holds the FR-2 aggregate twins (QmnJ, HIXnJ) after the primary rows; `fr1` is the series of the
+// series list as before, `aggregates` the 71 new rows.
+const fr1All = rowsOf(committed.fr1);
+const fr1 = fr1All.filter((r) => r.aggregate === undefined);
+const aggregates = fr1All.filter((r) => r.aggregate !== undefined);
 const fr3 = rowsOf(committed.fr3);
 const de1 = rowsOf(readFileSync(`${repoRoot}registry/stations/de-1.yaml`, 'utf8'));
 const ch1 = rowsOf(readFileSync(`${repoRoot}registry/stations/ch-1.yaml`, 'utf8'));
@@ -357,6 +361,72 @@ describe('registry/stations/fr-1.yaml', () => {
     expect(codes(off)).toEqual(['A060005051', 'A937203050', 'A937204050']);
     expect(off).toHaveLength(5);
     expect(off.every((r) => r.role === 'primary' && r.tier === 2 && !r.first_release && r.country === 'DE')).toBe(true);
+  });
+});
+
+describe('the FR-2 aggregate twins in registry/stations/fr-1.yaml (P14b)', () => {
+  const primaries = fr1.filter((r) => r.tier === 1 && r.role === 'primary');
+
+  it('are 71 rows after every primary row: 31 QmnJ beside the tier-1 Q rows, 40 HIXnJ beside the tier-1 H rows', () => {
+    expect(aggregates).toHaveLength(71);
+    expect(aggregates.filter((r) => r.aggregate === 'mean')).toHaveLength(31);
+    expect(aggregates.filter((r) => r.aggregate === 'max')).toHaveLength(40);
+    expect(fr1All).toHaveLength(550 + 71);
+    // After the 550 rows of the series list, in the order of their primaries (code, then H before Q).
+    expect(fr1All.slice(550)).toEqual(aggregates);
+    expect(aggregates.map((r) => r.provider_key)).toEqual(
+      primaries.map((r) => `${r.provider_code}/${r.quantity === 'Q' ? 'QmnJ' : 'HIXnJ'}`),
+    );
+  });
+
+  it('keep the station of their primary and differ in exactly the aggregate fields', () => {
+    for (const [i, a] of aggregates.entries()) {
+      const p = primaries[i] as PublicStation;
+      const q = a.quantity === 'Q';
+      expect({ ...a, aggregate: undefined }).toEqual({
+        ...p,
+        provider_key: `${p.provider_code}/${q ? 'QmnJ' : 'HIXnJ'}`,
+        tier: 2,
+        role: 'twin',
+        native_unit: q ? 'l/s' : 'mm',
+        to_canonical: q ? 0.001 : 0.1,
+        value_kind: q ? null : 'stage',
+        native_step: 'P1D',
+        expected_step: 'P1D',
+        staleness_limit: 'P1D',
+        expected_threshold_source: null,
+        expected_forecast_source: null,
+        first_release: false,
+        aggregate: undefined,
+      });
+      // The same station id, name, position, country, licence and audience as the primary; H on the same local zero (D16).
+      expect([a.id, a.audience, a.licence_gate, a.datum, a.gauge_zero]).toEqual([
+        p.id,
+        'public',
+        'open',
+        q ? null : 'LOCAL',
+        [],
+      ]);
+    }
+  });
+
+  it('are twins of tier 2, never first_release, so the tier-1 rule (primary and first_release) still holds', () => {
+    expect(aggregates.every((r) => r.role === 'twin' && r.tier === 2 && !r.first_release)).toBe(true);
+    expect(fr1All.filter((r) => r.first_release).every((r) => r.tier === 1 && r.role === 'primary')).toBe(true);
+    expect(fr1All.filter((r) => r.tier === 1)).toHaveLength(71);
+  });
+
+  it('are in the FR-1 file only: FR-3 still holds its 26 twins and no aggregate', () => {
+    expect(fr3).toHaveLength(26);
+    expect(fr3.some((r) => r.aggregate !== undefined || /Qmn|HIXn/.test(r.provider_key))).toBe(false);
+  });
+
+  it('are named in the header, and the file holds 621 rows with 71 aggregate lines', () => {
+    const at = committed.fr1.indexOf('\nstations:');
+    const [head, rows] = [committed.fr1.slice(0, at), committed.fr1.slice(at)];
+    expect(head).toContain('aggregate twins of each tier-1 station');
+    expect(rows.split('  - id: ').length - 1).toBe(621);
+    expect(rows.match(/\n {4}aggregate: (mean|max)\n/g)).toHaveLength(71);
   });
 });
 

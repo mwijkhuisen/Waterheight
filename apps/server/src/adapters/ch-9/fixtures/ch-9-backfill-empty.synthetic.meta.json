@@ -1,0 +1,10 @@
+{
+  "spec": "ch-9-backfill-bs",
+  "variant": "100089",
+  "source": "CH-9",
+  "synthetic": true,
+  "recorded_at": "2026-10-18T11:36:17Z",
+  "status": 200,
+  "derived_from": "hand-made: the `/exports/json` answer when the where clause matches no record is a bare empty array",
+  "values": "none"
+}

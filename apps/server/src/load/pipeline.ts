@@ -717,7 +717,10 @@ export class Loader {
       return setAside('quarantined', 'sha256_mismatch');
     }
 
-    const registry = await this.registry(line.source);
+    // P14b: a backfill spec with `obsTarget` (DE-8 → DE-7, FR-2 → FR-1, CH-9 → CH-1) states the target's series, so the
+    // rows, their counters and their dirty rows follow the target's registry; the batch, the ledger, the unit list
+    // and the health stay the payload's own source's (`line.source`).
+    const registry = await this.registry(spec.obsTarget ?? line.source);
     const fillRegistry = spec.fill === undefined ? undefined : await this.registry(spec.fill);
     const zeroRegistry = spec.zeroTarget === undefined ? undefined : await this.registry(spec.zeroTarget);
     const refRegistries =
@@ -732,6 +735,7 @@ export class Loader {
         ? null
         : await previousLoad(this.deps.db, line.source, line.spec, fetchedAt);
     const labelOffsets = spec.labelOffsets === true ? await labelOffsetsOf(this.deps.db, line.source) : undefined;
+    const ceiling = spec.obsTarget === undefined ? EPOCH_MS : FLOOR_MS;
     let result: Normalised;
     let checked: CheckedRun[];
     try {
@@ -745,13 +749,16 @@ export class Loader {
         ...(refRegistries === undefined ? {} : { refRegistries }),
         ...(previous === null || spec.window === undefined ? {} : { since: previous.getTime() - spec.window }),
         ...(labelOffsets === undefined ? {} : { labelOffsets }),
-        // P14a: a backfill payload loads only inside its chunk (when the line names one) and before DATA_EPOCH.
+        // P14a: a backfill payload loads only inside its chunk (when the line names one) and before DATA_EPOCH;
+        // P14b: before DATA_FLOOR for a spec that fills another source's series (its live rows own every day the site
+        // can show). Its key and the adapter version name one parse, which a wire may keep across slice lines.
         ...(spec.backfill === true
           ? {
               backfill: {
                 from: line.backfill === undefined ? Number.NEGATIVE_INFINITY : Date.parse(line.backfill.from),
-                to: Math.min(EPOCH_MS, line.backfill === undefined ? EPOCH_MS : Date.parse(line.backfill.to)),
+                to: Math.min(ceiling, line.backfill === undefined ? ceiling : Date.parse(line.backfill.to)),
               },
+              memoKey: `${line.key}\n${adapterVersion}`,
             }
           : {}),
       });
@@ -1040,6 +1047,11 @@ export class Loader {
     if (closesFull) this.deps.alert('cap_closes_full', { ...ids, n: 1 });
     if (pendingBad) this.deps.alert('bump_pending_bad', { ...ids, n: 1 });
     if (result.unknown > 0) this.deps.info?.('series not in the registry', { ...ids, n: result.unknown });
+    // P14b: the raw rows a backfill dropped before its values were formed (DE-8 `NA`, off-grid stamps): fixed codes
+    // and counts, once per line, outside the ledger (its identities count values, not raw rows).
+    const raw = spec.backfill === true ? Object.entries((result as Backfilled).raw_dropped ?? {}) : [];
+    const rawDropped = Object.fromEntries(raw.filter(([, n]) => n > 0));
+    if (Object.keys(rawDropped).length > 0) this.deps.info?.('backfill_raw_dropped', { ...rawDropped, ...ids });
     return outcome;
   }
 
@@ -1185,8 +1197,10 @@ export function failureOf(err: unknown): { kind: 'payload' | 'stall'; code: stri
 
 /**
  * P14a: the ledger row of a backfill payload (plan §3.6) and, only when it is new, its counts added to the job, in the
- * payload's transaction: a re-fetched or replayed archive key counts once. A line that names no job of its source and
- * spec (a job aborted and deleted by hand, a forged line) loads without a ledger row. `reconciled`: every value the
+ * payload's transaction: a re-fetched or replayed archive key counts once per chunk (P14b: the slice lines of one
+ * DE-8 decade object share its key and its batch, and each slice has its own row, also when the batch existed). A
+ * line that names no job of its source and spec (a job aborted and deleted by hand, a forged line) loads without a
+ * ledger row. `reconciled`: every value the
  * provider stated was either dropped by normalise or kept, and every kept row was inserted, revised or skipped.
  * `aside`: the payload was quarantined or skipped, so the row has no counts and is never reconciled (P14a queue fix):
  * the guard's `unloaded` stops waiting for it and the runner fails the job `unreconciled` at its next pass. A replay
@@ -1210,7 +1224,7 @@ async function recordChunk(
       SELECT id, ${line.key}, ${chunk.from}::timestamptz, ${chunk.to}::timestamptz, ${c.provider_values}, ${c.kept},
              ${c.inserted}, ${c.revised}, ${c.skipped}, ${c.dropped}, ${reconciled}
       FROM job
-      ON CONFLICT (job_id, archive_key) DO NOTHING
+      ON CONFLICT (job_id, archive_key, chunk_from) DO NOTHING
       RETURNING job_id
     )
     UPDATE backfill_job j

@@ -38,10 +38,10 @@ CREATE TYPE public.audience AS ENUM (
 
 
 --
--- Name: backfill_guard(text); Type: FUNCTION; Schema: public; Owner: -
+-- Name: backfill_guard(text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.backfill_guard(p_source text) RETURNS text
+CREATE FUNCTION public.backfill_guard(p_source text, p_target text DEFAULT NULL::text) RETURNS text
     LANGUAGE sql STABLE SECURITY DEFINER
     SET search_path TO 'pg_catalog', 'pg_temp'
     AS $$
@@ -61,7 +61,7 @@ CREATE FUNCTION public.backfill_guard(p_source text) RETURNS text
   END
   FROM (SELECT 1) AS one
   LEFT JOIN public.app_meta l ON l.key = 'loader'
-  LEFT JOIN public.source_health h ON h.source_id = p_source
+  LEFT JOIN public.source_health h ON h.source_id = COALESCE(p_target, p_source)
 $$;
 
 
@@ -713,6 +713,9 @@ CREATE TABLE public.series (
     active boolean DEFAULT true NOT NULL,
     first_seen timestamp with time zone DEFAULT now() NOT NULL,
     last_seen timestamp with time zone,
+    aggregate text,
+    CONSTRAINT series_aggregate_check CHECK ((aggregate = ANY (ARRAY['mean'::text, 'max'::text, 'min'::text]))),
+    CONSTRAINT series_aggregate_not_primary CHECK (((aggregate IS NULL) OR (role <> 'primary'::text))),
     CONSTRAINT series_check CHECK (((quantity = 'Q'::text) = (value_kind IS NULL))),
     CONSTRAINT series_check1 CHECK (((quantity = 'Q'::text) OR (datum IS NOT NULL))),
     CONSTRAINT series_datum_check CHECK ((datum = ANY (ARRAY['NAP'::text, 'TAW'::text, 'DNG'::text, 'NHN'::text, 'NN'::text, 'IGN69'::text, 'NGF1884'::text, 'LN02'::text, 'NG95'::text, 'LOCAL'::text, 'MSL'::text]))),
@@ -2185,7 +2188,7 @@ ALTER TABLE ONLY public.attribution
 --
 
 ALTER TABLE ONLY public.backfill_chunk
-    ADD CONSTRAINT backfill_chunk_pkey PRIMARY KEY (job_id, archive_key);
+    ADD CONSTRAINT backfill_chunk_pkey PRIMARY KEY (job_id, archive_key, chunk_from);
 
 
 --
@@ -2870,4 +2873,7 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261111000001'),
     ('20261112000001'),
     ('20261113000001'),
-    ('20261113000002');
+    ('20261113000002'),
+    ('20261115000001'),
+    ('20261115000002'),
+    ('20261115000003');

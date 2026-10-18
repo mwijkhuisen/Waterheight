@@ -182,7 +182,8 @@ describe('registry/stations/nl-1.yaml', () => {
   });
 
   it('gives every tier-1 row every field of the station registry', () => {
-    const fields = Object.keys(PublicStation.shape);
+    // `aggregate` (P14b) is optional: absent means instantaneous.
+    const fields = Object.keys(PublicStation.shape).filter((f) => f !== 'aggregate');
     for (const r of rows.filter((x) => x.tier === 1)) {
       const record = r as Record<string, unknown>;
       expect(fields.filter((f) => record[f] === undefined)).toEqual([]);

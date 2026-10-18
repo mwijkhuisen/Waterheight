@@ -62,3 +62,11 @@ condition = "AND"
 regexTarget = "secret"
 regexes = ['''^nl-1-obs-key-eijsden-grens-h$''']
 paths = ['''^apps/server/test/classification/inputs\.ts$''']
+
+[[allowlists]]
+description = "P14b: provider keys of eleven FR-1 aggregate twin rows (a Sandre station code and the Hub'Eau grandeur QmnJ or HIXnJ) in the generated FR-1 registry, not keys"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''^(A573061001/HIXnJ|A743061001/HIXnJ|A793061002/HIXnJ|A793061002/QmnJ|E237110501/HIXnJ|E364121001/HIXnJ|E364121002/HIXnJ|E367125002/HIXnJ|E367125002/QmnJ|E381126501/HIXnJ|E381126501/QmnJ)$''']
+paths = ['''^registry/stations/fr-1\.yaml$''']

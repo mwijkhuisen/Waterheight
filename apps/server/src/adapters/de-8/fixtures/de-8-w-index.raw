@@ -1,0 +1,184 @@
+{
+	"datasets": [
+		{ "name":"Ahreinzugsgebiet_Wasserstaende_CSV",
+			"title":"Ahreinzugsgebiet Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Ahreinzugsgebiet-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"22917", "timestamp":"2026-10-16T03:39:04.245745"},
+				{"name":"Ahreinzugsgebiet-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"387064", "timestamp":"2026-10-16T03:39:04.667749"},
+				{"name":"Ahreinzugsgebiet-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"694744", "timestamp":"2026-10-16T03:39:05.212754"},
+				{"name":"Ahreinzugsgebiet-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"1064414", "timestamp":"2026-10-16T03:39:05.795760"},
+				{"name":"Ahreinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"843087", "timestamp":"2026-10-16T03:39:06.384765"}]
+		},
+		{ "name":"Diemeleinzugsgebiet_Wasserstaende_CSV",
+			"title":"Diemeleinzugsgebiet Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Diemeleinzugsgebiet-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"64125", "timestamp":"2026-10-16T03:39:06.798769"},
+				{"name":"Diemeleinzugsgebiet-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"105610", "timestamp":"2026-10-16T03:39:07.189772"},
+				{"name":"Diemeleinzugsgebiet-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"216316", "timestamp":"2026-10-16T03:39:07.671777"},
+				{"name":"Diemeleinzugsgebiet-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"461421", "timestamp":"2026-10-16T03:39:08.205781"},
+				{"name":"Diemeleinzugsgebiet-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"918966", "timestamp":"2026-10-16T03:39:08.724786"},
+				{"name":"Diemeleinzugsgebiet-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"1352484", "timestamp":"2026-10-16T03:42:15.880501"},
+				{"name":"Diemeleinzugsgebiet-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"1517719", "timestamp":"2026-10-16T03:42:16.567507"},
+				{"name":"Diemeleinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"2518394", "timestamp":"2026-10-16T03:42:17.341514"}]
+		},
+		{ "name":"Edereinzugsgebiet_Wasserstaende_CSV",
+			"title":"Edereinzugsgebiet Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Edereinzugsgebiet-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"135385", "timestamp":"2026-10-16T03:42:17.857519"},
+				{"name":"Edereinzugsgebiet-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"148087", "timestamp":"2026-10-16T03:42:18.293523"},
+				{"name":"Edereinzugsgebiet-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"102233", "timestamp":"2026-10-16T03:42:18.720527"},
+				{"name":"Edereinzugsgebiet-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"198323", "timestamp":"2026-10-16T03:42:19.157531"},
+				{"name":"Edereinzugsgebiet-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"726980", "timestamp":"2026-10-16T03:42:19.687536"},
+				{"name":"Edereinzugsgebiet-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"1576831", "timestamp":"2026-10-16T03:42:20.286541"},
+				{"name":"Edereinzugsgebiet-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"1765307", "timestamp":"2026-10-16T03:42:20.969547"},
+				{"name":"Edereinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"3167301", "timestamp":"2026-10-16T03:42:21.836555"}]
+		},
+		{ "name":"Emseinzugsgebiet_Wasserstaende_CSV",
+			"title":"Emseinzugsgebiet Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Emseinzugsgebiet-NRW-W_1900-1909_EPSG25832_CSV.zip", "size":"328", "timestamp":"2025-10-16T16:54:19.968873"},
+				{"name":"Emseinzugsgebiet-NRW-W_1910-1919_EPSG25832_CSV.zip", "size":"328", "timestamp":"2025-10-16T16:54:20.343876"},
+				{"name":"Emseinzugsgebiet-NRW-W_1940-1949_EPSG25832_CSV.zip", "size":"649", "timestamp":"2026-04-10T12:54:11.521955"},
+				{"name":"Emseinzugsgebiet-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"371063", "timestamp":"2026-10-16T03:42:22.345560"},
+				{"name":"Emseinzugsgebiet-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"923843", "timestamp":"2026-10-16T03:42:23.047566"},
+				{"name":"Emseinzugsgebiet-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"1540580", "timestamp":"2026-10-16T03:42:23.695572"},
+				{"name":"Emseinzugsgebiet-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"3091009", "timestamp":"2026-10-16T03:42:24.566580"},
+				{"name":"Emseinzugsgebiet-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"5282147", "timestamp":"2026-10-16T03:42:25.836592"},
+				{"name":"Emseinzugsgebiet-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"5785171", "timestamp":"2026-10-16T03:42:27.143604"},
+				{"name":"Emseinzugsgebiet-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"9999008", "timestamp":"2026-10-16T03:42:28.994621"},
+				{"name":"Emseinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"16190263", "timestamp":"2026-10-16T03:42:31.776647"}]
+		},
+		{ "name":"Erfteinzugsgebiet_Wasserstaende_CSV",
+			"title":"Erfteinzugsgebiet Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Erfteinzugsgebiet-NRW-W_1930-1939_EPSG25832_CSV.zip", "size":"351", "timestamp":"2026-10-16T03:42:32.719655"},
+				{"name":"Erfteinzugsgebiet-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"311307", "timestamp":"2026-10-16T03:42:33.143659"},
+				{"name":"Erfteinzugsgebiet-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"754184", "timestamp":"2026-10-16T03:42:33.702664"},
+				{"name":"Erfteinzugsgebiet-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"913889", "timestamp":"2026-10-16T03:42:34.221669"},
+				{"name":"Erfteinzugsgebiet-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"1311554", "timestamp":"2026-10-16T03:42:34.821675"},
+				{"name":"Erfteinzugsgebiet-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"3737895", "timestamp":"2026-10-16T03:42:35.735683"},
+				{"name":"Erfteinzugsgebiet-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"13182824", "timestamp":"2026-10-16T03:42:37.958703"},
+				{"name":"Erfteinzugsgebiet-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"16313704", "timestamp":"2026-10-16T03:42:40.731729"},
+				{"name":"Erfteinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"9643168", "timestamp":"2026-10-16T03:42:42.803748"}]
+		},
+		{ "name":"Issel-Berkel-Vechteeinzugsgebiet_Wasserstaende_CSV",
+			"title":"Issel-Berkel-Vechteeinzugsgebiet Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Issel-Berkel-Vechteeinzugsgebiet-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"115038", "timestamp":"2026-10-16T03:42:43.495754"},
+				{"name":"Issel-Berkel-Vechteeinzugsgebiet-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"830401", "timestamp":"2026-10-16T03:42:44.022759"},
+				{"name":"Issel-Berkel-Vechteeinzugsgebiet-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"568050", "timestamp":"2026-10-16T03:42:44.524764"},
+				{"name":"Issel-Berkel-Vechteeinzugsgebiet-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"885919", "timestamp":"2026-10-16T03:42:45.070769"},
+				{"name":"Issel-Berkel-Vechteeinzugsgebiet-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"2198792", "timestamp":"2026-10-16T03:42:45.792775"},
+				{"name":"Issel-Berkel-Vechteeinzugsgebiet-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"3635043", "timestamp":"2026-10-16T03:42:46.753784"},
+				{"name":"Issel-Berkel-Vechteeinzugsgebiet-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"5131163", "timestamp":"2026-10-16T03:42:47.946795"},
+				{"name":"Issel-Berkel-Vechteeinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"7344237", "timestamp":"2026-10-16T03:42:49.396808"}]
+		},
+		{ "name":"Lahneinzugsgebiet_Wasserstaende_CSV",
+			"title":"Lahneinzugsgebiet Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Lahneinzugsgebiet-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"41379", "timestamp":"2026-10-16T03:42:49.983814"},
+				{"name":"Lahneinzugsgebiet-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"42250", "timestamp":"2026-10-16T03:42:50.359817"},
+				{"name":"Lahneinzugsgebiet-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"36530", "timestamp":"2026-10-16T03:42:50.735821"},
+				{"name":"Lahneinzugsgebiet-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"43277", "timestamp":"2026-10-16T03:42:51.111824"},
+				{"name":"Lahneinzugsgebiet-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"120055", "timestamp":"2026-10-16T03:42:51.496828"},
+				{"name":"Lahneinzugsgebiet-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"431582", "timestamp":"2026-10-16T03:42:51.967832"},
+				{"name":"Lahneinzugsgebiet-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"598321", "timestamp":"2026-10-16T03:42:52.469837"},
+				{"name":"Lahneinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"745008", "timestamp":"2026-10-16T03:42:52.986841"}]
+		},
+		{ "name":"Lippeeinzugsgebiet_Wasserstaende_CSV",
+			"title":"Lippeeinzugsgebiet Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Lippeeinzugsgebiet-NRW-W_1910-1919_EPSG25832_CSV.zip", "size":"15993", "timestamp":"2026-10-16T03:42:53.416845"},
+				{"name":"Lippeeinzugsgebiet-NRW-W_1920-1929_EPSG25832_CSV.zip", "size":"23773", "timestamp":"2026-10-16T03:42:53.793849"},
+				{"name":"Lippeeinzugsgebiet-NRW-W_1930-1939_EPSG25832_CSV.zip", "size":"126096", "timestamp":"2026-10-16T03:42:54.184852"},
+				{"name":"Lippeeinzugsgebiet-NRW-W_1940-1949_EPSG25832_CSV.zip", "size":"130780", "timestamp":"2026-10-16T03:42:54.578856"},
+				{"name":"Lippeeinzugsgebiet-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"799934", "timestamp":"2026-10-16T03:42:55.089861"},
+				{"name":"Lippeeinzugsgebiet-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"1383262", "timestamp":"2026-10-16T03:42:55.693866"},
+				{"name":"Lippeeinzugsgebiet-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"2266606", "timestamp":"2026-10-16T03:42:56.431873"},
+				{"name":"Lippeeinzugsgebiet-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"2840627", "timestamp":"2026-10-16T03:42:57.290881"},
+				{"name":"Lippeeinzugsgebiet-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"6371866", "timestamp":"2026-10-16T03:42:58.669894"},
+				{"name":"Lippeeinzugsgebiet-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"12559669", "timestamp":"2026-10-16T03:43:00.842914"},
+				{"name":"Lippeeinzugsgebiet-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"24627870", "timestamp":"2026-10-16T03:43:04.711949"},
+				{"name":"Lippeeinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"28329535", "timestamp":"2026-10-16T03:43:09.390992"}]
+		},
+		{ "name":"Niers-u-Schwalmeinzugsgebiet_Wasserstaende_CSV",
+			"title":"Niers-u-Schwalmeinzugsgebiet Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Niers-u-Schwalmeinzugsgebiet-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"383069", "timestamp":"2026-10-16T03:43:10.625003"},
+				{"name":"Niers-u-Schwalmeinzugsgebiet-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"399673", "timestamp":"2026-10-16T03:43:11.135008"},
+				{"name":"Niers-u-Schwalmeinzugsgebiet-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"337711", "timestamp":"2026-10-16T03:43:11.596012"},
+				{"name":"Niers-u-Schwalmeinzugsgebiet-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"734720", "timestamp":"2026-10-16T03:43:12.108017"},
+				{"name":"Niers-u-Schwalmeinzugsgebiet-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"2870447", "timestamp":"2026-10-16T03:43:12.912024"},
+				{"name":"Niers-u-Schwalmeinzugsgebiet-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"4368215", "timestamp":"2026-10-16T03:43:13.980034"},
+				{"name":"Niers-u-Schwalmeinzugsgebiet-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"5090963", "timestamp":"2026-10-16T03:43:15.232046"},
+				{"name":"Niers-u-Schwalmeinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"12186595", "timestamp":"2026-10-16T03:43:18.053071"}]
+		},
+		{ "name":"RheingrabenNord_Wasserstaende_CSV",
+			"title":"RheingrabenNord Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"RheingrabenNord-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"687655", "timestamp":"2026-10-16T03:43:19.105081"},
+				{"name":"RheingrabenNord-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"982909", "timestamp":"2026-10-16T03:43:19.810088"},
+				{"name":"RheingrabenNord-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"671813", "timestamp":"2026-10-16T03:43:20.281092"},
+				{"name":"RheingrabenNord-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"895985", "timestamp":"2026-10-16T03:43:21.018099"},
+				{"name":"RheingrabenNord-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"2301488", "timestamp":"2026-10-16T03:43:21.935107"},
+				{"name":"RheingrabenNord-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"8496061", "timestamp":"2026-10-16T03:43:23.516122"},
+				{"name":"RheingrabenNord-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"10739629", "timestamp":"2026-10-16T03:43:25.575141"},
+				{"name":"RheingrabenNord-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"15625402", "timestamp":"2026-10-16T03:43:28.314166"}]
+		},
+		{ "name":"Ruhreinzugsgebiet_Wasserstaende_CSV",
+			"title":"Ruhreinzugsgebiet Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Ruhreinzugsgebiet-NRW-W_1930-1939_EPSG25832_CSV.zip", "size":"680", "timestamp":"2026-10-16T03:43:29.096173"},
+				{"name":"Ruhreinzugsgebiet-NRW-W_1940-1949_EPSG25832_CSV.zip", "size":"1041", "timestamp":"2026-10-16T03:43:29.461176"},
+				{"name":"Ruhreinzugsgebiet-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"2211243", "timestamp":"2026-10-16T03:43:30.200183"},
+				{"name":"Ruhreinzugsgebiet-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"2492928", "timestamp":"2026-10-16T03:43:30.957190"},
+				{"name":"Ruhreinzugsgebiet-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"2313106", "timestamp":"2026-10-16T03:43:31.761198"},
+				{"name":"Ruhreinzugsgebiet-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"3902048", "timestamp":"2026-10-16T03:43:32.746207"},
+				{"name":"Ruhreinzugsgebiet-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"10362170", "timestamp":"2026-10-16T03:43:34.593224"},
+				{"name":"Ruhreinzugsgebiet-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"22768682", "timestamp":"2026-10-16T03:43:38.255257"},
+				{"name":"Ruhreinzugsgebiet-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"38609193", "timestamp":"2026-10-16T03:43:44.212312"},
+				{"name":"Ruhreinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"33112996", "timestamp":"2026-10-16T03:43:49.990365"}]
+		},
+		{ "name":"Rureinzugsgebiet_Wasserstaende_CSV",
+			"title":"Rureinzugsgebiet Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Rureinzugsgebiet-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"276024", "timestamp":"2026-10-16T03:43:51.059375"},
+				{"name":"Rureinzugsgebiet-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"765893", "timestamp":"2026-10-16T03:43:51.581380"},
+				{"name":"Rureinzugsgebiet-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"991850", "timestamp":"2026-10-16T03:43:52.139385"},
+				{"name":"Rureinzugsgebiet-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"2293967", "timestamp":"2026-10-16T03:43:52.910392"},
+				{"name":"Rureinzugsgebiet-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"11087174", "timestamp":"2026-10-16T03:43:54.845410"},
+				{"name":"Rureinzugsgebiet-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"18619225", "timestamp":"2026-10-16T03:43:57.863437"},
+				{"name":"Rureinzugsgebiet-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"19462150", "timestamp":"2026-10-16T03:44:01.210468"},
+				{"name":"Rureinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"20222118", "timestamp":"2026-10-16T03:44:04.634500"}]
+		},
+		{ "name":"Siegeinzugsgebiet-Oestl_Wasserstaende_CSV",
+			"title":"Siegeinzugsgebiet \u00d6stlich Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Siegeinzugsgebiet-Oestl-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"174998", "timestamp":"2026-10-16T03:44:05.534508"},
+				{"name":"Siegeinzugsgebiet-Oestl-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"282620", "timestamp":"2026-10-16T03:44:05.946512"},
+				{"name":"Siegeinzugsgebiet-Oestl-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"251632", "timestamp":"2026-10-16T03:44:06.410516"},
+				{"name":"Siegeinzugsgebiet-Oestl-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"389638", "timestamp":"2026-10-16T03:44:06.877520"},
+				{"name":"Siegeinzugsgebiet-Oestl-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"1634559", "timestamp":"2026-10-16T03:44:07.503526"},
+				{"name":"Siegeinzugsgebiet-Oestl-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"3844764", "timestamp":"2026-10-16T03:44:08.468535"},
+				{"name":"Siegeinzugsgebiet-Oestl-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"5024587", "timestamp":"2026-10-16T03:44:09.605545"},
+				{"name":"Siegeinzugsgebiet-Oestl-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"6538263", "timestamp":"2026-10-16T03:44:11.034558"}]
+		},
+		{ "name":"Siegeinzugsgebiet-Westl_Wasserstaende_CSV",
+			"title":"Siegeinzugsgebiet Westlich Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Siegeinzugsgebiet-Westl-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"648188", "timestamp":"2026-10-16T03:44:11.667564"},
+				{"name":"Siegeinzugsgebiet-Westl-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"806223", "timestamp":"2026-10-16T03:44:12.197569"},
+				{"name":"Siegeinzugsgebiet-Westl-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"1122705", "timestamp":"2026-10-16T03:44:12.784575"},
+				{"name":"Siegeinzugsgebiet-Westl-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"1342227", "timestamp":"2026-10-16T03:44:13.607582"},
+				{"name":"Siegeinzugsgebiet-Westl-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"3028530", "timestamp":"2026-10-16T03:44:14.476590"},
+				{"name":"Siegeinzugsgebiet-Westl-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"12476377", "timestamp":"2026-10-16T03:44:16.643610"},
+				{"name":"Siegeinzugsgebiet-Westl-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"14649337", "timestamp":"2026-10-16T03:44:24.214679"},
+				{"name":"Siegeinzugsgebiet-Westl-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"11686508", "timestamp":"2026-10-16T03:44:27.360708"}]
+		},
+		{ "name":"Weserzufluesse_Wasserstaende_CSV",
+			"title":"Weserzufl\u00fcsse Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Weserzufluesse-NRW-W_1950-1959_EPSG25832_CSV.zip", "size":"262351", "timestamp":"2026-10-16T03:44:28.084715"},
+				{"name":"Weserzufluesse-NRW-W_1960-1969_EPSG25832_CSV.zip", "size":"532071", "timestamp":"2026-10-16T03:44:28.527719"},
+				{"name":"Weserzufluesse-NRW-W_1970-1979_EPSG25832_CSV.zip", "size":"728410", "timestamp":"2026-10-16T03:44:29.051724"},
+				{"name":"Weserzufluesse-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"2509165", "timestamp":"2026-10-16T03:44:29.791731"},
+				{"name":"Weserzufluesse-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"5644600", "timestamp":"2026-10-16T03:44:31.030742"},
+				{"name":"Weserzufluesse-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"16200060", "timestamp":"2026-10-16T03:44:33.660766"},
+				{"name":"Weserzufluesse-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"20600947", "timestamp":"2026-10-16T03:44:36.988797"},
+				{"name":"Weserzufluesse-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"32453726", "timestamp":"2026-10-16T03:44:41.966842"}]
+		},
+		{ "name":"Wuppereinzugsgebiet_Wasserstaende_CSV",
+			"title":"Wuppereinzugsgebiet Wasserst\u00e4nde NRW als CSV","files": [
+				{"name":"Wuppereinzugsgebiet-NRW-W_1980-1989_EPSG25832_CSV.zip", "size":"804295", "timestamp":"2026-10-16T03:44:43.111853"},
+				{"name":"Wuppereinzugsgebiet-NRW-W_1990-1999_EPSG25832_CSV.zip", "size":"2109552", "timestamp":"2026-10-16T03:44:43.815860"},
+				{"name":"Wuppereinzugsgebiet-NRW-W_2000-2009_EPSG25832_CSV.zip", "size":"6634173", "timestamp":"2026-10-16T03:44:45.189872"},
+				{"name":"Wuppereinzugsgebiet-NRW-W_2010-2019_EPSG25832_CSV.zip", "size":"7645047", "timestamp":"2026-10-16T03:44:46.730886"},
+				{"name":"Wuppereinzugsgebiet-NRW-W_2020-2029_EPSG25832_CSV.zip", "size":"10741332", "timestamp":"2026-10-16T03:44:48.775905"}]
+		}
+	]
+}

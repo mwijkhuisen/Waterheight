@@ -58,7 +58,8 @@ export const BASELINE: Readonly<Record<string, { audience: Audience; licence_kin
   'BE-4': { audience: 'off', licence_kind: 'cc-by' },
   'BE-5': { audience: 'off', licence_kind: null },
   'FR-1': { audience: 'public', licence_kind: 'etalab-2.0' },
-  'FR-2': { audience: 'off', licence_kind: 'etalab-2.0' },
+  // FR-2 and CH-9 were off for scheduling, not licence; P14b makes them public for history (CODEOWNERS review).
+  'FR-2': { audience: 'public', licence_kind: 'etalab-2.0' },
   'FR-3': { audience: 'public', licence_kind: 'etalab-2.0' },
   'FR-4': { audience: 'public', licence_kind: 'etalab-2.0' },
   'FR-5': { audience: 'public', licence_kind: 'etalab-2.0' },
@@ -78,7 +79,7 @@ export const BASELINE: Readonly<Record<string, { audience: Audience; licence_kin
   'CH-6': { audience: 'off', licence_kind: 'ch-open-use' },
   'CH-7': { audience: 'off', licence_kind: 'ch-open-use' },
   'CH-8': { audience: 'off', licence_kind: 'ch-open-use' },
-  'CH-9': { audience: 'off', licence_kind: 'ch-open-use' },
+  'CH-9': { audience: 'public', licence_kind: 'ch-open-use' },
   'CH-10': { audience: 'off', licence_kind: 'unlicensed' },
   'CH-11': { audience: 'off', licence_kind: null },
   'CANARY-OWNER': { audience: 'owner', licence_kind: null },

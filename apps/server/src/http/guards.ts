@@ -99,6 +99,9 @@ export type ZipOptions = {
   /** Allowed member names; the default refuses any `/`. */
   names: (name: string) => boolean;
   maxMembers?: number;
+  /** P14b: a spec's own caps above the §6.7 defaults (ZIP_MAX_TOTAL, ZIP_MAX_RATIO), each with a justification there. */
+  maxTotal?: number;
+  maxRatio?: number;
   /** Receives each member's inflated bytes; nothing is ever written to disk. */
   onMember?: (name: string) => { data: (chunk: Uint8Array) => void; end: () => void } | undefined;
 };
@@ -117,6 +120,8 @@ const UNSAFE_NAME = /(^[/\\])|\\|(^|\/)\.\.(\/|$)|\0|^[A-Za-z]:/;
  */
 export async function checkZip(buf: Buffer, opts: ZipOptions): Promise<ZipMember[]> {
   const maxMembers = opts.maxMembers ?? ZIP_MAX_MEMBERS;
+  const maxTotal = opts.maxTotal ?? ZIP_MAX_TOTAL;
+  const maxRatio = opts.maxRatio ?? ZIP_MAX_RATIO;
   let eocd = -1;
   for (let p = buf.length - 22; p >= Math.max(0, buf.length - 22 - 65_535); p -= 1) {
     if (buf.readUInt32LE(p) === 0x06054b50) {
@@ -167,13 +172,13 @@ export async function checkZip(buf: Buffer, opts: ZipOptions): Promise<ZipMember
     if (compressed === 0xffffffff || size === 0xffffffff || local === 0xffffffff) fail('zip64');
     if (UNSAFE_NAME.test(name) || !opts.names(name)) fail('zip_name');
     if (entries.some((e) => e.name === name)) fail('zip_name');
-    if (size > (compressed === 0 ? 0 : compressed * ZIP_MAX_RATIO)) fail('zip_ratio');
+    if (size > (compressed === 0 ? 0 : compressed * maxRatio)) fail('zip_ratio');
     total += size;
     compressedTotal += compressed;
     entries.push({ name, size, compressed, method, crc, local, start: 0, raw });
   }
-  if (total > ZIP_MAX_TOTAL) fail('zip_total');
-  if (total > compressedTotal * ZIP_MAX_RATIO) fail('zip_ratio');
+  if (total > maxTotal) fail('zip_total');
+  if (total > compressedTotal * maxRatio) fail('zip_ratio');
 
   // Local headers must match the central directory, and member data must not overlap.
   for (const e of entries) {
@@ -200,7 +205,7 @@ export async function checkZip(buf: Buffer, opts: ZipOptions): Promise<ZipMember
       out += chunk.length;
       inflatedTotal += chunk.length;
       if (out > e.size) fail('zip_size');
-      if (inflatedTotal > ZIP_MAX_TOTAL) fail('zip_total');
+      if (inflatedTotal > maxTotal) fail('zip_total');
       crc = crc32(chunk, crc);
       sink?.data(chunk);
     };

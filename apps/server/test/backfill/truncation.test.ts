@@ -87,7 +87,8 @@ describe('a truncated chunk (review C3)', () => {
 
   it('halves the chunk at the cursor down to a day, then fails truncated: nothing committed, every request counted', async () => {
     const { job, t, periods } = await run((c) => (c.check ? normal(c) : { status: 200, body: withValues(9500) }));
-    expect(periods).toEqual([40, 20, 10, 5, 2.5, 1.25, 1]);
+    // P14b: halves are whole days (a provider that asks by UTC day would miss a boundary at noon).
+    expect(periods).toEqual([40, 20, 10, 5, 3, 2, 1]);
     expect(job).toMatchObject({ status: 'failed', last_error: 'truncated', chunks_done: 0, requests: 8 });
     expect(job?.cursor_ts.toISOString()).toBe('2026-01-01T00:00:00.000Z');
     expect(t.lines()).toHaveLength(0);
