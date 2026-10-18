@@ -1,0 +1,26 @@
+# Our own statistics from the stored history (P14f, issue #29; ClimatologyConfig in packages/contracts/src/registry.ts).
+# Read by `main.js climatology` and `main.js travel-times`, by scripts/gen-classification.ts (docs/classification.md
+# prints N and the window) and by the tests. The pure functions of packages/core take these as arguments.
+#   min_years       N: a series gets a day-of-year set only with at least this many complete UTC years (owner
+#                   2026-10-18: 10; a ±15-day window then pools 310 daily means per day key)
+#   window_days     the window around each day of the year, each side (31 days a year with 15)
+#   min_day_hours   a complete UTC day has a sample in at least this many of its 24 hours
+#   min_year_share  a complete UTC year has at least this share of complete days
+#   percentiles     computed per day key; P10 and P90 are stored (P10_DOY, P90_DOY), P50 is computed and tested only
+#   travel          the empirical travel times (catalogue §3.7): windows of window_h hours stepped by step_h, a
+#                   centred smooth_h rolling mean, first differences, Pearson r of at least r_min at an interior lag
+#                   from min_lag_h to max_lag_h, at least min_windows windows per flow class
+version: 1
+min_years: 10
+window_days: 15
+min_day_hours: 20
+min_year_share: 0.9
+percentiles: [10, 50, 90]
+travel:
+  window_h: 336
+  step_h: 168
+  smooth_h: 6
+  r_min: 0.5
+  min_windows: 6
+  max_lag_h: 96
+  min_lag_h: 1

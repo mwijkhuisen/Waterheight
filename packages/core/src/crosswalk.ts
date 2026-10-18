@@ -229,9 +229,12 @@ export function levelOf(source: string, scale: string, code: string): 1 | 2 | 3 
  *   that level), as LHP 0 or BAFU 1 are;
  * - `stats`: statistics, not warnings; `normal` only between a low bound and an `elevated` bound (MNW < W < MHW);
  * - `percentile`: SPW long-term percentiles (D18 addendum): at or below the low bound `low`, otherwise `normal`,
- *   never an alert level.
+ *   never an alert level;
+ * - `doy`: our own day-of-year climatology of the series (P14f, D18 extension of 2026-10-18), "open upward": at or
+ *   below P10_DOY `low`, between `normal`, at or above P90_DOY `elevated` (unusual for the date, never a warning);
+ *   it never yields high or extreme and never caps a later candidate.
  */
-export type SetForm = 'scale' | 'stats' | 'percentile';
+export type SetForm = 'scale' | 'stats' | 'percentile' | 'doy';
 
 /**
  * How one reference kind takes part: a value at or above (`>=`), at or below (`<=`) or below (`<`) it reaches the
@@ -239,6 +242,7 @@ export type SetForm = 'scale' | 'stats' | 'percentile';
  * row must carry: a stored row with the other one is not this reference (C31: SPW non-exceedance, HIC exceedance).
  */
 export type ReferenceRole = {
+  /** The source whose rows take this role; `'*'` (the DOY roles) is any source: the row's own `source_id`. */
   source: string;
   kind: string;
   op: '>=' | '<=' | '<' | null;
@@ -375,13 +379,33 @@ export const REFERENCE_ROLES: readonly ReferenceRole[] = [
   ref('DE-10', 'HW20', '>=', 'extreme', 'statistical', 'stats', 'HW20', GATED),
   ref('DE-10', 'HW50', '>=', 'extreme', 'statistical', 'stats', 'HW50', GATED),
   ref('DE-10', 'HW100', '>=', 'extreme', 'statistical', 'stats', 'HW100', GATED),
+  // Our day-of-year climatology (P14f): rows of any source (the series' own `source_id`, so its audience applies),
+  // computed from that series' history by the climatology command; non-exceedance by construction. The basis
+  // follows the series (level or discharge), as for every set.
+  ref('*', 'P10_DOY', '<=', 'low', 'statistical', 'doy', 'DOY P10', {
+    convention: 'non_exceedance',
+    flag: 'our day-of-year climatology (P14f): at or below P10 of the date is low',
+  }),
+  ref('*', 'P90_DOY', '>=', 'elevated', 'statistical', 'doy', 'DOY P90', {
+    convention: 'non_exceedance',
+    flag: 'our day-of-year climatology (P14f): at or above P90 of the date is elevated (unusual for the date, never a warning)',
+  }),
 ];
+
+/** The stored kinds of our day-of-year climatology (P14f): P50 is computed and tested, never stored (plan §1b). */
+export const DOY_KINDS = ['P10_DOY', 'P90_DOY'] as const;
 
 const ROLE_BY_KIND = new Map(REFERENCE_ROLES.map((r) => [`${r.source}\n${r.kind}`, r]));
 
-/** The role of a stored reference kind (FR-5's CRUE_<hash> rows are CRUE). */
+/**
+ * The role of a stored reference kind (FR-5's CRUE_<hash> rows are CRUE); a kind no source-specific role names
+ * falls back to the any-source role (`'*'`: the DOY kinds).
+ */
 export function referenceRole(source: string, kind: string): ReferenceRole | undefined {
-  return ROLE_BY_KIND.get(`${source}\n${source === 'FR-5' && kind.startsWith('CRUE_') ? 'CRUE' : kind}`);
+  return (
+    ROLE_BY_KIND.get(`${source}\n${source === 'FR-5' && kind.startsWith('CRUE_') ? 'CRUE' : kind}`) ??
+    ROLE_BY_KIND.get(`*\n${kind}`)
+  );
 }
 
 /** The agency named in a basis label. */

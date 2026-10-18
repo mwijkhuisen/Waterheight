@@ -1,3 +1,4 @@
+import { utcMonthDay } from './climatology.ts';
 import {
   AGENCY,
   AREA_SCALE,
@@ -20,8 +21,9 @@ import { inSeason, monthDay } from './season.ts';
 // < extreme`, with the basis it was taken from. No I/O: the server reads the rows valid at t through one view family
 // and hands them in. The rules are written out in docs/classification.md (generated from crosswalk.ts):
 // - every source of evidence gives an interval on low..extreme and, where it decides, a point level;
-// - candidates are taken in the priority operational > statistical > provider class, and within operational the
-//   agency's gauge class before its thresholds; each narrows the interval when it agrees with it and is skipped
+// - candidates are taken in the priority operational > statistical > provider class, within operational the
+//   agency's gauge class before its thresholds, and within statistical the providers' statistics before our own
+//   day-of-year climatology (P14f, owner 2026-10-18); each narrows the interval when it agrees with it and is skipped
 //   when it does not (the higher priority wins);
 // - the state is the interval when one level is left, else the first point inside it, else no_ref: a station
 //   without a deciding reference is never given a guess (no neighbour, default or interpolated threshold);
@@ -210,6 +212,30 @@ function setCandidate(
 
 export { inSeason, monthDay };
 
+/**
+ * The candidate of our day-of-year climatology (P14f, plan §1a.3): the series' P10_DOY and P90_DOY rows of the UTC
+ * day key of t (29 February uses 0228), "open upward": at or below P10 [low, low], between [normal, extreme] with
+ * the point normal, at or above P90 [elevated, extreme] with the point elevated. It never yields high or extreme
+ * and never caps a later candidate, so an NL-4 high class still shows above it. A key without exactly one row of
+ * each kind, or with P10 >= P90, decides nothing. The label names no agency: the statistic is ours, computed from
+ * the history of the row's own source, which is the basis source (never the role's `'*'`).
+ */
+function doyCandidate(used: readonly Used[], v: number, measure: Measure, skipLow: boolean): Cand | null {
+  const p10 = used.filter((u) => u.role.kind === 'P10_DOY');
+  const p90 = used.filter((u) => u.role.kind === 'P90_DOY');
+  if (p10.length !== 1 || p90.length !== 1) return null;
+  const [lo10, hi90] = [(p10[0] as Used).ref, (p90[0] as Used).ref];
+  if (lo10.value >= hi90.value) return null;
+  const source = lo10.source;
+  const label = `DOY P10/P90${years(lo10.period ?? hi90.period)}`;
+  const basis = (ref: string): BasisOut => ({ source, kind: 'statistical', measure, ref, label });
+  if (v >= hi90.value) return { group: 'statistical', lo: 3, hi: 5, point: 3, basis: basis('P90_DOY') };
+  // An impounded stage has no statistical low bound (as for the providers' sets): below P90 it decides nothing.
+  if (skipLow) return null;
+  if (v <= lo10.value) return { group: 'statistical', lo: 1, hi: 1, point: 1, basis: basis('P10_DOY') };
+  return { group: 'statistical', lo: 2, hi: 5, point: 2, basis: basis('P10_DOY/P90_DOY') };
+}
+
 /** The NL-4 stem of a workbook label: the label without its bracketed bound (cut at the first `(`). */
 export const nl4Stem = (label: string) => {
   const i = label.indexOf('(');
@@ -301,24 +327,34 @@ export function classify(s: SeriesIn, family: Family): Classified {
   }
   if (s.value !== null) {
     const v = s.value;
+    const md = utcMonthDay(s.t);
     const sets = new Map<string, Used[]>();
     for (const r of refs) {
       const role = referenceRole(r.source, r.kind);
       if (role === undefined || role.op === null || role.group === null) continue;
       if (role.convention !== undefined && r.convention !== role.convention) continue;
-      const key = `${role.group}\n${r.source}`;
+      // A DOY row holds for its own day key only (the server passes only that day's rows; defensive).
+      if (role.form === 'doy' && r.seasonFrom !== md) continue;
+      // One set per (group, source), sorted by this key: within a group the sources in alphabetical order, and a
+      // source's DOY set ("1") after every provider set ("0") of the group (P14f: provider statistics first).
+      const key = `${role.group}\n${role.form === 'doy' ? 1 : 0}\n${r.source}`;
       sets.set(key, [...(sets.get(key) ?? []), { role, ref: r }]);
     }
     const skipLow = s.impounded && s.valueKind === 'stage';
     for (const [key, used] of [...sets].sort(([a], [b]) => (a < b ? -1 : 1))) {
-      const c = setCandidate(used, refs, v, measure, skipLow && key.startsWith('statistical'));
+      const low = skipLow && key.startsWith('statistical');
+      const c =
+        (used[0] as Used).role.form === 'doy'
+          ? doyCandidate(used, v, measure, low)
+          : setCandidate(used, refs, v, measure, low);
       if (c) cands.push(c);
     }
     const nl4 = nl4Candidate(refs, v, s.t, measure);
     if (nl4) cands.push(nl4);
   }
-  // Operational classes, then operational reference sets (the order they were pushed in), then statistics, then
-  // display classes. D12: a tidal reach is classed from operational sources only.
+  // Operational classes, then operational reference sets, then the statistical sets, then display classes (the
+  // order they were pushed in: inside a group the reference sets by source in alphabetical order, our DOY sets
+  // last, and the NL-4 class at the end). D12: a tidal reach is classed from operational sources only.
   const ordered = ORDER.flatMap((g) => cands.filter((c) => c.group === g)).filter(
     (c) => !s.tidal || c.group === 'operational',
   );

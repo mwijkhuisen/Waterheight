@@ -4,6 +4,7 @@ import {
   type Case,
   chCase,
   classified,
+  type DoyAt,
   de1Case,
   de7Case,
   frCase,
@@ -12,6 +13,7 @@ import {
   nl1Case,
   nl1WfsCase,
   vigilance,
+  withDoy,
 } from './inputs.ts';
 
 // Golden states of about 30 real public stations (PHASES P7b): the rows are produced by the real adapters from the
@@ -19,12 +21,14 @@ import {
 // pure classifier as the public family, `fresh: true` everywhere (the golden is about the mapping, not about capture
 // health) and t = the value's own timestamp. The recordings are of 2026-09-29/30, a low-water period: states are low,
 // normal or no_ref; the flood levels are in flood.test.ts. `UPDATE_GOLDEN=1` rewrites the golden file; a change of it
-// is reviewed like code.
+// is reviewed like code. The entries with `doy` (key `…#doy`) are the same recordings with a synthetic day-of-year
+// set beside the real rows (P14f, `withDoy`): each pairs with its plain entry, so the golden shows what the DOY set
+// changes and what it does not (provider statistics first, operational classes above it, NL-4 below, tidal).
 
 const GOLDEN = new URL('./golden-states.golden.json', import.meta.url);
 const FR5 = vigilance('fr-5-vigilance');
 
-type Spec = { why: string; build: () => Case | Promise<Case> };
+type Spec = { why: string; build: () => Case | Promise<Case>; doy?: DoyAt };
 const SPECS: Spec[] = [
   // DE-1 on the Rhine: MNW/MHW/HSW of the meta payload plus the LHP station class.
   { why: 'Kaub: 1 cm under MNW 65 is low, LHP RP:0 says only "not elevated"', build: () => de1Case('de.wsv.25700100') },
@@ -143,15 +147,63 @@ const SPECS: Spec[] = [
     why: 'Mersch: the Alzette, inside the zone Sud but no LU-Alert zone was active on 2026-09-29',
     build: () => lu1Case('lu.age.mersch'),
   },
+  // P14f: a synthetic day-of-year set beside the real rows (the value at P10 or below, inside, at P90 or above).
+  {
+    why: 'Lobith H + DOY inside: the NL-4 "Verlaagd" class below the DOY normal collapses to normal (DOY basis)',
+    build: () => nl1Case('nl.rws.lobith.bovenrijn.tolkamer'),
+    doy: 'normal',
+  },
+  {
+    why: 'Lobith Q + DOY at or under P10: low, now named by the DOY set, which ranks above NL-4',
+    build: () => nl1Case('nl.rws.lobith.bovenrijn.tolkamer', 'Q'),
+    doy: 'low',
+  },
+  {
+    why: 'Eijsden grens H + DOY at or over P90: NL-4 "Normaal" below it, elevated (unusual for the date)',
+    build: () => nl1Case('nl.rws.eijsden.grens'),
+    doy: 'elevated',
+  },
+  {
+    why: 'Delfzijl + DOY over P90: a tidal station is classed from operational sources only: still no_ref',
+    build: () => nl1WfsCase('nl.rws.delfzijl'),
+    doy: 'elevated',
+  },
+  {
+    why: 'Kaub + DOY inside: under MNW stays low, the provider statistic first',
+    build: () => de1Case('de.wsv.25700100'),
+    doy: 'normal',
+  },
+  {
+    why: 'Raunheim + DOY over P90: LHP HE:0 and MNW/MHW say normal, the DOY set is outranked: normal',
+    build: () => de1Case('de.wsv.24900108'),
+    doy: 'elevated',
+  },
+  {
+    why: 'Grevenmacher UP + DOY inside: HSW alone decides nothing, the DOY set refines below it: normal',
+    build: () => de1Case('de.wsv.26100200'),
+    doy: 'normal',
+  },
+  {
+    why: 'Wasserbillig + DOY inside: an impounded stage has no statistical low, below P90 nothing decides',
+    build: () => lu1Case('lu.age.wasserbillig'),
+    doy: 'normal',
+  },
+  {
+    why: 'Lauterbourg H + DOY under P10: a gauge state now exists, so the section is returned beside it',
+    build: () => frCase('fr.sandre.A302009050', 'H', FR5),
+    doy: 'low',
+  },
 ];
 
 const entries = await Promise.all(
   SPECS.map(async (s) => {
-    const c = await s.build();
+    const plain = await s.build();
+    const c = s.doy === undefined ? plain : withDoy(plain, s.doy);
     const out = classified(c);
     return {
       why: s.why,
       entry: {
+        ...(s.doy === undefined ? {} : { doy: s.doy }),
         station: c.row.id,
         series: c.row.quantity,
         source: c.row.source,
@@ -167,7 +219,8 @@ const entries = await Promise.all(
     };
   }),
 );
-const key = (e: { station: string; series: string }) => `${e.station}#${e.series}`;
+const key = (e: { station: string; series: string; doy?: string }) =>
+  `${e.station}#${e.series}${e.doy === undefined ? '' : '#doy'}`;
 const actual = Object.fromEntries(entries.map((e) => [key(e.entry), e.entry]));
 
 function golden(): typeof actual {
@@ -209,5 +262,24 @@ describe('golden states of real public stations', () => {
     expect(at('de.wsv.3790010#H')).toMatchObject({ state: 'no_ref', flags: { tidal: true } });
     expect(at('fr.sandre.A302009050#H')).toMatchObject({ state: 'normal', section: true });
     expect(at('fr.sandre.E131000202#H')).toMatchObject({ state: 'no_ref', section: false });
+  });
+
+  it('the DOY cases (P14f): each pairs with its plain entry, and the headline changes', () => {
+    const at = (k: string) => actual[k];
+    const doy = Object.keys(actual).filter((k) => k.endsWith('#doy'));
+    expect(doy.length).toBeGreaterThanOrEqual(8);
+    for (const k of doy) expect(at(k)).toMatchObject({ value: at(k.slice(0, -4))?.value, t: at(k.slice(0, -4))?.t });
+    const label = 'DOY P10/P90 1991–2000';
+    // NL-4 low inside P10–P90 collapses to normal; NL-4 normal above P90 is elevated (the DOY set ranks above NL-4)
+    expect(at('nl.rws.lobith.bovenrijn.tolkamer#H#doy')).toMatchObject({ state: 'normal', basis: { label } });
+    expect(at('nl.rws.eijsden.grens#H#doy')).toMatchObject({
+      state: 'elevated',
+      basis: { source: 'NL-1', kind: 'statistical', measure: 'level', ref: 'P90_DOY', label },
+    });
+    // provider statistics and classes first; tidal and impounded unchanged
+    expect(at('de.wsv.24900108#H#doy')).toEqual({ ...at('de.wsv.24900108#H'), doy: 'elevated' });
+    expect(at('de.wsv.25700100#H#doy')).toEqual({ ...at('de.wsv.25700100#H'), doy: 'normal' });
+    expect(at('nl.rws.delfzijl#H#doy')).toMatchObject({ state: 'no_ref' });
+    expect(at('lu.age.wasserbillig#H#doy')).toMatchObject({ state: 'no_ref' });
   });
 });

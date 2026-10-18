@@ -13,6 +13,7 @@ export type MethodClass = {
 };
 
 export type MethodReference = {
+  /** '*': our own day-of-year climatology, of any source (the series' own). */
   source: string;
   kind: string;
   /** A value at or above, at or below, or below the reference reaches the level; null: shown, never classifies. */
@@ -20,7 +21,7 @@ export type MethodReference = {
   level: 'low' | 'normal' | 'elevated' | 'high' | 'extreme' | null;
   basis: 'stage' | 'discharge' | 'area';
   group: 'operational' | 'statistical' | null;
-  form: 'scale' | 'stats' | 'percentile' | null;
+  form: 'scale' | 'stats' | 'percentile' | 'doy' | null;
   short: string;
 };
 
@@ -851,6 +852,26 @@ export const METHOD_REFERENCES: readonly MethodReference[] = [
     group: null,
     form: null,
     short: 'crue historique',
+  },
+  {
+    source: '*',
+    kind: 'P10_DOY',
+    op: '<=',
+    level: 'low',
+    basis: 'stage',
+    group: 'statistical',
+    form: 'doy',
+    short: 'DOY P10',
+  },
+  {
+    source: '*',
+    kind: 'P90_DOY',
+    op: '>=',
+    level: 'elevated',
+    basis: 'stage',
+    group: 'statistical',
+    form: 'doy',
+    short: 'DOY P90',
   },
 ];
 
