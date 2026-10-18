@@ -78,7 +78,7 @@ export const River = z.strictObject({
 export type River = z.infer<typeof River>;
 
 /** The water-body ids a mouth may name until P17b's water-body file (registry/waterbodies.yaml) replaces this list. */
-export const PENDING_WATERBODY_IDS = ['eems-dollard', 'ketelmeer', 'noordzee', 'zwarte-meer'] as const;
+export const PENDING_WATERBODY_IDS = ['eems-dollard', 'ketelmeer', 'noordzee', 'westerschelde', 'zwarte-meer'] as const;
 
 /**
  * Where a river ends in the sea or a lake (P17a): the node of the river's own edges nearest to `at`, at most `max_m`

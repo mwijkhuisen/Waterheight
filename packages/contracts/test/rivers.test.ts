@@ -119,7 +119,7 @@ describe('rivers.yaml kind, tidal zone, member-of selection and mouths (P17a)', 
 
   it('accepts kind, tidal_zone, osm_member_of and mouths, all optional', () => {
     expect(problems(p17a())).toBe('');
-    expect(PENDING_WATERBODY_IDS).toEqual(['eems-dollard', 'ketelmeer', 'noordzee', 'zwarte-meer']);
+    expect(PENDING_WATERBODY_IDS).toEqual(['eems-dollard', 'ketelmeer', 'noordzee', 'westerschelde', 'zwarte-meer']);
   });
 
   it('fails each mutation with its own problem', () => {
