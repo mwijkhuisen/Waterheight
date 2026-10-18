@@ -4,6 +4,24 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## P17a delta and canals on the river graph (#65)
+
+What P17a leaves (`PHASES.md` §54, ADR-0012 amendment).
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-407 | tidal | **The tidal limits are working bounds, and the zone is whole channels.** The limits of the Lek, Waal and Maas are not measured; a channel is in the zone entirely or not at all (Het Scheur sits outside it with a `tidal` flag). | [U] A reviewed per-channel limit when a source gives one (P17b, P19) | open |
+| KG-408 | data | **Canals without ID evidence are deferred.** No Wikidata item with P402 or P403 for any label tried (lookup 2026-10-18): Lekkanaal, Lateraalkanaal (and West), Noordervaart, Ommerkanaal, Hoogeveense Vaart, Reevediep, Slochterdiep, Verbindingskanaal (Borgsweer), Van Starkenborghkanaal, Johan Frisokanaal, Beatrixkanaal, Zijkanaal Almelo, Mauriksche Wetering and Bathse Spuikanaal. The Oude Eemskanaal (Q34734769) and the Prinses Margrietkanaal (Q661647) joined them after the first extract: no relation or QID-tagged way carries them, and a name-only selection is refused. | Each enters with evidence, in a reviewed PR (P17b or later) | open |
+| KG-409 | data | **Groningen and Frisian canal and boezem gauges stay unmapped** (groningen, eibersburen, terherne.*, burgum.*boezem, lemmer.*stroomkanaal). | P17b (water bodies and the override table) | open |
+| KG-410 | scope | **The regulated Brabant brooks wait for P21.** Gender, Goorloop, Biezenloop, Schijndelse Loop, Donkersvoortse Loop, Beekse Waterloop, Gulden Aa and the Brabantse Aa codes belong to water-board feeds. | P21 (#69) | open |
+| KG-411 | design | **No regulated canal direction.** Every canal is `direction: none` (none is documented). A field for a documented direction is added when evidence exists. | Evidence for a canal, then a reviewed contract change | open |
+| KG-412 | design | **`km_graph` inside the tidal zone is bookkeeping, not a chainage.** `topoOrder` releases a stalled node through a `none` link and `kmGraph` skips back links; the numbers are stable but mean nothing along a loop. Tarjan SCC is the upgrade. Likewise a zone reach's `upstream` and `downstream` follow the drawn direction and may form a loop (`hollandse-ijssel.1` and `.7` name each other); the web's chain, Hovmöller and neighbour walks keep seen-sets and caps, and the flow-tile direction test skips the zone. | Only if a feature reads zone chainage or walks the zone by direction | accepted |
+| KG-413 | design | **The mouths' water bodies are placeholders.** `mouths` name `PENDING_WATERBODY_IDS` (eems-dollard, ketelmeer, noordzee, westerschelde, zwarte-meer). The six resolve on the fixture (`max_m` 200). Two are short of the sea [U]: the Haringvliet's is the river's own last node, and OSM's Rhine runs 3.8 km on as the Deltageul (two rhine-only, directed edges) to the sluices at Stellendam; the Scheldt relation ends at the head of the Westerschelde, so its mouth names `westerschelde` | P17b replaces the list with `registry/waterbodies.yaml` | open |
+| KG-414 | provider | **`kanne` stays open** (catalogue §10 R9). | Owner decision on the catalogue entry | open |
+| KG-415 | design | **A canal cannot take `joins`, `flags` or a station override `river:` until P17b.** `place()` has no canal edges, so such an entry fails there. | P17b (canal stations and water bodies) | open |
+| KG-417 | data | **The Spui is a dead end.** It ends at two unregistered tidal channels of the Rhine relation (Beningen, Q13438616; Droogte voor de Hoorn), 3.5 km short of the nearest Haringvliet node, past the 2 km cap of a `joins` entry. No criterion path needs it. | A connector row with ID evidence (a second Wikidata lookup), P17b | open |
+| KG-416 | data | **Hollandse IJssel or Hollandsche IJssel.** The id is `hollandse-ijssel` (Wikidata nl label); the older spelling is an alias, and provider strings use either. | Check provider spellings when P17b maps gauges | open |
+
 ## P14b open archives DE-8, FR-2 and CH-9 (#29)
 
 What P14b leaves (`PHASES.md` §55, `docs/runbooks/backfill.md` §8). KG-355 is closed.
