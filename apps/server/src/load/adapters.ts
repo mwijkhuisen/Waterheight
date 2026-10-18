@@ -60,6 +60,7 @@ import {
   normalise as normaliseNl1,
   normaliseForecast as normaliseNl1Forecast,
   normaliseTide as normaliseNl1Tide,
+  normaliseTideType as normaliseNl1TideType,
   type TideKind,
 } from '../adapters/nl-1/normalise.ts';
 import {
@@ -405,6 +406,22 @@ const nl1Tide = (kind: TideKind, caps: WaarnemingenCaps, maxBytes: number): Spec
 });
 
 /**
+ * #174: `nl-1-hwlw-astro` asks, per location, the GETETTPE type series (RWS's own high/low labels: `tideLabels`) and
+ * then the heights (`tide`). One parse; the first list's Typering picks the normaliser, and each normaliser checks
+ * every list, so a payload that mixes the two drifts (`tide_typering` / `tide_process`).
+ */
+const nl1HwlwAstro: SpecLoader = {
+  maxBytes: 2 * MIB,
+  needsVariant: false,
+  run: (b, c) => {
+    const lists = parseWaarnemingen(b, TIDE_CAPS);
+    return lists[0]?.aquo.Typering.Code === 'GETETTPE'
+      ? normaliseNl1TideType(lists, c)
+      : normaliseNl1Tide(lists, c, 'extreme_astro');
+  },
+};
+
+/**
  * P16b: one catch-up window (nl-1-obs-{sea,wide,slow}-catchup: DATA_EPOCH to the seed's start, one request per row) of
  * a live series: the observation loader in live mode with no age limit (a window can reach more than 45 days back),
  * the future check kept, and every row before DATA_EPOCH dropped as `before_epoch` (the P14a backfill owns that past).
@@ -478,7 +495,7 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
       'nl-1-obs-wide': nl1Observations,
       'nl-1-obs-slow': nl1Observations,
       'nl-1-hwlw': nl1Tide('extreme', TIDE_CAPS, 2 * MIB),
-      'nl-1-hwlw-astro': nl1Tide('extreme_astro', TIDE_CAPS, 2 * MIB),
+      'nl-1-hwlw-astro': nl1HwlwAstro,
       'nl-1-astro': nl1Tide('astro', ASTRO_CAPS, 25 * MIB),
       'nl-1-obs-sea-catchup': nl1Catchup,
       'nl-1-obs-wide-catchup': nl1Catchup,

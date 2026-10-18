@@ -37,17 +37,20 @@ import {
   applyFetchHealth,
   applyGaugeZeros,
   applyTide,
+  applyTideLabels,
   type BatchInput,
   clearAttempt,
   closeBatch,
   cursors,
   emptyFold,
   type FetchFold,
+  labelTide,
   lock,
   openBatch,
   ownerSources,
   previousLoad,
   type ResolvedTide,
+  type ResolvedTideLabel,
   readAttempt,
   type SeriesRow,
   seriesOf,
@@ -147,6 +150,11 @@ export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
  * a staged group that its combiner refused; `run_mismatch` and `step_mismatch`, a complete LU-3 group whose files
  * disagree on their times or are not one hour apart (the whole run is withheld, as for an incomplete one).
  * P16b: `hwlw_unlabelled`, a list of high and low waters the adapter cannot label (nothing of it is stored).
+ * #174: `hwlw_unlabelled` is also an astronomical extreme that has neither RWS's label (`tide_label`) nor a strict
+ * alternation label (counted by the pipeline in `commit`, nothing stored); `hwlw_type_unknown`, a value of the GETETTPE
+ * type series that is neither `hoogwater` nor `laagwater` (never stored or logged). `hwlw_type_conflict` (RWS's label and
+ * the alternation label of a row differ) is NOT here: the row is stored with RWS's label, so a replay would load
+ * nothing more; it is counted in `dropped` and alerted once per payload, outside the RETAINED loop.
  */
 export const RETAINED = [
   'unit_mismatch',
@@ -168,6 +176,7 @@ export const RETAINED = [
   'run_mismatch',
   'step_mismatch',
   'hwlw_unlabelled',
+  'hwlw_type_unknown',
 ] as const;
 
 const FLOOR_MS = Date.parse(DATA_FLOOR);
@@ -831,6 +840,16 @@ export class Loader {
       else if (s.role !== 'primary') result.dropped.tide_not_primary = (result.dropped.tide_not_primary ?? 0) + 1;
       else tide.push({ ...r, id: s.id, counted: s.sameAudience });
     }
+    // #174: RWS's own labels of the astronomical extremes resolve like the tide rows (they share the unknown set: a
+    // heights and a type list of one key are one unknown key).
+    const tideLabels: ResolvedTideLabel[] = [];
+    for (const r of result.tideLabels ?? []) {
+      const s = registry.get(r.series);
+      if (s === undefined) tideUnknown.add(r.series);
+      else if (s.off) continue;
+      else if (s.role !== 'primary') result.dropped.tide_not_primary = (result.dropped.tide_not_primary ?? 0) + 1;
+      else tideLabels.push({ ...r, id: s.id, counted: s.sameAudience });
+    }
     const headDrops = forecastDecl(line.source)?.headDrops ?? false;
     const points = (runs: readonly ResolvedRun[]) => runs.reduce((n, r) => n + r.run.points.length, 0);
     const classes = result.classes ?? [];
@@ -846,7 +865,8 @@ export class Loader {
       refs.filter((r) => r.counted).length +
       warningRows +
       points(forecasts) +
-      tide.filter((r) => r.counted).length;
+      tide.filter((r) => r.counted).length +
+      tideLabels.filter((r) => r.counted).length;
     let n_rows = n_rows_base;
     // Values a registry or parser change could still load: the pruner keeps this object until a replay stores them.
     const n_skipped_base =
@@ -923,7 +943,14 @@ export class Loader {
       const fw = await applyForecasts(tx, line.source, forecasts, state.id, fetchedAt, headDrops, touches.forecast);
       const staged = await this.stage(tx, line, spec, result, refRegistry, state.id, fetchedAt, touches.forecast);
       // P16b: in no published file yet, so no touch.
-      const tw = await applyTide(tx, tide, state.id, fetchedAt);
+      // #174: the labels of this payload first, then every `extreme_astro` row takes RWS's stored label (read here, inside
+      // the transaction that holds the loader lock), the alternation label or, with neither, is not stored.
+      const tl = await applyTideLabels(tx, tideLabels, state.id, fetchedAt);
+      const lab = await labelTide(tx, tide);
+      const tw = await applyTide(tx, lab.rows, state.id, fetchedAt);
+      if (lab.unlabelled > 0) result.dropped.hwlw_unlabelled = (result.dropped.hwlw_unlabelled ?? 0) + lab.unlabelled;
+      // Counted, not RETAINED: the row is stored with RWS's label, so a replay has nothing more to load.
+      if (lab.conflicts > 0) result.dropped.hwlw_type_conflict = lab.conflicts;
       // P14a: a backfill's change that ends before DATA_FLOOR is in no published file or day; markDirty would clip it
       // onto the floor's first day (a dirty row and a bump of 2026-08-01 for every chunk of history).
       if (spec.backfill === true) touches.obs = touches.obs.filter((t) => t.to === undefined || t.to >= FLOOR_MS);
@@ -948,8 +975,8 @@ export class Loader {
       warnChanges = warn.changes;
       classChanged = cls.changed;
       closesFull = warn.full;
-      n_rows = n_rows_base + cls.kept + staged.rows;
-      n_skipped = n_skipped_base + cls.unknown + staged.skipped;
+      n_rows = n_rows_base + cls.kept + staged.rows - lab.unlabelledCounted;
+      n_skipped = n_skipped_base + cls.unknown + staged.skipped + lab.unlabelled;
       if (result.unitMismatch !== undefined) {
         units = await storeUnitMismatch(tx, line.source, fetchedAt, result.unitMismatch);
       }
@@ -972,7 +999,8 @@ export class Loader {
         cls.changed +
         opened(warnChanges) +
         fc.n_new +
-        tw.n_new;
+        tw.n_new +
+        tl.n_new;
       const n_changed =
         written.n_changed +
         filled.n_changed +
@@ -980,7 +1008,8 @@ export class Loader {
         corrected(refChanges) +
         corrected(warnChanges) +
         fc.n_changed +
-        tw.n_changed;
+        tw.n_changed +
+        tl.n_changed;
       outcome = { kind: 'loaded', n_rows, n_new, n_changed };
       // A replay that changes nothing leaves the batch exactly as the first load wrote it.
       const changed =
@@ -991,7 +1020,8 @@ export class Loader {
           cls.writes +
           warn.writes +
           fc.writes +
-          tw.writes >
+          tw.writes +
+          tl.writes >
           0 || state.skipped !== n_skipped;
       if (!state.existed || changed || state.previous !== 'ok') {
         await closeBatch(tx, state.id, batch, { status: 'ok', n_rows, n_new, n_changed, n_skipped, error: null });
@@ -1031,6 +1061,8 @@ export class Loader {
       const n = result.dropped[code] ?? 0;
       if (n > 0) this.deps.alert(code, { ...ids, n });
     }
+    const conflicts = result.dropped.hwlw_type_conflict ?? 0;
+    if (conflicts > 0 && spec.backfill !== true) this.deps.alert('hwlw_type_conflict', { ...ids, n: conflicts });
     for (const change of ['corrected', 'superseded', 'changed'] as const) {
       const n = zeroChanges[change] ?? 0;
       if (n > 0) this.deps.alert(`gauge_zero_${change}`, { ...ids, n });

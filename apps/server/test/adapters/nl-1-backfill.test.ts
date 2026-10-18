@@ -239,3 +239,41 @@ describe('P16a request bodies', () => {
     expect(aquo?.Groepering?.Code).toBe(groepering);
   });
 });
+
+// #174: nl-1-hwlw-astro asks each location's GETETTPE type series before its heights. The type body is the
+// 2026-10-17 probe's shape and shares its heights' Periode (one `now` per run); every heights body stays as it was.
+describe('#174 type series bodies', () => {
+  const req = { url: 'https://x.invalid/', method: 'POST' as const, headers: {}, variant: 'v' };
+  const now = new Date('2026-11-02T04:30:30Z');
+  const b = (row: Row, params: Record<string, string>) =>
+    (adapter.build as NonNullable<typeof adapter.build>)({ req, row, now, window: null, params }).body ?? '';
+  const per = (code: string, aquo: string) =>
+    `{"Locatie":{"Code":"${code}"},"AquoPlusWaarnemingMetadata":{"AquoMetadata":${aquo}},"Periode":{"Begindatumtijd":"2026-11-02T04:30:00Z","Einddatumtijd":"2027-12-07T04:30:00Z"}}`;
+  const s = spec('nl-1-hwlw-astro');
+
+  it('every one of the 158 rows: a type body of the probe shape, then the heights body as it was', () => {
+    expect(s.rows).toHaveLength(158);
+    for (const row of s.rows) {
+      const g = row.groepering as string;
+      const want =
+        row.typering === 'GETETTPE'
+          ? `{"Compartiment":{"Code":"OW"},"Grootheid":{"Code":"NVT"},"Groepering":{"Code":"${g}"},"Typering":{"Code":"GETETTPE"},"ProcesType":"astronomisch"}`
+          : `{"Compartiment":{"Code":"OW"},"Grootheid":{"Code":"WATHTE"},"Groepering":{"Code":"${g}"},"Hoedanigheid":{"Code":"${row.hoedanigheid}"},"ProcesType":"astronomisch"}`;
+      expect(b(row, s.params), `${row.code} ${row.typering}`).toBe(per(row.code as string, want));
+      // The heights body is the one the row built before #174, when it had no typering.
+      if (row.typering === 'NVT') expect(b({ ...row, typering: '' }, s.params)).toBe(b(row, s.params));
+    }
+  });
+
+  it('fails closed: an unknown typering, and GETETTPE on anything but an astronomical extreme row', () => {
+    const h = { code: 'a', quantity: 'H', hoedanigheid: 'NAP', groepering: 'GETETBRKD2', typering: 'GETETTPE' };
+    const astro = { proces: 'astronomisch', ahead: 'P2D' };
+    expect(b(h, astro)).toContain('"Typering":{"Code":"GETETTPE"}');
+    expect(() => b({ ...h, typering: 'GETETTPX' }, astro)).toThrow(/bad typering/);
+    expect(() => b({ ...h, quantity: 'Q', hoedanigheid: 'NVT', groepering: '' }, astro)).toThrow(/typering/);
+    expect(() => b({ ...h, groepering: '' }, astro)).toThrow(/typering/);
+    expect(() => b({ ...h, groepering: 'GETETM2' }, { proces: 'meting' })).toThrow(/typering/);
+    expect(() => b({ ...h, groepering: 'GETETM2' }, astro)).toThrow(/typering/);
+    expect(() => b({ ...h, method: 'other:F012' }, astro)).toThrow(/typering/);
+  });
+});

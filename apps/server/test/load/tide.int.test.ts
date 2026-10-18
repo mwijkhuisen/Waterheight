@@ -1,9 +1,12 @@
+import { CANARIES } from '@rws/contracts';
 import { emptyNormalised, type TideRowIn } from '@rws/core';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { recorded, writePayload } from '../../../../scripts/fixture-archive.ts';
 import { VIEWS } from '../../src/db/audience.ts';
 import type { LoadAdapter } from '../../src/load/adapters.ts';
+import { syncOwnerCanary } from '../../src/load/canary.ts';
 import { replay } from '../../src/load/replay.ts';
+import { lock } from '../../src/load/store.ts';
 import { sqlState } from '../db/testdb.ts';
 import { type Harness, harness } from './harness.ts';
 
@@ -242,5 +245,256 @@ describe('the pipeline attaches tide rows to primary series only', { timeout: 30
       { parse_status: 'ok', n_rows: 2, n_new: 2, n_changed: 0, n_skipped: 1 + 3, error: null },
     ]);
     expect(h.alerts).toEqual([{ code: 'hwlw_unlabelled', fields: { source: 'NL-1', spec: 'nl-1-hwlw-astro', n: 3 } }]);
+  });
+});
+
+// #174: RWS's own high/low labels. `nl-1-hwlw-astro` asks, per location, the GETETTPE type series and then the heights
+// (two archived lines, type first as capture writes them). The loader stores the type in `tide_label` and gives every
+// astronomical extreme RWS's label, the strict-alternation label as the fallback, and nothing if it has neither.
+// The Goeree lichteiland MSL pair is real (both recordings of 2026-10-17). RWS published no agger (a double low water)
+// in anything we recorded, so the agger and the conflict are SYNTHETIC: heights built in the test from the real
+// Vlissingen type series (its instants and words) with generated values.
+
+type Mt = {
+  Meetwaarde: { Waarde_Alfanumeriek: string; Waarde_Numeriek: number };
+  Tijdstip: string;
+  WaarnemingMetadata: Record<string, unknown>;
+};
+type Lijst = { AquoMetadata: Record<string, unknown>; Locatie: unknown; MetingenLijst: Mt[] };
+type Doc = { Succesvol: boolean; WaarnemingenLijst: Lijst[] };
+const docOf = (name: string): Doc => JSON.parse(recorded(name, 'NL-1').body.toString('utf8'));
+const bytes = (doc: Doc) => Buffer.from(JSON.stringify(doc));
+const listOf = (doc: Doc): Lijst => doc.WaarnemingenLijst[0] as Lijst;
+
+const GOEREE = 'goeree.lichteiland/WATHTE/MSL/other:F007';
+/** The pair's fetch times: the type 180 s before its heights, as the capture spaces them. */
+const TYPE_AT = new Date('2026-10-17T18:49:53Z');
+const HEIGHTS_AT = new Date(TYPE_AT.getTime() + 180_000);
+const LATER = (ms: number) => new Date(HEIGHTS_AT.getTime() + ms);
+const SPEC = 'nl-1-hwlw-astro';
+const HW_URL = recorded('nl-1-hwlw-astro-goeree-lichteiland-msl', 'NL-1').url;
+const VL = 'vlissingen/NAP';
+
+/** Heights for the instants and words of a real type series: highs near 200 cm, lows near -100 cm, alternating. */
+function heightsOf(type: Doc, template: Doc, agger?: number): Buffer {
+  const t = listOf(type);
+  const tpl = listOf(template);
+  const shape = tpl.MetingenLijst[0] as Mt;
+  const MetingenLijst = t.MetingenLijst.map((m, i): Mt => {
+    const high = m.Meetwaarde.Waarde_Alfanumeriek === 'hoogwater';
+    // An agger breaks the alternation: one high is as low as the lows (it is no strict extreme any more).
+    const v = high ? (i === agger ? -150 : 200 + (i % 7)) : -100 - (i % 5);
+    return { ...shape, Tijdstip: m.Tijdstip, Meetwaarde: { Waarde_Alfanumeriek: String(v), Waarde_Numeriek: v } };
+  });
+  return bytes({ ...type, WaarnemingenLijst: [{ ...tpl, Locatie: t.Locatie, MetingenLijst }] });
+}
+const vlissingenType = () => docOf('nl-1-hwlw-astro-vlissingen-nap-getettpe');
+const napTemplate = () => docOf('nl-1-hwlw-astro-hoekvanholland-nap-nvt');
+const wordAt = (i: number) => listOf(vlissingenType()).MetingenLijst[i]?.Meetwaarde.Waarde_Alfanumeriek;
+const flipped = (i: number) => (wordAt(i) === 'hoogwater' ? 'laagwater' : 'hoogwater');
+/** The Vlissingen type series with the words of the given indexes replaced. */
+function typeWith(words: Record<number, string>): Buffer {
+  const doc = vlissingenType();
+  for (const [i, w] of Object.entries(words))
+    (listOf(doc).MetingenLijst[Number(i)] as Mt).Meetwaarde.Waarde_Alfanumeriek = w;
+  return bytes(doc);
+}
+
+const line = (variant: string, body: Buffer, at: Date) =>
+  writePayload(h.archive, {
+    source: 'NL-1',
+    spec: SPEC,
+    variant,
+    at,
+    body,
+    url: HW_URL,
+    method: 'POST',
+    retention: 'forever',
+  });
+const typeLine = (loc: string, body: Buffer, at = TYPE_AT) => line(`${loc}/GETETTPE`, body, at);
+const heightsLine = (loc: string, body: Buffer, at = HEIGHTS_AT) => line(`${loc}/NVT`, body, at);
+const labelRows = () =>
+  q('SELECT series_id, ts, hilo, batch_id::text AS batch, xmin::text AS xmin FROM tide_label ORDER BY series_id, ts');
+const tick = () => h.loader({ now: NOW }).tick();
+const REPLAY_HW = { source: 'NL-1', spec: SPEC, from: day(TYPE_AT.getTime()), to: day(NOW.getTime()) } as const;
+const alertsOf = (code: string) => h.alerts.filter((a) => a.code === code);
+const IDS = { source: 'NL-1', spec: SPEC };
+
+describe("RWS's labels of the astronomical extremes (#174)", { timeout: 300_000 }, () => {
+  beforeEach(async () => {
+    h = await harness();
+  }, 120_000);
+  afterEach(() => h.close());
+
+  it('the real Goeree MSL pair: the type is stored in tide_label and the heights take its labels, no conflict', async () => {
+    const goeree = await h.seriesId(GOEREE);
+    await typeLine('goeree.lichteiland/MSL', recorded('nl-1-hwlw-astro-goeree-lichteiland-msl-getettpe', 'NL-1').body);
+    await heightsLine('goeree.lichteiland/MSL', recorded('nl-1-hwlw-astro-goeree-lichteiland-msl', 'NL-1').body);
+    expect(await tick()).toEqual({ lines: 2, loaded: 2 });
+    const labels = await labelRows();
+    const tide = await tideRows();
+    expect(labels).toHaveLength(1545);
+    expect(tide).toHaveLength(1546);
+    expect(tide.every((r) => r.series_id === goeree && r.kind === 'extreme_astro')).toBe(true);
+    // 1,544 instants are in both recordings and RWS's label is on the heights; the 2 heights-only edges alternate.
+    const both = await q(
+      `SELECT count(*)::int AS n, count(*) FILTER (WHERE t.hilo = l.hilo)::int AS same
+       FROM tide t JOIN tide_label l ON l.series_id = t.series_id AND l.ts = t.ts`,
+    );
+    expect(both).toEqual([{ n: 1544, same: 1544 }]);
+    expect(tide.every((r) => r.hilo === 'high' || r.hilo === 'low')).toBe(true);
+    expect(await batches()).toMatchObject([
+      { spec_id: SPEC, parse_status: 'ok', n_rows: 1545, n_new: 1545, n_changed: 0, n_skipped: 0 },
+      { spec_id: SPEC, parse_status: 'ok', n_rows: 1546, n_new: 1546, n_changed: 0, n_skipped: 0 },
+    ]);
+    expect(alertsOf('hwlw_type_conflict')).toEqual([]);
+    expect(alertsOf('hwlw_unlabelled')).toEqual([]);
+    expect(await h.count('obs')).toBe(0);
+    expect(await h.count('publish_dirty')).toBe(0);
+    // A second pass (replay of both lines) writes nothing: no label and no tide row is rewritten.
+    expect(await replay(deps(), { ...REPLAY_HW, dryRun: false })).toEqual({
+      lines: 2,
+      loaded: 2,
+      quarantined: 0,
+      skipped: 0,
+      n_new: 0,
+      n_changed: 0,
+    });
+    expect(await labelRows()).toEqual(labels);
+    expect(await tideRows()).toEqual(tide);
+  });
+
+  it('an agger list (not alternating) after its type is stored with RWS labels and no hwlw_unlabelled', async () => {
+    const type = vlissingenType();
+    await typeLine(VL, bytes(type));
+    await heightsLine(VL, heightsOf(type, napTemplate(), 11));
+    expect(await tick()).toEqual({ lines: 2, loaded: 2 });
+    const tide = await tideRows();
+    const labels = await labelRows();
+    expect(tide).toHaveLength(1546);
+    expect(labels).toHaveLength(1546);
+    expect(tide.map((r) => r.hilo)).toEqual(labels.map((r) => r.hilo));
+    // The agger instant itself carries RWS's word, not a derived one.
+    expect(tide[11]?.hilo).toBe(wordAt(11) === 'hoogwater' ? 'high' : 'low');
+    expect(alertsOf('hwlw_unlabelled')).toEqual([]);
+    expect(alertsOf('hwlw_type_conflict')).toEqual([]);
+    expect((await batches()).at(-1)).toMatchObject({ n_rows: 1546, n_new: 1546, n_skipped: 0 });
+  });
+
+  it('a planted conflict stores RWS label, counts the conflict, alerts once and leaves n_skipped alone', async () => {
+    await typeLine(VL, typeWith({ 20: flipped(20) }));
+    await heightsLine(VL, heightsOf(vlissingenType(), napTemplate()));
+    expect(await tick()).toEqual({ lines: 2, loaded: 2 });
+    const tide = await tideRows();
+    // Every row but the 21st agrees with the unflipped type; the 21st has RWS's (flipped) label.
+    const expected = listOf(vlissingenType()).MetingenLijst.map((m, i) =>
+      (i === 20 ? flipped(20) : m.Meetwaarde.Waarde_Alfanumeriek) === 'hoogwater' ? 'high' : 'low',
+    );
+    expect(tide.map((r) => r.hilo)).toEqual(expected);
+    expect(alertsOf('hwlw_type_conflict')).toEqual([{ code: 'hwlw_type_conflict', fields: { ...IDS, n: 1 } }]);
+    expect(alertsOf('hwlw_unlabelled')).toEqual([]);
+    expect((await batches()).at(-1)).toMatchObject({ n_rows: 1546, n_new: 1546, n_skipped: 0 });
+  });
+
+  it('heights without type rows keep strict alternation; an agger without type rows is hwlw_unlabelled', async () => {
+    // Real Goeree heights alone: alternation labels, no tide_label row.
+    await heightsLine('goeree.lichteiland/MSL', recorded('nl-1-hwlw-astro-goeree-lichteiland-msl', 'NL-1').body);
+    expect(await tick()).toEqual({ lines: 1, loaded: 1 });
+    expect(await h.count('tide_label')).toBe(0);
+    expect(await tideRows()).toHaveLength(1546);
+    expect((await batches()).at(-1)).toMatchObject({ n_rows: 1546, n_skipped: 0 });
+    expect(h.alerts).toEqual([]);
+    // A synthetic agger alone: all its rows are unlabelled, nothing is stored, the object is kept (n_skipped).
+    await heightsLine(VL, heightsOf(vlissingenType(), napTemplate(), 11), LATER(1000));
+    expect(await tick()).toEqual({ lines: 1, loaded: 1 });
+    expect(await tideRows()).toHaveLength(1546);
+    expect((await batches()).at(-1)).toMatchObject({ n_rows: 0, n_new: 0, n_skipped: 1546 });
+    expect(h.alerts).toEqual([{ code: 'hwlw_unlabelled', fields: { ...IDS, n: 1546 } }]);
+  });
+
+  it('a type that loads after its heights relabels nothing until the next heights line (the ponytail rule)', async () => {
+    const heights = heightsOf(vlissingenType(), napTemplate());
+    await heightsLine(VL, heights);
+    expect(await tick()).toEqual({ lines: 1, loaded: 1 });
+    const alternation = await tideRows();
+    // RWS says the opposite for one instant, but arrives after the heights.
+    await typeLine(VL, typeWith({ 20: flipped(20) }), LATER(600_000));
+    expect(await tick()).toEqual({ lines: 1, loaded: 1 });
+    expect(await h.count('tide_label')).toBe(1546);
+    expect(await tideRows()).toEqual(alternation);
+    expect(alertsOf('hwlw_type_conflict')).toEqual([]);
+    // The next heights fetch (the same curve, newer) writes RWS's label for that one row, and alerts the conflict.
+    await heightsLine(VL, heights, LATER(1_200_000));
+    expect(await tick()).toEqual({ lines: 1, loaded: 1 });
+    const after = await tideRows();
+    expect(after.filter((r, i) => r.hilo !== alternation[i]?.hilo)).toHaveLength(1);
+    expect(after[20]?.hilo).not.toBe(alternation[20]?.hilo);
+    expect((await batches()).at(-1)).toMatchObject({ n_rows: 1546, n_new: 0, n_changed: 1, n_skipped: 0 });
+    expect(alertsOf('hwlw_type_conflict')).toEqual([{ code: 'hwlw_type_conflict', fields: { ...IDS, n: 1 } }]);
+  });
+
+  it('an agger heights line loaded before its type is loaded by a replay after it: n_skipped falls, the rows are stored', async () => {
+    const type = vlissingenType();
+    await heightsLine(VL, heightsOf(type, napTemplate(), 11));
+    expect(await tick()).toEqual({ lines: 1, loaded: 1 });
+    expect(await h.count('tide')).toBe(0);
+    expect(await batches()).toMatchObject([{ n_rows: 0, n_new: 0, n_skipped: 1546 }]);
+    await typeLine(VL, bytes(type), LATER(600_000));
+    expect(await tick()).toEqual({ lines: 1, loaded: 1 });
+    expect(await h.count('tide')).toBe(0);
+    const r = await replay(deps(), { ...REPLAY_HW, dryRun: false });
+    expect(r).toMatchObject({ lines: 2, loaded: 2, quarantined: 0, n_new: 1546, n_changed: 0 });
+    expect(await h.count('tide')).toBe(1546);
+    expect(await batches()).toMatchObject([
+      { n_rows: 1546, n_new: 1546, n_changed: 0, n_skipped: 0 },
+      { n_rows: 1546, n_new: 1546, n_changed: 0, n_skipped: 0 },
+    ]);
+    // And once more: nothing is written.
+    const settled = await tideRows();
+    expect(await replay(deps(), { ...REPLAY_HW, dryRun: false })).toMatchObject({ n_new: 0, n_changed: 0 });
+    expect(await tideRows()).toEqual(settled);
+  });
+
+  it('a type value that is neither hoogwater nor laagwater is hwlw_type_unknown: retained, counted, never named', async () => {
+    const WORD = 'springvloed-synthetic';
+    await typeLine(VL, typeWith({ 3: WORD, 4: WORD }));
+    expect(await tick()).toEqual({ lines: 1, loaded: 1 });
+    expect(await labelRows()).toHaveLength(1544);
+    expect(await batches()).toMatchObject([{ n_rows: 1544, n_new: 1544, n_skipped: 2 }]);
+    expect(h.alerts).toEqual([{ code: 'hwlw_type_unknown', fields: { ...IDS, n: 2 } }]);
+    expect(JSON.stringify(h.alerts)).not.toContain(WORD);
+    // Those two instants have no RWS label: the heights fall back to alternation there.
+    await heightsLine(VL, heightsOf(vlissingenType(), napTemplate()));
+    expect(await tick()).toEqual({ lines: 1, loaded: 1 });
+    expect(await tideRows()).toHaveLength(1546);
+    expect(alertsOf('hwlw_type_conflict')).toEqual([]);
+  });
+
+  it('tide_label is read by no API role; the owner canary is absent from the public tide view', async () => {
+    for (const role of ['rws_api', 'rws_publish', 'rws_owner_api'] as const) {
+      const c = await h.t.connectAs(role);
+      expect(await sqlState(c, 'SELECT 1 FROM tide_label LIMIT 1'), role).toBe('42501');
+    }
+    const load = await h.t.connectAs('rws_load');
+    expect(await sqlState(load, 'SELECT 1 FROM tide_label LIMIT 1')).toBe('ok');
+    expect(await sqlState(load, 'DELETE FROM tide_label')).toBe('42501');
+    // The canary's tide row (its series is the owner source's) is in the owner view and in no public one.
+    const migrator = h.dbAs('rws_migrator', 1);
+    await migrator.db.transaction().execute(async (tx) => {
+      await lock(tx);
+      await syncOwnerCanary(tx);
+    });
+    const canary = (await q(`SELECT id FROM series WHERE provider_key = 'owner-canary'`))[0]?.id;
+    await q(
+      `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id) VALUES ($1, 'extreme_astro', $2, $3, 'high', 0)`,
+      [canary, '2026-10-20T00:00:00Z', CANARIES.owner.value],
+    );
+    for (const role of ['rws_api', 'rws_publish'] as const) {
+      const c = await h.t.connectAs(role);
+      const { rows } = await c.query(`SELECT * FROM ${VIEWS.public.tide}`);
+      expect(rows, role).toEqual([]);
+    }
+    const owner = await h.t.connectAs('rws_owner_api');
+    expect((await owner.query(`SELECT count(*)::int AS n FROM ${VIEWS.owner.tide}`)).rows).toEqual([{ n: 1 }]);
   });
 });

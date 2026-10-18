@@ -80,8 +80,11 @@ describe('request budgets', () => {
     expect(tide.specs).toHaveLength(3);
     expect((inFlightPerSecond(tide).get(RWS) as Uint8Array).reduce((a, b) => Math.max(a, b), 0)).toBe(1);
     // Spread by space_ms 179000: a 180 s period, at most 20 requests an hour each (they never overlap, so also in all).
+    // #174: hwlw-astro asks each location's type series before its heights, 158 rows, so its run is 04:30-12:24 and
+    // still ends long before astro starts at 20:00.
     expect(budgets(tide).find((b) => b.host === RWS)?.peakPerHour).toBeLessThanOrEqual(20);
     for (const id of TIDE) expect(spec(id).variants?.space_ms, id).toBe(179000);
+    expect(spec('nl-1-hwlw-astro').rows).toHaveLength(158);
   });
 
   it('RWS: the first start, a catch-up or hourly retries add at most the three tide specs at once, still ≤ 1,000', () => {
