@@ -39,10 +39,10 @@ Adapter table today: `DE-1` with the specs `de-1-basin`, `de-1-series` and `de-1
 `replay` runs as a one-off container of the `load` service (role `rws_load`, the raw archive mounted, network `db`). It needs the compose files of the running release. Define this once per shell; it calls `rws_compose` of the installed `rws-lib.sh`, the command line of every deploy:
 
 ```bash
-rwsc() { sudo bash -c '. /usr/local/lib/rws/deploy/bin/rws-lib.sh && rws_compose "$@"' rwsc "$@"; }
+rwsc() { sudo bash -c 'cd / && . /usr/local/lib/rws/deploy/bin/rws-lib.sh && rws_compose "$@"' rwsc "$@"; }
 ```
 
-`rws_compose` adds the owner overlay while the owner site is on and the tunnel overlay while `RWS_EDGE=tunnel`, so compose knows every service of the project. A plain `-f compose.yaml` line (this runbook's until the P14a queue fix) warns of an orphan `rws-cloudflared-1` on a tunnel host: **never** answer that warning with `--remove-orphans`, which removes the tunnel and takes the site off line.
+`rws_compose` adds the owner overlay while the owner site is on and the tunnel overlay while `RWS_EDGE=tunnel`, so compose knows every service of the project. The `cd /` keeps it working from a directory a deploy has since removed (compose fails there with `getwd: no such file or directory`). A plain `-f compose.yaml` line (this runbook's until the P14a queue fix) warns of an orphan `rws-cloudflared-1` on a tunnel host: **never** answer that warning with `--remove-orphans`, which removes the tunnel and takes the site off line.
 
 First count what it would touch (`--dry-run` reads the manifest and counts lines, and writes nothing):
 

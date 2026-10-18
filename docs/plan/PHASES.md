@@ -3289,6 +3289,27 @@ NL-1 and up to nine other sources were `down` from 01:00 to 04:00 UTC. The loade
     - `run.test.ts` and `truncation.test.ts`: the drift code.
 - **The [agent-prod] criterion stays open** (KG-343) until a night passes within the limits.
 
+### Night 4 (2026-10-17/18): the freshness criterion passes (issue #29)
+
+The first night with the queue fix (#165) ran from 22:01 to 05:00 UTC. It loaded 745 chunks and 3.32M rows (24.41M in all; jobs 24 done, 10 planned, 1 running, 6 failed; `revised` 0, `unreconciled` 0). **Live p95 stayed under 120 s in every hour of the window**, from the per-hour ledger query of `docs/runbooks/backfill.md` §6:
+
+| Hour (UTC) | Backfill chunks | Chunk cycle p50 | Live p50 | Live p95 | Live max |
+|---|---|---|---|---|---|
+| 22h | 139 | 19 s | 25 s | 65 s | 73 s |
+| 23h | 149 | 17 s | 26 s | 62 s | 70 s |
+| 00h | 102 | 24 s | 33 s | 86 s | 97 s |
+| 01h | 132 | 19 s | 28 s | 54 s | 74 s |
+| 02h | 97 | 24 s | 37 s | 76 s | 87 s |
+| 03h | 72 | 35 s | 38 s | 75 s | 93 s |
+| 04h | 47 | 44 s | 49 s | 100 s | 169 s |
+
+- **Ticked in #29 and KG-343 closed** on 2026-10-18.
+- **Heavier live load.** #176 (P16b, merged 20:02Z on 10-17) had doubled the loader's live batches, from about 620 to about 1,200 an hour, and loaded about 18,000 archived lines at 20 to 21h, before the window. The night held the limit on top of that.
+- **Margin (KG-356).** The chunk cycle and live p95 grew through the night, and one line waited 169 s at 04h, so the 60 s backlog limit was crossed briefly. The outside 30-minute samples are missing that night (the workstation stopped its sampler for lack of memory), so the evidence is the ledger query.
+- **Pace.** About 106 chunks an hour (11,104 guard waits), so the 11 jobs left take about four more nights.
+- **The six `schema_drift` jobs**, resumed for one request each, all printed `drift` `invalid_format`. In the NL-1 parser that is only `Kwaliteitswaardecode` (`^\d{2}$`) (KG-355, P14b).
+- **`rwsc` starts from `/`** (`backfill.md` §2, `replay.md` §2). A shell left in a release directory that a deploy had removed made compose fail with `getwd: no such file or directory`.
+
 ## 50. Amendment: fix #109, the Cloudflare Tunnel edge (2026-10-12)
 
 What #109 built (ADR-0021, owner decisions of 2026-10-12): the public site can run behind a Cloudflare Tunnel on the current home host (KG-228), switched back to Caddy direct by one line. Direct mode is unchanged byte for byte (`deploy/tests/caddy-edge.test.sh` compares the adapted Caddy JSON with today's text; measured equal to main's). The domain moves to `waterradar.io` first, in direct mode and without code (`docs/runbooks/domain-change.md`); the tunnel follows (`docs/runbooks/edge-switch.md`).
