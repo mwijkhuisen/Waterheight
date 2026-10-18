@@ -9,6 +9,7 @@ import {
   msgRx,
   open,
   panelOf,
+  type SourceDataEvent,
   start,
   type W,
   XSS,
@@ -273,6 +274,46 @@ test('the flow clock runs, freezes in a hidden tab and runs again once the tab i
   await expect.poll(() => frames(page)).toBeGreaterThan(frozen);
   expect(await visibility(page, FLOW)).toBe('visible');
   expect(await visibility(page, ARROWS)).toBe('none');
+  await finish(page, s);
+});
+
+// #177: a step moves the opacity between fixed dash layers. A step that set `line-dasharray` (cross-faded in MapLibre 6)
+// reloaded every in-view tile of the `rivers` source each time, up to 25 times a second (39 to 55 tile loads in these
+// 2 s). A tile that comes into view, or a one-off reload of the source (the bins' layers), loads each tile once.
+test('a flow step reloads no river tile', async ({ page, context, baseURL }) => {
+  const s = await start(page, context, baseURL, 'state');
+  await flowOn(page);
+  await open(page, '/');
+  await mapReady(page);
+  await flowReady(page);
+  await expect.poll(() => frames(page)).toBeGreaterThan(2);
+  const run = await page.evaluate(async () => {
+    const w = window as unknown as W & { __rwsFlowFrames?: number };
+    const map = w.__rws?.map;
+    if (!map) throw new Error('no map');
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    let loads = new Map<string, number>();
+    let lastTile = performance.now();
+    const count = (e: SourceDataEvent) => {
+      if (e.sourceId !== 'rivers' || e.tile === undefined) return;
+      const key = String(e.tile.tileID?.key);
+      loads.set(key, (loads.get(key) ?? 0) + 1);
+      lastTile = performance.now();
+    };
+    map.on('sourcedata', count);
+    // The start's visibility change and the reach chunk's layers (the bins a metadata read later) each reload the
+    // source once: count from a quiet second on (at most 10 s; a reload on every step is never quiet).
+    const t0 = performance.now();
+    while (!(map.isSourceLoaded('rivers') && performance.now() - lastTile > 1000) && performance.now() - t0 < 10_000)
+      await wait(100);
+    loads = new Map();
+    const ticks = w.__rwsFlowFrames ?? 0;
+    await wait(2000);
+    map.off('sourcedata', count);
+    return { most: Math.max(0, ...loads.values()), ticks: (w.__rwsFlowFrames ?? 0) - ticks };
+  });
+  expect(run.ticks, 'flow steps in 2 s').toBeGreaterThanOrEqual(3);
+  expect(run.most, 'the loads of one river tile while the flow stepped').toBeLessThanOrEqual(1);
   await finish(page, s);
 });
 
