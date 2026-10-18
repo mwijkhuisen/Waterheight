@@ -5,11 +5,15 @@ import { parse } from 'yaml';
 import { server } from '../../../../test/msw.setup.ts';
 import { kiwisUrlProblems, MAX_IDS, MAX_VALUES, MIN_STEP_MS } from '../../src/adapters/_shared/kiwis/request.ts';
 import { adapter as be3 } from '../../src/adapters/be-3/capture.ts';
+import { Pacer, windowEnd } from '../../src/backfill/pacer.ts';
+import { jobBudget } from '../../src/backfill/plan.ts';
+import { runBackfill } from '../../src/backfill/run.ts';
 import { loadBackfill } from '../../src/backfill/spec.ts';
 import { budgets, inFlightPerSecond, LATENCY_MS, requestsPerMinute, seedStarts } from '../../src/capture/budget.ts';
 import { runSeeds } from '../../src/capture/seeds.ts';
 import { baseRequest, type Registry, variantKey } from '../../src/capture/specs.ts';
 import type { Row } from '../../src/http/types.ts';
+import { Clock, fakeClient, MemoryJobStore, tempArchive } from '../backfill/harness.ts';
 import { fixture, registry, runDeps, spec } from './helpers.ts';
 
 // Criterion "[CI] The budget config test holds" (issue #16; A§7.3), computed
@@ -507,5 +511,130 @@ describe('budget model', () => {
     expect([0, 1, 2, 3, 4, 5].map((i) => one[i])).toEqual([1, 0, 1, 0, 1, 0]);
     const two = { specs: [...tiny('0 0 * * *', 3).specs, ...tiny('0 0 * * *', 1).specs] } as Registry;
     expect([0, 1, 2, 3].map((i) => f(two)[i])).toEqual([2, 1, 1, 0]);
+  });
+});
+
+// Criterion "[CI] the per-provider rate budget holds" (issue #29, P14b): the backfill limits of the three open-archive
+// hosts in registry/backfill.yaml, beside the live capture of the same host, and the runner's pacer holding them on a
+// fake clock. A chunk a decade file already answered (DE-8 reuse) sends nothing.
+describe('backfill budgets per host (P14b)', () => {
+  const backfill = loadBackfill(registry.hosts);
+  const WINDOW = { from: '22:00', to: '05:00' };
+  const HOSTS = {
+    'www.opengeodata.nrw.de': { source: 'DE-8', min_interval_ms: 30_000, max_per_hour: 20 },
+    'hubeau.eaufrance.fr': { source: 'FR-2', min_interval_ms: 2000, max_per_hour: 1800 },
+    'data.bs.ch': { source: 'CH-9', min_interval_ms: 1000, max_per_hour: 3600 },
+  } as const;
+  const windowHours = 7;
+  const limitsOf = (host: string) => {
+    const l = backfill.hosts[host];
+    if (l === undefined) throw new Error(`no backfill limits for ${host}`);
+    return l;
+  };
+
+  it.each(Object.entries(HOSTS))(
+    '%s: the spec of its source uses it, with its limits and the 22:00–05:00 window',
+    (host, want) => {
+      const l = limitsOf(host);
+      expect(l.window_utc).toEqual(WINDOW);
+      expect(l.min_interval_ms).toBeGreaterThanOrEqual(want.min_interval_ms);
+      expect(l.max_per_hour).toBeLessThanOrEqual(want.max_per_hour);
+      // The hourly cap is never looser than the spacing (DE-8: 30 s apart, yet at most 20 an hour).
+      expect(l.max_per_hour).toBeLessThanOrEqual(3_600_000 / l.min_interval_ms);
+      expect(backfill.specs.filter((s) => s.host === host).map((s) => s.source)).toEqual([want.source]);
+    },
+  );
+
+  it('hubeau.eaufrance.fr: FR-1 live in its busiest hour plus FR-2 at its limit, ≥ 2 s between FR-2 pages', () => {
+    const live = peak('hubeau.eaufrance.fr');
+    const l = limitsOf('hubeau.eaufrance.fr');
+    expect(live).toBeGreaterThan(0); // FR-1's live capture is really counted
+    expect(l.min_interval_ms).toBeGreaterThanOrEqual(2000);
+    // Hub'Eau documents no limit; together they stay at or under one request a second averaged over any hour.
+    console.info(`hubeau.eaufrance.fr: live peak ${live}/h + FR-2 backfill ${l.max_per_hour}/h`);
+    expect(live + l.max_per_hour).toBeLessThanOrEqual(3600);
+  });
+
+  it('data.bs.ch: no live capture, and a whole night of backfill is at most 10 % of the 500,000 a day it allows', () => {
+    expect(peak('data.bs.ch')).toBe(0);
+    const l = limitsOf('data.bs.ch');
+    expect(l.max_per_hour * windowHours).toBeLessThanOrEqual(0.1 * 500_000);
+  });
+
+  it('www.opengeodata.nrw.de: 20 an hour, 30 s apart, beside the 2 live requests a day', () => {
+    const l = limitsOf('www.opengeodata.nrw.de');
+    expect(l).toMatchObject({ min_interval_ms: 30_000, max_per_hour: 20 });
+    expect(peak('www.opengeodata.nrw.de')).toBeLessThanOrEqual(2);
+    // The 32 decade files of de-8-backfill-w fit two hours of one night.
+    expect(backfill.specs.find((s) => s.id === 'de-8-backfill-w')?.series).toHaveLength(32);
+  });
+
+  it.each(Object.keys(HOSTS))(
+    '%s: the pacer holds the spacing and the sliding hour over a whole night (fake clock)',
+    async (host) => {
+      const l = limitsOf(host);
+      const clock = new Clock(Date.parse('2026-10-13T22:00:00Z'));
+      const pacer = new Pacer(l, clock.now, clock.sleep);
+      const closes = windowEnd(clock.now(), l.window_utc).getTime();
+      const starts: number[] = [];
+      while (await pacer.wait(closes)) {
+        starts.push(clock.t);
+        clock.t += 50; // the request itself
+      }
+      expect(starts.length).toBeGreaterThan(0);
+      for (let i = 1; i < starts.length; i += 1)
+        expect((starts[i] as number) - (starts[i - 1] as number)).toBeGreaterThanOrEqual(l.min_interval_ms);
+      for (let i = l.max_per_hour; i < starts.length; i += 1)
+        expect((starts[i] as number) - (starts[i - l.max_per_hour] as number)).toBeGreaterThanOrEqual(3_600_000);
+      expect(starts.at(-1)).toBeLessThan(closes);
+      expect(starts.length).toBeLessThanOrEqual(l.max_per_hour * windowHours);
+      if (host === 'data.bs.ch') expect(starts.length).toBeLessThanOrEqual(0.1 * 500_000);
+    },
+  );
+
+  it('DE-8: the slices a decade file already answered send nothing (one request for six slices)', async () => {
+    const spec = backfill.specs.find((s) => s.id === 'de-8-backfill-w');
+    if (spec?.source !== 'DE-8') throw new Error('no DE-8 spec');
+    const unit = spec.series.find((u) => u.series_key === 'Rureinzugsgebiet/2020');
+    if (unit === undefined) throw new Error('no Rur 2020 unit');
+    const cfg = { ...backfill, specs: [{ ...spec, series: [unit] }] };
+    const store = new MemoryJobStore();
+    const from = new Date('2026-03-03T00:00:00Z');
+    const to = new Date('2026-08-01T00:00:00Z');
+    const { id } = await store.insert({
+      spec_id: spec.id,
+      source_id: 'DE-8',
+      series_key: unit.series_key,
+      range_from: from,
+      range_to: to,
+      chunk_ms: spec.chunk_ms,
+      request_budget: jobBudget(from, to, spec.chunk_ms, false),
+    });
+    const body = readFileSync(
+      new URL('../../src/adapters/de-8/fixtures/de-8-backfill-w-rur-2020.raw', import.meta.url),
+    );
+    const clock = new Clock();
+    const { client, calls } = fakeClient(clock, () => ({
+      status: 200,
+      body,
+      headers: { 'content-type': 'application/zip' },
+    }));
+    const t = tempArchive();
+    const out = await runBackfill({
+      config: cfg,
+      store,
+      archive: t.archive,
+      client,
+      now: clock.now,
+      sleep: clock.sleep,
+    });
+    expect(out.stopped).toBe('done');
+    expect(calls.map((c) => c.url)).toEqual([`${spec.url}${unit.file}`]);
+    expect(await store.get(id)).toMatchObject({ status: 'done', chunks_done: 6, chunks_with_data: 6, requests: 1 });
+    // No sleep at all: the pacer was asked once, for the one request (the first of the night waits for nothing).
+    expect(clock.slept).toEqual([]);
+    const lines = t.lines();
+    expect(lines).toHaveLength(6);
+    expect(new Set(lines.map((l) => l.key)).size).toBe(1);
   });
 });
