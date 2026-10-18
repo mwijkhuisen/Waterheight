@@ -33,6 +33,7 @@ const APPLIED: Readonly<Record<string, string>> = {
   '20261112000001_backfill_guard_unloaded.sql': 'caaae22a8d78a066a256e4a0049e4688d257810b0441fed1d0a11f44c834e6eb',
   '20261113000001_p16b_tide.sql': 'e66f5960702f10e49531fa950e7330c453304e2a03d0599b692bcf8583e0b979',
   '20261113000002_views_tide.sql': 'c15602587c7db99a2393f062b461a3b9dd7aea230bf40d92d38712235a15893d',
+  '20261114000001_tide_label.sql': 'e33b4f9829f04138c6c1b1dbcff3fed9ece4a5d72fa723ab6fed79c42de4d417',
 };
 
 const dir = new URL('../db/migrations/', import.meta.url);

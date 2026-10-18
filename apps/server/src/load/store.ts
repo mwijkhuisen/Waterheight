@@ -1,4 +1,4 @@
-import { type GaugeZeroRow, type ObsRow, QC, type SeriesDecl, type TideRowIn } from '@rws/core';
+import { type GaugeZeroRow, type ObsRow, QC, type SeriesDecl, type TideLabelIn, type TideRowIn } from '@rws/core';
 import { type Kysely, sql, type Transaction } from 'kysely';
 import type { DB } from '../db/generated.ts';
 import type { Audience, Touch } from './dirty.ts';
@@ -484,6 +484,99 @@ export async function applyTide(
   const mine = written.filter((w) => counted.has(w.series_id));
   const n_new = mine.filter((w) => w.inserted).length;
   return { n_new, n_changed: mine.length - n_new, writes: written.length };
+}
+
+/** #174: RWS's label of one astronomical extreme with the id of the series it attaches to; `counted` as for tide. */
+export type ResolvedTideLabel = TideLabelIn & { id: number; counted: boolean };
+
+/**
+ * #174: stores RWS's high/low labels (the GETETTPE type series) in `tide_label`, newest fetch wins exactly as
+ * `applyTide`: a label is written where none is stored, or where the stored row's batch is older than this one or is
+ * this very batch, and only when `hilo` differs. A confirmation keeps the older batch_id. No touch and no day bump (the
+ * labels reach a published file only as `tide.hilo`, which is itself in none yet). Returns the rows written (inserted
+ * and updated) of the series that share their source's audience, and every write.
+ */
+// ponytail: a type payload that loads AFTER its heights relabels nothing already stored in `tide`: the next heights
+// fetch (the monthly one, 180 s after its type) or a replay writes RWS's label (applyTide writes on a `hilo` change).
+// Add a relabel-on-type-load UPDATE of tide if that lag ever matters.
+export async function applyTideLabels(
+  tx: Tx,
+  rows: readonly ResolvedTideLabel[],
+  batch: string,
+  fetchedAt: Date,
+): Promise<{ n_new: number; n_changed: number; writes: number }> {
+  if (rows.length === 0) return { n_new: 0, n_changed: 0, writes: 0 };
+  const counted = new Set(rows.filter((r) => r.counted).map((r) => r.id));
+  const { rows: written } = await sql<{ series_id: number; inserted: boolean }>`
+    WITH incoming AS (
+      SELECT DISTINCT ON (i.series_id, i.ts) i.series_id, i.ts, i.hilo
+      FROM unnest(${rows.map((r) => r.id)}::int[], ${rows.map((r) => r.ts)}::timestamptz[],
+                  ${rows.map((r) => r.hilo)}::text[])
+           WITH ORDINALITY AS i(series_id, ts, hilo, ord)
+      ORDER BY i.series_id, i.ts, i.ord DESC
+    ),
+    wins AS (
+      SELECT i.series_id, i.ts, i.hilo
+      FROM incoming i
+      LEFT JOIN tide_label t ON t.series_id = i.series_id AND t.ts = i.ts
+      LEFT JOIN ingest_batch b ON b.id = t.batch_id
+      WHERE t.series_id IS NULL
+         OR (t.hilo IS DISTINCT FROM i.hilo
+             AND (b.id IS NULL OR b.id = ${batch}::bigint
+                  OR (b.fetched_at, b.id) < (${fetchedAt}::timestamptz, ${batch}::bigint)))
+    )
+    INSERT INTO tide_label AS t (series_id, ts, hilo, batch_id)
+    SELECT series_id, ts, hilo, ${batch}::bigint FROM wins
+    ON CONFLICT (series_id, ts) DO UPDATE SET hilo = EXCLUDED.hilo, batch_id = EXCLUDED.batch_id
+    RETURNING t.series_id, old.series_id IS NULL AS inserted`.execute(tx);
+  const mine = written.filter((w) => counted.has(w.series_id));
+  const n_new = mine.filter((w) => w.inserted).length;
+  return { n_new, n_changed: mine.length - n_new, writes: written.length };
+}
+
+/**
+ * #174: gives every `extreme_astro` row its high/low label: RWS's label from `tide_label` where one is stored (it wins;
+ * `conflicts` counts the rows whose own strict-alternation label differs), else the adapter's alternation label (the
+ * fallback), else the row is not stored (`unlabelled`; `unlabelledCounted` of them in a series that shares its
+ * source's audience). Other kinds pass through unread. Read inside the payload's transaction, after the labels of
+ * this payload were applied. The `tide` CHECK needs a label on every extreme row, so none leaves here without one.
+ */
+// ponytail: the key has no `kind`: only `extreme_astro` has a type series. A measured type series (#174 item 4) adds
+// a kind column with its own migration.
+export async function labelTide(
+  tx: Tx,
+  rows: readonly ResolvedTide[],
+): Promise<{ rows: ResolvedTide[]; unlabelled: number; unlabelledCounted: number; conflicts: number }> {
+  const ask = rows.filter((r) => r.kind === 'extreme_astro');
+  const stored = new Map<string, 'high' | 'low'>();
+  if (ask.length > 0) {
+    const { rows: found } = await sql<{ series_id: number; ts: Date; hilo: 'high' | 'low' }>`
+      SELECT l.series_id, l.ts, l.hilo
+      FROM tide_label l
+      JOIN unnest(${ask.map((r) => r.id)}::int[], ${ask.map((r) => r.ts)}::timestamptz[]) AS i(series_id, ts)
+        ON i.series_id = l.series_id AND i.ts = l.ts`.execute(tx);
+    for (const f of found) stored.set(`${f.series_id}|${f.ts.getTime()}`, f.hilo);
+  }
+  const out: ResolvedTide[] = [];
+  let unlabelled = 0;
+  let unlabelledCounted = 0;
+  let conflicts = 0;
+  for (const r of rows) {
+    if (r.kind !== 'extreme_astro') {
+      out.push(r);
+      continue;
+    }
+    const rws = stored.get(`${r.id}|${Date.parse(r.ts)}`);
+    if (rws !== undefined) {
+      if (r.hilo !== null && r.hilo !== rws) conflicts++;
+      out.push({ ...r, hilo: rws });
+    } else if (r.hilo !== null) out.push(r);
+    else {
+      unlabelled++;
+      if (r.counted) unlabelledCounted++;
+    }
+  }
+  return { rows: out, unlabelled, unlabelledCounted, conflicts };
 }
 
 export type ZeroChange = 'new' | 'corrected' | 'superseded' | 'changed';

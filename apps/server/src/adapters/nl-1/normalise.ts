@@ -11,6 +11,7 @@ import {
   rangeBit,
   SchemaDrift,
   scale,
+  type TideLabelIn,
   type TideRowIn,
   type TimeConvention,
   TimeError,
@@ -376,8 +377,13 @@ export type TideKind = 'astro' | 'extreme' | 'extreme_astro';
 //    neighbours and highs and lows alternate. A series that breaks it (fewer than 2 values, equal neighbours, two
 //    highs or two lows in a row), that lost a value between its first and last kept one (`gap`, `unknown_quality`,
 //    `conflict`, `out_of_range`: the rest may still alternate with every label after the hole flipped, review CR-2)
-//    or whose consecutive extremes lie more than 10 h apart (a missing extreme) stores nothing from this payload and
-//    counts its values as `hwlw_unlabelled` (retained). `astro` rows carry no label.
+//    or whose consecutive extremes lie more than 12 h apart (a missing pair, `EXTREME_MAX_SPACING_MS`) has no
+//    alternation label: a measured `extreme` series stores nothing from this payload and counts its values as
+//    `hwlw_unlabelled` (retained); an `extreme_astro` one, see #174 below. `astro` rows carry no label.
+//  - #174: RWS does label the astronomical extremes, in a type series of its own (`normaliseTideType` below), which
+//    the loader reads from `tide_label`. So an `extreme_astro` series that does not alternate keeps its rows with a
+//    null label, and the pipeline takes RWS's label for them or stores nothing (`hwlw_unlabelled` there). Measured
+//    `extreme` rows have no type series (KG-366) and keep the drop here.
 
 const TIDE_PROCESS: Record<TideKind, string> = {
   astro: 'astronomisch',
@@ -400,10 +406,15 @@ const DAY_MS = 86_400_000;
 const TIDE_AHEAD_MS = 401 * DAY_MS;
 
 /**
- * Consecutive extremes further apart than this mean one is missing (review CR-2): the measured spacing is 4.48 to
- * 8.00 h at Goeree lichteiland over 400 days and 5.48 to 7.20 h at Vlissingen; a missing extreme leaves about 12 h.
+ * Consecutive extremes further apart than this mean extremes are missing (review CR-2). A single missing extreme
+ * already breaks the alternation, so this rule only has to catch a missing PAIR (a high and a low, or a hole that
+ * keeps the zigzag). Measured on the recorded astronomical extremes of 2026-10-17: the largest spacing between two
+ * consecutive extremes is 10.1 h at Hoek van Holland, 9.73 h at Vlaardingen, 9.4 h at Maassluis and 8.0 h at Goeree
+ * lichteiland (4.48 to 8.00 h over 400 days there, 5.48 to 7.20 h at Vlissingen); a missing pair leaves a gap of at
+ * least 14.63 h (Hoek van Holland), 15.0 h (Vlaardingen), 15.3 h (Maassluis) and 16.92 h (Goeree). 12 h lies between
+ * the two ranges with margin on both sides (it was 10 h until #174, which withheld Hoek van Holland's real 10.1 h).
  */
-const EXTREME_MAX_SPACING_MS = 10 * 3_600_000;
+const EXTREME_MAX_SPACING_MS = 12 * 3_600_000;
 
 /** `high`/`low` by strict alternation, or null when the values do not alternate. */
 function alternation(values: readonly number[]): ('high' | 'low')[] | null {
@@ -523,13 +534,112 @@ export function normaliseTide(lists: readonly Waarnemingen[], ctx: Context, kind
       !holes.some((ts) => ts > first && ts < last) &&
       rows.every(([ts], i) => i === 0 || ts - (rows[i - 1] as [number, number])[0] <= EXTREME_MAX_SPACING_MS);
     const labels = whole ? alternation(rows.map((r) => r[1])) : null;
-    if (labels === null) {
+    if (labels === null && kind === 'extreme') {
       count(out, 'hwlw_unlabelled', rows.length);
       continue;
     }
     rows.forEach(([ts, value], i) => {
-      tide.push({ series: key, kind, ts: toIso(ts), value, hilo: labels[i] as 'high' | 'low' });
+      tide.push({ series: key, kind, ts: toIso(ts), value, hilo: (labels?.[i] as 'high' | 'low' | undefined) ?? null });
     });
+  }
+  return out;
+}
+
+// #174: RWS's own label of each astronomical extreme, the type series of `nl-1-hwlw-astro` (Typering GETETTPE, asked
+// just before the heights of the same location). Fail closed per list:
+//  - drift of the whole payload: Grootheid NVT (`tide_quantity`), Typering GETETTPE (`tide_typering`), Eenheid DIMSLS
+//    (`tide_unit`), Compartiment OW (`tide_compartment`), ProcesType astronomisch (`tide_process`), Hoedanigheid NVT
+//    (`tide_datum`), Groepering GETETBRKD2 or GETETBRKDMSL2 (`tide_grouping`);
+//  - the datum comes from the grouping (GETETBRKD2 NAP, GETETBRKDMSL2 MSL) and the series is the one registered key
+//    under `<code>/WATHTE/<datum>/`, as for the heights: none or several is `unknown`;
+//  - method other:F012 only, else `unregistered_method` (retained);
+//  - `hoogwater` is high and `laagwater` low; any other word is `hwlw_type_unknown` (retained, counted per value; the
+//    word itself is never stored, logged or alerted);
+//  - quality 99 is a gap, a code outside the observation list `unknown_quality`, the window that of the heights
+//    (`before_window`, `beyond_horizon`); one instant stated twice with the same label is one row (`duplicate`), with
+//    two labels neither (`conflict`).
+const TYPE_GROUPING: Readonly<Record<string, 'NAP' | 'MSL'>> = { GETETBRKD2: 'NAP', GETETBRKDMSL2: 'MSL' };
+const TYPE_WORD: Readonly<Record<string, 'high' | 'low'>> = { hoogwater: 'high', laagwater: 'low' };
+
+/** #174: the GETETTPE labels of one response, as `tideLabels` (never `tide` or `obs`). */
+export function normaliseTideType(lists: readonly Waarnemingen[], ctx: Context): Normalised {
+  const tideLabels: TideLabelIn[] = [];
+  const out = { ...emptyNormalised(), tideLabels };
+  const byCombination = new Map<string, string[]>();
+  for (const key of ctx.registry.keys()) {
+    const combination = key.slice(0, key.lastIndexOf('/'));
+    byCombination.set(combination, [...(byCombination.get(combination) ?? []), key]);
+  }
+  const merged = new Map<string, { labels: Map<number, 'high' | 'low'>; conflicts: Set<number> }>();
+  const unknown = new Set<string>();
+
+  for (const { aquo, locatie, metingen } of lists) {
+    if (aquo.Grootheid.Code !== 'NVT') throw new SchemaDrift('tide_quantity');
+    if (aquo.Typering.Code !== 'GETETTPE') throw new SchemaDrift('tide_typering');
+    if (aquo.Eenheid.Code !== 'DIMSLS') throw new SchemaDrift('tide_unit');
+    if (aquo.Compartiment.Code !== 'OW') throw new SchemaDrift('tide_compartment');
+    if (aquo.ProcesType !== 'astronomisch') throw new SchemaDrift('tide_process');
+    if (aquo.Hoedanigheid.Code !== 'NVT') throw new SchemaDrift('tide_datum');
+    const datum = Object.hasOwn(TYPE_GROUPING, aquo.Groepering.Code) ? TYPE_GROUPING[aquo.Groepering.Code] : undefined;
+    if (datum === undefined) throw new SchemaDrift('tide_grouping');
+    const combination = `${locatie.Code}/WATHTE/${datum}`;
+    const keys = byCombination.get(combination);
+    const key = keys?.length === 1 ? keys[0] : undefined;
+    if (key === undefined) {
+      unknown.add(combination);
+      continue;
+    }
+    if (aquo.WaardeBepalingsMethode.Code !== 'other:F012') {
+      count(out, 'unregistered_method', metingen.length);
+      continue;
+    }
+    let series = merged.get(key);
+    if (series === undefined) {
+      series = { labels: new Map(), conflicts: new Set() };
+      merged.set(key, series);
+    }
+    for (const m of metingen) {
+      const ts = instant(m.Tijdstip);
+      const quality = m.WaarnemingMetadata.Kwaliteitswaardecode;
+      const word = m.Meetwaarde.Waarde_Alfanumeriek;
+      const hilo = Object.hasOwn(TYPE_WORD, word) ? TYPE_WORD[word] : undefined;
+      const dropped =
+        quality === GAP
+          ? 'gap'
+          : !KNOWN_QUALITY.has(quality)
+            ? 'unknown_quality'
+            : ts > ctx.fetchedAt + TIDE_AHEAD_MS
+              ? 'beyond_horizon'
+              : ts < ctx.fetchedAt - DAY_MS
+                ? 'before_window'
+                : hilo === undefined
+                  ? 'hwlw_type_unknown'
+                  : series.conflicts.has(ts)
+                    ? 'conflict'
+                    : null;
+      if (dropped !== null || hilo === undefined) {
+        count(out, dropped ?? 'hwlw_type_unknown');
+        continue;
+      }
+      const before = series.labels.get(ts);
+      if (before === undefined) {
+        series.labels.set(ts, hilo);
+      } else if (before === hilo) {
+        count(out, 'duplicate');
+      } else {
+        // Two labels for one instant: neither is stored.
+        series.labels.delete(ts);
+        series.conflicts.add(ts);
+        count(out, 'conflict', 2);
+      }
+    }
+  }
+
+  out.unknown = unknown.size;
+  for (const [key, { labels }] of merged) {
+    for (const [ts, hilo] of [...labels].sort((a, b) => a[0] - b[0])) {
+      tideLabels.push({ series: key, ts: toIso(ts), hilo });
+    }
   }
   return out;
 }

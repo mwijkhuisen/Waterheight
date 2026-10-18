@@ -164,11 +164,15 @@ export type Normalised = {
   forecastPart?: ForecastPart;
   /** P16b: astronomical tide and high and low waters (NL-1), stored in `tide`, never in `obs`. */
   tide?: TideRowIn[];
+  /** #174: RWS's own high/low labels of the astronomical extremes (the GETETTPE type series), stored in `tide_label`. */
+  tideLabels?: TideLabelIn[];
 };
 
 /**
  * P16b: one tide value. `series` is the provider key of the registered primary measured H series of the location
- * and datum the value belongs to; `value` in cm (canonical); `hilo` set exactly for the two extreme kinds.
+ * and datum the value belongs to; `value` in cm (canonical); `hilo` set exactly for the two extreme kinds, except that
+ * an `extreme_astro` row whose list does not alternate comes with null (#174: the loader takes RWS's label for it,
+ * or stores nothing).
  */
 export type TideRowIn = {
   series: string;
@@ -177,6 +181,9 @@ export type TideRowIn = {
   value: number;
   hilo: 'high' | 'low' | null;
 };
+
+/** #174: RWS's label of one astronomical extreme; `series` is the key a heights row of the same instant resolves to. */
+export type TideLabelIn = { series: string; ts: string; hilo: 'high' | 'low' };
 
 /** The observation rows of a Normalised, as one or more arrays (`obsChunks` when the payload set it). */
 export const obsParts = (n: Normalised): Iterable<ObsRow[]> => n.obsChunks?.() ?? [n.obs];
