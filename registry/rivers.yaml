@@ -5,7 +5,8 @@
 #                    water_name); a test checks each one occurs there
 #   aliases          other spellings (OSM name:* and local forms), for P6b matching; never shown
 #   osm_relation_id  the curated type=waterway relation; the geo run fails if it carries another wikidata tag
-#   osm_way_name     only without a relation: ways tagged waterway=*, wikidata=<wikidata> and name=<this>
+#   osm_way_name     only without a relation or osm_member_of: ways tagged waterway=*, wikidata=<wikidata> and
+#                    name=<this>
 #   parent_river_id  the river it flows into, or for a delta branch the one it splits from
 #   km_direction     how the official km count (downstream, upstream = from the mouth, none known)
 #   evidence         where the relation and Wikidata ids come from (never guessed)
@@ -22,6 +23,18 @@
 #                   `h` hours or `d` days, a range [lo, hi] or one value with its `label` {nl, en} (the condition or
 #                   event); `derived: true` for a figure the catalogue derives from other anchors. Indicative, never an
 #                   ETA; the catalogue's UNVERIFIED figures and our own medians and low-water legs stay out
+#   kind             (P17a) river, delta_channel or canal; a row without it is a river. Canal edges have direction
+#                    `none` and stay out of place() and every public output (reaches, tiles, download, web labels)
+#                    until P17b
+#   tidal_zone       (P17a, `true` only, delta_channel only) the declared tidal zone: its edges have direction `none`, so
+#                    loops are allowed there; its reaches are tidal and carry no travel time
+#   osm_member_of    (P17a) instead of a relation or a way name: {river, name}, the waterway ways of that registered
+#                    river's curated relation (any role) whose OSM name is `name`, minus drop_ways; selection only,
+#                    never in an output
+#   mouths           (P17a, top level) where a river ends in the sea or a lake: id, river, `at` [lon, lat], `max_m`
+#                    (at most 2000), `waterbody` (one of PENDING_WATERBODY_IDS until P17b's water-body file) and evidence;
+#                    the mouth node is the node of the river's own edges nearest `at` within `max_m`, else the build
+#                    fails (mouth_unplaced)
 version: 1
 rivers:
   - id: rhine
@@ -673,7 +686,7 @@ rivers:
     osm_relation_id: 409101
     osm_way_name: null
     wikidata: Q168904
-    parent_river_id: null
+    parent_river_id: zwarte-water
     km_direction: none
     nl_entry:
       id: vecht-border
@@ -3606,6 +3619,420 @@ rivers:
     parent_river_id: rhine
     km_direction: none
     evidence: "Wikidata Q18027187 (no P402; P403 Q668852 Hinterrhein, a Wikidata error: its P625 (8.959 E, 46.728 N) is at Sumvitg on the Vorderrhein, which OSM maps as the main stream of the Rhine relation r123924 (Tomasee to Reichenau)), SPARQL by id 2026-10-16 (#143); found by its label \"Rein da Sumvitg\"@de; only the way w181642606 carries wikidata=<this id> in the extract (geo.yml run 38869567719, rivernet-fixture artifact); it holds only the lowest 6.2 km, 3.8 km from the gauge Sumvitg, Encardens"
+  # P17a (issue #65): the lower-delta channels, the Zwarte Water and the RWS-gauged canals
+  - id: boven-merwede
+    name_nl: "Boven-Merwede"
+    name_en: "Boven-Merwede"
+    names: {}
+    aliases: ["Bovenmerwede"]
+    osm_relation_id: 19260802
+    osm_way_name: null
+    wikidata: Q2577726
+    parent_river_id: waal
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q2577726 (P402 19260802; P403 Q1849230 Beneden-Merwede, Q253128 Nieuwe Merwede), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (selection pending the first geo.yml dispatch); fallback: the 2 ways of r123924 tagged wikidata=Q2577726 (osm_way_name Boven-Merwede)"
+  - id: beneden-merwede
+    name_nl: "Beneden-Merwede"
+    name_en: "Beneden-Merwede"
+    names: {}
+    aliases: ["Benedenmerwede"]
+    osm_relation_id: 19267990
+    osm_way_name: null
+    wikidata: Q1849230
+    parent_river_id: boven-merwede
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q1849230 (P402 19267990; P403 Q1551989 Oude Maas, Q1899552 Noord), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (selection pending the first geo.yml dispatch); fallback: the 3 ways of r123924 tagged wikidata=Q1849230 (osm_way_name Beneden-Merwede)"
+  - id: nieuwe-merwede
+    name_nl: "Nieuwe Merwede"
+    name_en: "Nieuwe Merwede"
+    names: {}
+    aliases: []
+    osm_relation_id: 19260921
+    osm_way_name: null
+    wikidata: Q253128
+    parent_river_id: boven-merwede
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q253128 (P402 19260921; P403 Q957787 Hollands Diep), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (selection pending the first geo.yml dispatch); fallback: way w131469656 of r123924 (waterway=canal, tagged wikidata=Q253128)"
+  - id: noord
+    name_nl: "Noord"
+    name_en: "Noord"
+    names: {}
+    aliases: []
+    osm_relation_id: 19274114
+    osm_way_name: null
+    wikidata: Q1899552
+    parent_river_id: beneden-merwede
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q1899552 (P402 19274114; P403 Q1362309 Nieuwe Maas), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (selection pending the first geo.yml dispatch); fallback: the 3 ways of r123924 tagged wikidata=Q1899552 (osm_way_name Noord)"
+  - id: oude-maas
+    name_nl: "Oude Maas"
+    name_en: "Oude Maas"
+    names: {}
+    aliases: []
+    osm_relation_id: 12218249
+    osm_way_name: null
+    wikidata: Q1551989
+    parent_river_id: beneden-merwede
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q1551989 (P402 12218249; P403 Q2669073 Scheur), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (selection pending the first geo.yml dispatch); fallback: osm_member_of rhine name Oude Maas (5 river ways and 1 waterway=fairway way in r123924)"
+  - id: nieuwe-maas
+    name_nl: "Nieuwe Maas"
+    name_en: "Nieuwe Maas"
+    names: {}
+    aliases: []
+    osm_relation_id: 12711142
+    osm_way_name: null
+    wikidata: Q1362309
+    parent_river_id: noord
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q1362309 (P402 12711142; P403 Q2669073 Scheur), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (selection pending the first geo.yml dispatch); fallback: osm_member_of rhine name Nieuwe Maas (5 untagged ways in r123924)"
+  - id: het-scheur
+    name_nl: "Het Scheur"
+    name_en: "Het Scheur"
+    names: {}
+    aliases: ["Scheur"]
+    osm_relation_id: 19268470
+    osm_way_name: null
+    wikidata: Q2669073
+    parent_river_id: nieuwe-maas
+    km_direction: none
+    kind: delta_channel
+    flags:
+      - kind: tidal
+        evidence: "Lower Rhine-Meuse delta, catalogue §4.7 item 7: Het Scheur runs from the Nieuwe Maas / Oude Maas confluence to the Nieuwe Waterweg, between zone channels. A directed connector outside the 14-channel tidal zone (owner, 2026-10-18), flagged tidal over its whole length so it is drawn like the zone, without flow arrows (D31)."
+    evidence: "Wikidata Q2669073 (P402 19268470; P403 Q1989481 Nieuwe Waterweg), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); gaugeless connector between the Nieuwe Maas / Oude Maas and the Nieuwe Waterweg (murg-aare precedent); own relation (pending dispatch); fallback: osm_member_of rhine name Scheur (1 untagged way in r123924)"
+  - id: nieuwe-waterweg
+    name_nl: "Nieuwe Waterweg"
+    name_en: "Nieuwe Waterweg"
+    names: {}
+    aliases: []
+    osm_relation_id: 19274117
+    osm_way_name: null
+    wikidata: Q1989481
+    parent_river_id: het-scheur
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q1989481 (P402 19274117; P403 Q1693 North Sea), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); parent is Het Scheur (Wikidata: Scheur flows into it); own relation (pending dispatch); fallback: osm_member_of rhine name Nieuwe Waterweg (1 untagged way in r123924)"
+  - id: hollandse-ijssel
+    name_nl: "Hollandse IJssel"
+    name_en: "Hollandse IJssel"
+    names: {}
+    aliases: ["Hollandsche IJssel"]
+    osm_relation_id: 12216145
+    osm_way_name: null
+    wikidata: Q1624768
+    parent_river_id: nieuwe-maas
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q1624768 (P402 12216145; P403 Q1362309 Nieuwe Maas), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); Wikidata nl label is Hollandse IJssel; no ways in the fixture, so own relation only (pending the first geo.yml dispatch)"
+  - id: dordtsche-kil
+    name_nl: "Dordtsche Kil"
+    name_en: "Dordtsche Kil"
+    names: {}
+    aliases: ["Dordtse Kil"]
+    osm_relation_id: null
+    osm_way_name: "Dordtsche Kil"
+    wikidata: Q127631
+    parent_river_id: oude-maas
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q127631 (no P402; P403 Q1551989 Oude Maas, Q957787 Hollands Diep), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); the single way of r123924 tagged wikidata=Q127631 and name=Dordtsche Kil is in the fixture (osm_way_name)"
+  - id: spui
+    name_nl: "Spui"
+    name_en: "Spui"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Spui"
+    wikidata: Q571651
+    parent_river_id: oude-maas
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q571651 (no P402; P403 Q1551989 Oude Maas, Q1585393 Haringvliet), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); the single way of r123924 tagged wikidata=Q571651 and name=Spui is in the fixture (osm_way_name); it is the only way named Spui there"
+  - id: amer
+    name_nl: "Amer"
+    name_en: "Amer"
+    names: {}
+    aliases: []
+    osm_relation_id: 1761773
+    osm_way_name: null
+    wikidata: Q304810
+    parent_river_id: bergsche-maas
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q304810 (P402 1761773; P403 Q957787 Hollands Diep), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); no ways in the fixture, so own relation only (pending the first geo.yml dispatch)"
+  - id: bergsche-maas
+    name_nl: "Bergsche Maas"
+    name_en: "Bergsche Maas"
+    names: {}
+    aliases: ["Bergse Maas"]
+    osm_relation_id: 1316759
+    osm_way_name: null
+    wikidata: Q820174
+    parent_river_id: meuse
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q820174 (P402 1316759; P403 Q957787 Hollands Diep), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); the Meuse relation r1075197 has destination=Bergsche Maas; no ways in the fixture, so own relation only (pending the first geo.yml dispatch)"
+  - id: hollandsch-diep
+    name_nl: "Hollandsch Diep"
+    name_en: "Hollands Diep"
+    names: {}
+    aliases: []
+    osm_relation_id: 19264170
+    osm_way_name: null
+    wikidata: Q957787
+    parent_river_id: nieuwe-merwede
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q957787 (P402 19264170; P403 Q1585393 Haringvliet, Q2437978 Volkerak), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (pending dispatch); fallback: the 4 ways of r123924 tagged wikidata=Q957787 (osm_way_name Hollandsch Diep), the 5th is untagged"
+  - id: haringvliet
+    name_nl: "Haringvliet"
+    name_en: "Haringvliet"
+    names: {}
+    aliases: []
+    osm_relation_id: 19264175
+    osm_way_name: null
+    wikidata: Q1585393
+    parent_river_id: hollandsch-diep
+    km_direction: none
+    kind: delta_channel
+    tidal_zone: true
+    evidence: "Wikidata Q1585393 (P402 19264175; P403 Q1693 North Sea), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (pending dispatch); fallback: osm_member_of rhine name Haringvliet (3 untagged main_stream ways in r123924)"
+  - id: zwarte-water
+    name_nl: "Zwarte Water"
+    name_en: "Zwarte Water"
+    names: {}
+    aliases: ["Zwartewater"]
+    osm_relation_id: 2237871
+    osm_way_name: null
+    wikidata: Q231763
+    parent_river_id: null
+    km_direction: none
+    kind: river
+    evidence: "Wikidata Q231763 (P402 2237871; P403 Q231747 Zwarte Meer), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); the P403 of the Vechte (Q168904); new root; the namesake Q116207008 has no mouth and is rejected; own relation (pending the first geo.yml dispatch)"
+  - id: noordzeekanaal
+    name_nl: "Noordzeekanaal"
+    name_en: "North Sea Canal"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Noordzeekanaal"
+    wikidata: Q119314
+    parent_river_id: null
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q119314 (no P402; P403 Q1693 North Sea, Q2129861 IJgeul), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); ways tagged wikidata=Q119314 (osm_way_name, pending the first geo.yml dispatch); the mouth is not a registered river, so no parent"
+  - id: amsterdam-rijnkanaal
+    name_nl: "Amsterdam-Rijnkanaal"
+    name_en: "Amsterdam-Rhine Canal"
+    names: {}
+    aliases: []
+    osm_relation_id: 2826125
+    osm_way_name: null
+    wikidata: Q478348
+    parent_river_id: waal
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q478348 (P402 2826125; P403 Q216171 Waal), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (pending the first geo.yml dispatch)"
+  - id: maas-waalkanaal
+    name_nl: "Maas-Waalkanaal"
+    name_en: "Maas-Waal Canal"
+    names: {}
+    aliases: []
+    osm_relation_id: 5366090
+    osm_way_name: null
+    wikidata: Q1476744
+    parent_river_id: null
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q1476744 (P402 5366090; no P403), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); two-way P402 5366090: the relation must carry wikidata=Q1476744 (pending the first geo.yml dispatch)"
+  - id: julianakanaal
+    name_nl: "Julianakanaal"
+    name_en: "Juliana Canal"
+    names: {}
+    aliases: []
+    osm_relation_id: 5362867
+    osm_way_name: null
+    wikidata: Q1712089
+    parent_river_id: null
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q1712089 (P402 5362867; no P403), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); two-way P402 5362867: relation r5362867 carries wikidata=Q1712089 in the committed fixture (the former canal trap)"
+  - id: kanaal-wessem-nederweert
+    name_nl: "Kanaal Wessem-Nederweert"
+    name_en: "Wessem-Nederweert Canal"
+    names: {}
+    aliases: []
+    osm_relation_id: 5362868
+    osm_way_name: null
+    wikidata: Q846191
+    parent_river_id: null
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q846191 (P402 5362868; no P403), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); two-way P402 5362868: the relation must carry wikidata=Q846191 (pending the first geo.yml dispatch)"
+  - id: zuid-willemsvaart
+    name_nl: "Zuid-Willemsvaart"
+    name_en: "Zuid-Willemsvaart"
+    names: {}
+    aliases: []
+    osm_relation_id: 2243765
+    osm_way_name: null
+    wikidata: Q228617
+    parent_river_id: dieze
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q228617 (P402 2243765; P403 Q1224319 Dieze), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); relation r2243765 carries wikidata=Q228617 in the committed fixture (the former canal trap); the Oude Zuid-Willemsvaart way is not in this relation"
+  - id: wilhelminakanaal
+    name_nl: "Wilhelminakanaal"
+    name_en: "Wilhelminakanaal"
+    names: {}
+    aliases: []
+    osm_relation_id: 3391385
+    osm_way_name: null
+    wikidata: Q631287
+    parent_river_id: zuid-willemsvaart
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q631287 (P402 3391385; P403 Q228617 Zuid-Willemsvaart), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (pending the first geo.yml dispatch)"
+  - id: eindhovensch-kanaal
+    name_nl: "Eindhovensch Kanaal"
+    name_en: "Eindhovensch Kanaal"
+    names: {}
+    aliases: ["Eindhovens Kanaal"]
+    osm_relation_id: 8452431
+    osm_way_name: null
+    wikidata: Q1949882
+    parent_river_id: null
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q1949882 (P402 8452431; no P403), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); two-way P402 8452431: the relation must carry wikidata=Q1949882 (pending the first geo.yml dispatch)"
+  - id: twentekanaal
+    name_nl: "Twentekanaal"
+    name_en: "Twentekanaal"
+    names: {}
+    aliases: []
+    osm_relation_id: 2354375
+    osm_way_name: null
+    wikidata: Q1587301
+    parent_river_id: ijssel
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q1587301 (P402 2354375; P403 Q217818 IJssel), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (pending the first geo.yml dispatch); the branch to Almelo (aadorp) is not in this item"
+  - id: meppelerdiep
+    name_nl: "Meppelerdiep"
+    name_en: "Meppelerdiep"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Meppelerdiep"
+    wikidata: Q667700
+    parent_river_id: zwarte-water
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q667700 (no P402; P403 Q231763 Zwarte Water), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); ways tagged wikidata=Q667700 (osm_way_name, pending the first geo.yml dispatch)"
+  - id: zwolle-ijsselkanaal
+    name_nl: "Zwolle-IJsselkanaal"
+    name_en: "Zwolle-IJsselkanaal"
+    names: {}
+    aliases: []
+    osm_relation_id: 17875579
+    osm_way_name: null
+    wikidata: Q2936045
+    parent_river_id: null
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q2936045 (P402 17875579; no P403), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); two-way P402 17875579: the relation must carry wikidata=Q2936045 (pending the first geo.yml dispatch)"
+  - id: eemskanaal
+    name_nl: "Eemskanaal"
+    name_en: "Eemskanaal"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Eemskanaal"
+    wikidata: Q1339731
+    parent_river_id: null
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q1339731 (no P402; P403 Q1854148 Mouth of the Ems river), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); ways tagged wikidata=Q1339731 (osm_way_name, pending the first geo.yml dispatch); the mouth is not a registered river, so no parent"
+  - id: oude-eemskanaal
+    name_nl: "Oude Eemskanaal"
+    name_en: "Oude Eemskanaal"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Oude Eemskanaal"
+    wikidata: Q34734769
+    parent_river_id: null
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q34734769 (no P402; P403 Q1854148 Mouth of the Ems river), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); ways tagged wikidata=Q34734769 (osm_way_name, pending the first geo.yml dispatch); the mouth is not a registered river, so no parent"
+  - id: prinses-margrietkanaal
+    name_nl: "Prinses Margrietkanaal"
+    name_en: "Prinses Margrietkanaal"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Prinses Margrietkanaal"
+    wikidata: Q661647
+    parent_river_id: null
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q661647 (no P402; P403 Q4121 IJsselmeer), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); ways tagged wikidata=Q661647 (osm_way_name, pending the first geo.yml dispatch); the mouth is a lake, so no parent"
+  - id: reitdiep
+    name_nl: "Reitdiep"
+    name_en: "Reitdiep"
+    names: {}
+    aliases: []
+    osm_relation_id: null
+    osm_way_name: "Reitdiep"
+    wikidata: Q2153647
+    parent_river_id: null
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q2153647 (no P402; P403 Q525364 Lauwersmeer), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); ways tagged wikidata=Q2153647 (osm_way_name, pending the first geo.yml dispatch); a natural watercourse that the RWS inventory types as canal (dorkwerd.reitdiep); the mouth is a lake, so no parent"
+  - id: schelde-rijnkanaal
+    name_nl: "Schelde-Rijnkanaal"
+    name_en: "Scheldt-Rhine Canal"
+    names: {}
+    aliases: []
+    osm_relation_id: 2433219
+    osm_way_name: null
+    wikidata: Q1717773
+    parent_river_id: null
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q1717773 (P402 2433219; P403 Q2437978 Volkerak), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (pending the first geo.yml dispatch); the Volkerak is not a registered river, so no parent"
+  - id: kanaal-gent-terneuzen
+    name_nl: "Kanaal Gent-Terneuzen"
+    name_en: "Ghent-Terneuzen Canal"
+    names: {}
+    aliases: []
+    osm_relation_id: 12230517
+    osm_way_name: null
+    wikidata: Q1009271
+    parent_river_id: null
+    km_direction: none
+    kind: canal
+    evidence: "Wikidata Q1009271 (P402 12230517; P403 Q1524840 Western Scheldt), SPARQL 2026-10-18 (tools/geo/rivernet/lookup-wikidata.ts); own relation (pending the first geo.yml dispatch); the Western Scheldt (Q1524840) is not the registered scheldt row (Q37620), so no parent"
 excluded:
   - name: "Bovenrijn"
     wikidata: Q55022283
