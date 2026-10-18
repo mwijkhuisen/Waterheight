@@ -366,7 +366,9 @@ export async function readStates(
   const { stations } = fixed;
   const forecast = opts.forecast;
   // P14f: the day-of-year rows of t's UTC day (also for a forecast t), outside the snapshot like the static rows and
-  // beside it, not after it (review R1-4): one more connection at most, for one short indexed read.
+  // beside it, not after it (review R1-4): one more connection at most, for one short indexed read. Both promises go
+  // into Promise.all unawaited, so a failure of either is handled there (review round 2, X1: an `await` inside the
+  // array left the DOY read's rejection unhandled while the snapshot ran, which ends the process).
   const [doyRows, rows] = await Promise.all([
     readDoy(db, family, [utcMonthDay(t)], opts.cache),
     forecast !== undefined
@@ -378,7 +380,7 @@ export async function readStates(
           classes: [],
           health: [],
         }
-      : await snapshot(db, async (tx) => {
+      : snapshot(db, async (tx) => {
           const warnings = (
             await sql<WarningRow>`
         SELECT ${WARNING_COLUMNS} FROM ${sql.table(V.warning)} WHERE valid @> ${at}::timestamptz ORDER BY id`.execute(

@@ -39,8 +39,11 @@ Options: `--family public|owner` (each at most once), `--series <id>,…` to res
 Run it under the deploy lock, so that no `rws-update` or `rws-deploy` can start its `migrate` meanwhile (it fails at once if a deploy is running: try again later), and not while the loader is catching up. It can run in the daytime: it takes the loader lock for one series at a time.
 
 ```bash
+sudo mkdir -p -m 0700 /run/rws   # /run is a tmpfs: after a reboot the lock directory exists only once an rws-* script ran
 sudo flock -n /run/rws/rws-deploy.lock bash -c 'cd / && . /usr/local/lib/rws/deploy/bin/rws-lib.sh && rws_compose run --rm --no-deps -T migrate climatology'
 ```
+
+While it runs no deploy can start: `rws-update` skips its run ("another deploy is running") and a manual `rws-deploy` waits at most 30 minutes for the lock. So do not start it when a release is waiting, and time the dry-run first: the run takes about as long as the dry-run plus a few seconds a series for the writes.
 
 Both families run in that one command. `--series <id>,…` restricts it, for instance to re-check one series.
 

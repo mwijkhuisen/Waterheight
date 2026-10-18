@@ -2,7 +2,7 @@ import { Snapshot } from '@rws/contracts';
 import type { Classified } from '@rws/core';
 import { describe, expect, it } from 'vitest';
 import { publicSnapshot } from '../../src/api/data.ts';
-import { classCoverage, type StateRead, StaticCache } from '../../src/api/states.ts';
+import { classCoverage, readStates, type StateRead, type Static, StaticCache } from '../../src/api/states.ts';
 import { errorCode } from '../../src/db/pool.ts';
 import { fakeDb } from './fake-db.ts';
 
@@ -166,6 +166,63 @@ describe('publicSnapshot fails closed on an owner-only source (review SR-5)', ()
       expect(errorCode(thrown)).toBe('owner_basis');
     });
   }
+});
+
+describe('readStates handles a failed DOY read beside a pending snapshot (P14f review round 2, X1)', () => {
+  const fixed = {
+    stations: [],
+    series: [],
+    refs: [],
+    zeros: [],
+    attached: new Map(),
+    sources: new Set<string>(),
+    attribution: [],
+    dates: new Map(),
+    history: new Map(),
+  } as unknown as Static;
+  const opts = (doy: () => Promise<never>) => ({
+    now: T,
+    current: false,
+    sections: new Map<string, string>(),
+    cache: { get: async () => fixed, doy } as unknown as StaticCache,
+  });
+
+  it('the DOY read failing first is the error of the read, never an unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const note = (e: unknown) => unhandled.push(e);
+    process.on('unhandledRejection', note);
+    try {
+      // The snapshot's statements answer only after 50 ms; the DOY read fails at once.
+      const db = fakeDb(() => new Promise((resolve) => setTimeout(() => resolve({ rows: [] }), 50)));
+      await expect(
+        readStates(
+          db,
+          'public',
+          T,
+          opts(() => Promise.reject(new Error('doy_failed'))),
+        ),
+      ).rejects.toThrow('doy_failed');
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', note);
+    }
+  });
+
+  it('the snapshot failing first is the error of the read, and the later DOY failure is handled', async () => {
+    const unhandled: unknown[] = [];
+    const note = (e: unknown) => unhandled.push(e);
+    process.on('unhandledRejection', note);
+    try {
+      const db = fakeDb(() => Promise.reject(new Error('snapshot_failed')));
+      const late = () => new Promise<never>((_, reject) => setTimeout(() => reject(new Error('doy_failed')), 30));
+      await expect(readStates(db, 'public', T, opts(late))).rejects.toThrow('snapshot_failed');
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', note);
+    }
+  });
 });
 
 describe('StaticCache.doy keeps no expired day (P14f review R1-5)', () => {
