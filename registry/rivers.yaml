@@ -23,8 +23,8 @@
 #                   event); `derived: true` for a figure the catalogue derives from other anchors. Indicative, never an
 #                   ETA; the catalogue's UNVERIFIED figures and our own medians and low-water legs stay out
 #   kind             (P17a) river, delta_channel or canal; a row without it is a river. Canal edges have direction
-#                    `none` and stay out of place() and every public output (reaches, tiles, download, web labels)
-#                    until P17b
+#                    `none` and stay out of place() and every product (reaches, tiles, download, web labels) until
+#                    P17b; they appear in the raw graph assets (river_graph.json, reaches.geojson, qa-report.json)
 #   tidal_zone       (P17a, `true` only, delta_channel only) the declared tidal zone: its edges have direction `none`, so
 #                    loops are allowed there; its reaches are tidal and carry no travel time
 #   mouths           (P17a, top level) where a river ends in the sea or a lake: id, river, `at` [lon, lat], `max_m`

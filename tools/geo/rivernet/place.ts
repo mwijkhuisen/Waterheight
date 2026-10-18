@@ -73,7 +73,7 @@ export function place(
   stations: readonly StationInput[],
   overrides: SnapOverridesFile,
 ): Placed {
-  // P17a: canals stay out of every public output until P17b. Their own edges are dropped, and a canal id is stripped
+  // P17a: canals stay out of every product built from here (reaches file, tiles, bins, download) until P17b. Their own edges are dropped, and a canal id is stripped
   // from an edge it shares with a river (a canal deeper in the parent tree would otherwise be that edge's primary),
   // so no canal has an edge in the network and a canal junction cuts no river's reach.
   const canals = new Set(rivers.rivers.filter((r) => r.kind === 'canal').map((r) => r.id));

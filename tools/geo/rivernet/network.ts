@@ -123,6 +123,8 @@ export function topoOrder(
     const stalled = new Set(left);
     // ponytail: the release may pick a node behind a loop rather than on it, which only skews km_graph inside the
     // zone (the end of every directed river); Tarjan SCC is the upgrade if P17b needs chainage in the zone.
+    // A release cannot hide a directed loop: checkAcyclic refused any among the OSM edges, and a join never targets an
+    // ancestor of its own source (over every link, earlier joins included), so no join closes a loop of any kind.
     const release = left
       .flatMap((n) => (out.get(n) ?? []).filter((l) => isNone(l) && stalled.has(ends(l).to)).map((l) => ends(l).to))
       .sort(byString)[0];
