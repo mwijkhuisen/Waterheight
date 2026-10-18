@@ -58,8 +58,15 @@ export const River = z.strictObject({
   name_en: Name,
   names: z.record(SourceId, z.array(Spelling).min(1)),
   aliases: z.array(Spelling),
+  // P17a: what the water is; a row without `kind` is a river (read as `r.kind ?? 'river'`).
+  kind: z.enum(['river', 'delta_channel', 'canal']).optional(),
+  // P17a: a delta channel of the declared tidal zone: its edges carry direction `none`, so loops are allowed there.
+  tidal_zone: z.literal(true).optional(),
   osm_relation_id: z.number().int().positive().nullable(),
   osm_way_name: Spelling.nullable(),
+  // P17a: the waterway ways of `river`'s curated relation (any role) whose OSM `name` is `name`. The name selects
+  // ways only and never reaches an output.
+  osm_member_of: z.strictObject({ river: Slug, name: Spelling }).optional(),
   wikidata: Qid,
   parent_river_id: Slug.nullable(),
   km_direction: z.enum(KM_DIRECTIONS),
@@ -69,6 +76,23 @@ export const River = z.strictObject({
   evidence: Evidence,
 });
 export type River = z.infer<typeof River>;
+
+/** The water-body ids a mouth may name until P17b's water-body file (registry/waterbodies.yaml) replaces this list. */
+export const PENDING_WATERBODY_IDS = ['eems-dollard', 'ketelmeer', 'noordzee', 'zwarte-meer'] as const;
+
+/**
+ * Where a river ends in the sea or a lake (P17a): the node of the river's own edges nearest to `at`, at most `max_m`
+ * away (as nl_entry), in the water body `waterbody`.
+ */
+export const Mouth = z.strictObject({
+  id: Slug,
+  river: Slug,
+  at: LonLat,
+  max_m: z.number().positive().max(2000),
+  waterbody: Slug,
+  evidence: Evidence,
+});
+export type Mouth = z.infer<typeof Mouth>;
 
 /**
  * A reviewed connection where the OSM relation ends short of its confluence or
@@ -116,6 +140,7 @@ export const RiversFile = z.strictObject({
   excluded: z.array(z.strictObject({ name: z.string().min(1), wikidata: Qid.optional(), reason: z.string().min(1) })),
   joins: z.array(Join).optional(),
   travel_times: z.array(TravelTime).optional(),
+  mouths: z.array(Mouth).optional(),
 });
 export type RiversFile = z.infer<typeof RiversFile>;
 
@@ -136,17 +161,24 @@ export function validateRivers(input: unknown): { problems: string[]; rivers?: R
     dup('id', ids, r.id, r.id);
     dup('osm_relation_id', relations, r.osm_relation_id, r.id);
     dup('wikidata', qids, r.wikidata, r.id);
-    if ((r.osm_relation_id === null) === (r.osm_way_name === null))
-      problems.push(`${r.id}: exactly one of osm_relation_id and osm_way_name must be set`);
+    if (
+      [r.osm_relation_id !== null, r.osm_way_name !== null, r.osm_member_of !== undefined].filter(Boolean).length !== 1
+    )
+      problems.push(`${r.id}: exactly one of osm_relation_id, osm_way_name and osm_member_of must be set`);
+    if (r.tidal_zone && r.kind !== 'delta_channel') problems.push(`${r.id}: tidal_zone needs kind delta_channel`);
     for (const [src, list] of Object.entries(r.names))
       if (new Set(list).size !== list.length) problems.push(`${r.id}: names.${src} has a duplicate spelling`);
     const ways = new Set<number>();
     for (const w of r.drop_ways ?? []) dup('drop_ways id', ways, w.id, r.id);
   }
   const parent = new Map(f.rivers.map((r) => [r.id, r.parent_river_id]));
+  const relationOf = new Map(f.rivers.map((r) => [r.id, r.osm_relation_id]));
   for (const r of f.rivers) {
     if (r.parent_river_id !== null && !parent.has(r.parent_river_id))
       problems.push(`${r.id}: unknown parent_river_id ${r.parent_river_id}`);
+    const of = r.osm_member_of?.river;
+    if (of !== undefined && (relationOf.get(of) ?? null) === null)
+      problems.push(`${r.id}: osm_member_of.river ${of} is not a river with an osm_relation_id`);
   }
   const looped = new Set<string>();
   for (const r of f.rivers) {
@@ -165,6 +197,13 @@ export function validateRivers(input: unknown): { problems: string[]; rivers?: R
   for (const r of f.rivers) if (r.nl_entry) dup('nl_entry id', entries, r.nl_entry.id, r.id);
   for (const j of f.joins ?? []) {
     for (const id of [j.river, j.to_river]) if (!parent.has(id)) problems.push(`joins: unknown river ${id}`);
+  }
+  const mouths = new Set<string>();
+  for (const m of f.mouths ?? []) {
+    dup('mouth id', mouths, m.id, 'mouths');
+    if (!parent.has(m.river)) problems.push(`mouths ${m.id}: unknown river ${m.river}`);
+    if (!(PENDING_WATERBODY_IDS as readonly string[]).includes(m.waterbody))
+      problems.push(`mouths ${m.id}: unknown waterbody ${m.waterbody}`);
   }
   const pairs = new Set<string>();
   for (const t of f.travel_times ?? []) {

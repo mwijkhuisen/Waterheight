@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KM_DIRECTIONS, validateRivers } from '../src/index.ts';
+import { KM_DIRECTIONS, PENDING_WATERBODY_IDS, validateRivers } from '../src/index.ts';
 
 // registry/rivers.yaml (P6a): the schema and its cross-checks, on a small in-test document.
 
@@ -85,6 +85,83 @@ describe('rivers.yaml schema', () => {
     ];
     for (const [label, mutate, want] of cases) {
       const d = valid();
+      mutate(d);
+      expect(problems(d), label).toMatch(want);
+    }
+  });
+});
+
+describe('rivers.yaml kind, tidal zone, member-of selection and mouths (P17a)', () => {
+  const mouth = (over: Record<string, unknown> = {}) => ({
+    id: 'waal-noordzee',
+    river: 'waal',
+    at: [4.1, 51.98],
+    max_m: 2000,
+    waterbody: 'noordzee',
+    evidence: 'test',
+    ...over,
+  });
+  const p17a = () => {
+    const d = valid();
+    Object.assign(at(d, 1), { kind: 'delta_channel', tidal_zone: true });
+    Object.assign(at(d, 4), { kind: 'canal' });
+    d.rivers.push(
+      river('noord', 'Noord', {
+        kind: 'delta_channel',
+        tidal_zone: true,
+        osm_member_of: { river: 'rhine', name: 'Noord' },
+        wikidata: 'Q7',
+        parent_river_id: 'waal',
+      }),
+    );
+    return { ...d, mouths: [mouth()] };
+  };
+
+  it('accepts kind, tidal_zone, osm_member_of and mouths, all optional', () => {
+    expect(problems(p17a())).toBe('');
+    expect(PENDING_WATERBODY_IDS).toEqual(['eems-dollard', 'ketelmeer', 'noordzee', 'zwarte-meer']);
+  });
+
+  it('fails each mutation with its own problem', () => {
+    const noord = (d: ReturnType<typeof p17a>) => d.rivers[5] as Record<string, unknown>;
+    const cases: [string, (d: ReturnType<typeof p17a>) => void, RegExp][] = [
+      ['bad kind', (d) => (at(d, 0).kind = 'lake'), /kind/],
+      ['tidal_zone false', (d) => (at(d, 1).tidal_zone = false), /tidal_zone/],
+      ['tidal_zone on a river', (d) => (at(d, 1).kind = 'river'), /waal: tidal_zone needs kind delta_channel/],
+      ['tidal_zone without a kind', (d) => delete at(d, 1).kind, /waal: tidal_zone needs kind delta_channel/],
+      ['member-of and a relation', (d) => (noord(d).osm_relation_id = 9), /noord: exactly one of/],
+      ['member-of and a way name', (d) => (noord(d).osm_way_name = 'Noord'), /noord: exactly one of/],
+      [
+        'member-of a river without a relation',
+        (d) => (noord(d).osm_member_of = { river: 'merkske', name: 'Noord' }),
+        /noord: osm_member_of.river merkske is not a river with an osm_relation_id/,
+      ],
+      [
+        'member-of an unknown river',
+        (d) => (noord(d).osm_member_of = { river: 'nowhere', name: 'Noord' }),
+        /noord: osm_member_of.river nowhere is not/,
+      ],
+      ['member-of without a name', (d) => (noord(d).osm_member_of = { river: 'rhine' }), /osm_member_of/],
+      [
+        'mouth of an unknown river',
+        (d) => (d.mouths = [mouth({ river: 'nowhere' })]),
+        /mouths waal-noordzee: unknown river nowhere/,
+      ],
+      [
+        'duplicate mouth id',
+        (d) => (d.mouths = [mouth(), mouth({ river: 'rhine' })]),
+        /mouths: duplicate mouth id waal-noordzee/,
+      ],
+      [
+        'unknown waterbody',
+        (d) => (d.mouths = [mouth({ waterbody: 'ijsselmeer' })]),
+        /mouths waal-noordzee: unknown waterbody ijsselmeer/,
+      ],
+      ['mouth max_m over 2 km', (d) => (d.mouths = [mouth({ max_m: 2001 })]), /max_m/],
+      ['mouth unknown key', (d) => (d.mouths = [mouth({ name: 'Noordzee' })]), /name/],
+    ];
+    for (const [label, mutate, want] of cases) {
+      const d = p17a();
       mutate(d);
       expect(problems(d), label).toMatch(want);
     }
