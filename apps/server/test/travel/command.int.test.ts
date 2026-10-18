@@ -206,10 +206,13 @@ describe('travel-times against a database, as rws_publish', { timeout: 120_000 }
     }
     expect(text).not.toContain(OWNER_STATION);
     expect(text).not.toContain('be.spw');
-    // counts only on the log: reaches 8, eligible 5 (gamma, delta.1, alpha x3; beta x2 and the open-ended one are out)
+    // counts only on the log: reaches 8, eligible 5 (gamma, delta.1, alpha x3; beta x2 and the open-ended one are
+    // out); delta.1's downstream end has no usable hour, so it has too little common history. Each reach reads its
+    // own series once a year: alpha.1 two (A Q, B Q; A's flow is its Q), alpha.2 three (B H, D H, and B Q for the
+    // flow), alpha.3 two, delta.1 two.
     expect(log).toHaveLength(1);
     expect(log[0]).toMatch(
-      /reaches 8, eligible 5, without public series 1, without a common quantity 0, queries \d+, years 2026-2026, pairs 3$/,
+      /reaches 8, eligible 5, without public series 1, without a common quantity 0, with too little common history 1, queries 9, timeouts 0, years 2026-2026, pairs 3$/,
     );
     // read-only: no row written
     expect((await h.t.admin.query('SELECT count(*)::int AS n FROM obs')).rows[0]?.n).toBe(before);

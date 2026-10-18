@@ -76,7 +76,9 @@ const NO_TOUCHES: Record<DirtyKind, never[]> = {
 /**
  * Applies a plan for one series inside the caller's transaction (which holds the loader lock): closes, inserts
  * (`WHERE NOT EXISTS`: the key is a temporal one, so there is no ON CONFLICT target) and marks the series' station
- * dirty from `at` on. `at` is the run's start, or one millisecond after the newest open range it closes.
+ * dirty from `at` on. `at` is the run's start, or one millisecond after the newest open range it closes; the dirty
+ * range runs from `at` to `commitAt`, the time of this series' write (P14f review R1-10: with `at` alone it was one
+ * instant).
  */
 export async function applyPlan(
   tx: Tx,
@@ -85,6 +87,7 @@ export async function applyPlan(
   stored: readonly Stored[],
   plan: Plan,
   runStart: Date,
+  commitAt: Date,
 ): Promise<void> {
   if (plan.close.length === 0 && plan.insert.length === 0) return;
   const newestLo = stored.reduce((m, s) => Math.max(m, s.lo.getTime()), Number.NEGATIVE_INFINITY);
@@ -113,7 +116,7 @@ export async function applyPlan(
   // The series' states change from `at` on (the publishers render the station again; no settled day is bumped).
   await markDirty(
     tx,
-    at,
+    new Date(Math.max(at.getTime(), commitAt.getTime())),
     dirtyEntriesOf(
       c.audience,
       { ...NO_TOUCHES, reference: [{ series: c.id, from: at.getTime() }] },

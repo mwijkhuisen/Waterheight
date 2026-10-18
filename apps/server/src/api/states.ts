@@ -105,6 +105,7 @@ async function readDoyRows(
   family: ChannelAudience,
   mds: readonly number[],
 ): Promise<Map<number, Ranged<RefRow>[]>> {
+  if (mds.length === 0) return new Map(); // no day key (no hour): no query (P14f review R1-4)
   const { rows } = await sql<Ranged<RefRow>>`
     SELECT ${REF_COLUMNS}, ${RANGE}
     FROM ${sql.table(VIEWS[family].reference)}
@@ -200,6 +201,9 @@ export class StaticCache {
       else missing.push(md);
     }
     if (missing.length > 0) {
+      // Expired keys go when new ones come (P14f review R1-5): the map holds nothing past its TTL but what this
+      // call refreshes.
+      for (const [key, e] of this.#doy) if (now - e.at >= this.#ttlMs) this.#doy.delete(key);
       const read = readDoyRows(db, family, missing);
       for (const md of missing) {
         const key = `${family}|${md}`;
@@ -212,6 +216,10 @@ export class StaticCache {
       }
     }
     return (await Promise.all(held)).flat();
+  }
+  /** The number of day entries held (the tests' view of the sweep). */
+  get doyEntries(): number {
+    return this.#doy.size;
   }
 }
 
@@ -357,9 +365,10 @@ export async function readStates(
   const fixed = await (opts.cache?.get(db, family) ?? readStatic(db, family));
   const { stations } = fixed;
   const forecast = opts.forecast;
-  // P14f: the day-of-year rows of t's UTC day (also for a forecast t), outside the snapshot like the static rows.
-  const doy = (await readDoy(db, family, [utcMonthDay(t)], opts.cache)).filter((r) => validAt(r, t));
-  const rows =
+  // P14f: the day-of-year rows of t's UTC day (also for a forecast t), outside the snapshot like the static rows and
+  // beside it, not after it (review R1-4): one more connection at most, for one short indexed read.
+  const [doyRows, rows] = await Promise.all([
+    readDoy(db, family, [utcMonthDay(t)], opts.cache),
     forecast !== undefined
       ? {
           areas: [],
@@ -396,7 +405,9 @@ export async function readStates(
                 ).rows
               : [],
           };
-        });
+        }),
+  ]);
+  const doy = doyRows.filter((r) => validAt(r, t));
   const series = fixed.series;
   const refs = [...fixed.refs.filter((r) => validAt(r, t)), ...doy];
   const zeros = fixed.zeros.filter((z) => validAt(z, t));

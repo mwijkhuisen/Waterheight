@@ -53,10 +53,10 @@ async function pickSeries(quantity: 'H' | 'Q', n: number): Promise<{ id: number;
 }
 
 const logLines: string[] = [];
-async function run(argv: string[], now: Date = RUN1) {
+async function run(argv: string[], now: Date | (() => Date) = RUN1) {
   logLines.length = 0;
   const code = await climatologyMain(argv, { DATABASE_URL: h.t.urlFor('rws_migrator') }, (l) => logLines.push(l), {
-    now: () => now,
+    now: typeof now === 'function' ? now : () => now,
   });
   return { code, log: [...logLines] };
 }
@@ -154,7 +154,7 @@ describe('the public family', { timeout: 300_000 }, () => {
     expect(r.code).toBe(0);
     expect(r.log).toHaveLength(1);
     expect(r.log[0]).toMatch(
-      /\(dry run\).*with a set 2, complete years 10-10, rows new 1460, changed 0, unchanged 0, closed 0/,
+      /\(dry run\).*with a set 2, years per set 10-10, rows new 1460, changed 0, unchanged 0, closed 0/,
     );
     expect(await countRows(id.a as number, false)).toBe(0);
   });
@@ -164,7 +164,7 @@ describe('the public family', { timeout: 300_000 }, () => {
     expect(r.code).toBe(0);
     // a and the level series are the two with a set; nine, noHistory... are counted as considered, not eligible
     expect(r.log).toHaveLength(1);
-    expect(r.log[0]).toMatch(/with a set 2, complete years 10-10, rows new 1460, changed 0, unchanged 0, closed 0/);
+    expect(r.log[0]).toMatch(/with a set 2, years per set 10-10, rows new 1460, changed 0, unchanged 0, closed 0/);
     expect(await countRows(id.a as number)).toBe(730);
     expect(await countRows(id.level as number)).toBe(730);
     for (const k of ['nine', 'tidal', 'impounded', 'noHistory', 'stage', 'spare'])
@@ -342,8 +342,16 @@ describe('re-runs', { timeout: 300_000 }, () => {
       id.a,
     ]);
     const second = new Date(RUN1.getTime() + 2 * 86_400_000);
-    const r = await run(['--series', ownIds()], second);
+    // the clock moves a minute after the run's start: the dirty range ends at the write, not at the start (R1-10)
+    let ticks = 0;
+    const r = await run(['--series', ownIds()], () => new Date(second.getTime() + (ticks++ === 0 ? 0 : 60_000)));
     expect(r.code).toBe(0);
+    const dirty = await q<{ from_ts: Date; to_ts: Date }>(
+      `SELECT from_ts, to_ts FROM publish_dirty WHERE kind = 'reference' AND family = 'public' AND from_ts = $1`,
+      [second.toISOString()],
+    );
+    expect(dirty.length).toBeGreaterThan(0);
+    expect(dirty.every((d) => d.to_ts.getTime() === second.getTime() + 60_000)).toBe(true);
     const m = /rows new 0, changed (\d+), unchanged (\d+), closed 0/.exec(r.log[0] ?? '');
     expect(m).not.toBeNull();
     const changed = Number(m?.[1]);
@@ -372,5 +380,16 @@ describe('re-runs', { timeout: 300_000 }, () => {
     expect(r.log[0]).toMatch(/rows new 0, changed 0, unchanged 730, closed 730/);
     expect(await countRows(id.a as number)).toBe(0);
     expect(await countRows(id.a as number, false)).toBeGreaterThan(730);
+  });
+
+  it('a deactivated series has its open rows closed (R1-2)', async () => {
+    expect(await countRows(id.level as number)).toBe(730);
+    await q(`UPDATE series SET active = false WHERE id = $1`, [id.level]);
+    const fourth = new Date(RUN1.getTime() + 4 * 86_400_000);
+    const r = await run(['--family', 'public', '--series', ownIds()], fourth);
+    expect(r.code).toBe(0);
+    expect(r.log[0]).toMatch(/with a set 0, years per set none, rows new 0, changed 0, unchanged 0, closed 730/);
+    expect(await countRows(id.level as number)).toBe(0);
+    expect(await countRows(id.level as number, false)).toBe(730);
   });
 });

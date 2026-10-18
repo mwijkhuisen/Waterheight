@@ -215,8 +215,9 @@ export { inSeason, monthDay };
 /**
  * The candidate of our day-of-year climatology (P14f, plan §1a.3): the series' P10_DOY and P90_DOY rows of the UTC
  * day key of t (29 February uses 0228), "open upward": at or below P10 [low, low], between [normal, extreme] with
- * the point normal, at or above P90 [elevated, extreme] with the point elevated. It never yields high or extreme
- * and never caps a later candidate, so an NL-4 high class still shows above it. A key without exactly one row of
+ * the point normal, at or above P90 [elevated, extreme] with the point elevated. It never yields high or extreme;
+ * above P10 it never caps a later candidate from above, so an NL-4 high class still shows above it, while at or
+ * below P10 it is [low, low] (the owner decision of 2026-10-18). A key without exactly one row of
  * each kind, or with P10 >= P90, decides nothing. The label names no agency: the statistic is ours, computed from
  * the history of the row's own source, which is the basis source (never the role's `'*'`).
  */

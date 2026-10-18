@@ -232,7 +232,8 @@ export function levelOf(source: string, scale: string, code: string): 1 | 2 | 3 
  *   never an alert level;
  * - `doy`: our own day-of-year climatology of the series (P14f, D18 extension of 2026-10-18), "open upward": at or
  *   below P10_DOY `low`, between `normal`, at or above P90_DOY `elevated` (unusual for the date, never a warning);
- *   it never yields high or extreme and never caps a later candidate.
+ *   it never yields high or extreme, and above P10 never caps a later candidate from above (at or below P10 it is
+ *   [low, low], the owner decision).
  */
 export type SetForm = 'scale' | 'stats' | 'percentile' | 'doy';
 

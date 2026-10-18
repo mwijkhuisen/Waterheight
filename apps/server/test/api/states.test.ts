@@ -2,8 +2,9 @@ import { Snapshot } from '@rws/contracts';
 import type { Classified } from '@rws/core';
 import { describe, expect, it } from 'vitest';
 import { publicSnapshot } from '../../src/api/data.ts';
-import { classCoverage, type StateRead } from '../../src/api/states.ts';
+import { classCoverage, type StateRead, StaticCache } from '../../src/api/states.ts';
 import { errorCode } from '../../src/db/pool.ts';
+import { fakeDb } from './fake-db.ts';
 
 // The pure parts of the P7b read on hand-made reads: the coverage report (review CR-4) and the owner-source check at
 // the public snapshot's boundary (review SR-5).
@@ -165,4 +166,33 @@ describe('publicSnapshot fails closed on an owner-only source (review SR-5)', ()
       expect(errorCode(thrown)).toBe('owner_basis');
     });
   }
+});
+
+describe('StaticCache.doy keeps no expired day (P14f review R1-5)', () => {
+  it('sweeps the day entries past their TTL when it inserts, and reads nothing for no day key', async () => {
+    let now = 0;
+    let queries = 0;
+    const db = fakeDb(async () => {
+      queries++;
+      return { rows: [] };
+    });
+    const cache = new StaticCache(60_000, () => now);
+    await cache.doy(db, 'public', [101, 102]);
+    await cache.doy(db, 'owner', [101]);
+    expect(cache.doyEntries).toBe(3);
+    expect(queries).toBe(2);
+    // within the TTL: held, no query, nothing swept
+    now = 59_999;
+    await cache.doy(db, 'public', [101, 102]);
+    expect(queries).toBe(2);
+    expect(cache.doyEntries).toBe(3);
+    // past it: a new key sweeps the three expired ones and holds only itself
+    now = 60_000;
+    await cache.doy(db, 'public', [103]);
+    expect(cache.doyEntries).toBe(1);
+    expect(queries).toBe(3);
+    // no day key: no query
+    await cache.doy(db, 'public', []);
+    expect(queries).toBe(3);
+  });
 });

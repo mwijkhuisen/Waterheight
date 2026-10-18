@@ -57,7 +57,8 @@ export function utcMonthDay(t: number): number {
  * UTC years: never a guess). A complete day has a sample in at least `min_day_hours` hours; a complete year has at
  * least `min_year_share` of its days complete. The pool of a key is, for every complete year, the real dates of
  * that year's key ± `window_days` (a window may reach into the year before or after, and a 29 February inside it
- * counts like any date), each only when that day is complete. The output depends only on the set of days, never on
+ * counts like any date), each only when that day is complete. A key has a row only when its pool holds days of at least
+ * `min_years` years and at least half the nominal pool (`min_years × (2 × window_days + 1) / 2` days). The output depends only on the set of days, never on
  * their order; a malformed, impossible or repeated date throws.
  */
 export function doyClimatology(days: readonly DailyMean[], p: DoyParams): DoySet | null {
@@ -81,19 +82,25 @@ export function doyClimatology(days: readonly DailyMean[], p: DoyParams): DoySet
     .sort((a, b) => a - b);
   if (years.length < p.min_years) return null;
   const rows: DoyRow[] = [];
+  const minPool = (p.min_years * (2 * p.window_days + 1)) / 2;
   // The 365 keys of a common year (2001): no 0229 key.
   for (let k = Date.UTC(2001, 0, 1); k < Date.UTC(2002, 0, 1); k += DAY_MS) {
     const key = new Date(k);
     const [month, date] = [key.getUTCMonth(), key.getUTCDate()];
     const pool: number[] = [];
+    let from = 0; // the complete years that put at least one day into this key's pool
     for (const y of years) {
+      const before = pool.length;
       const centre = Date.UTC(y, month, date) / DAY_MS;
       for (let off = -p.window_days; off <= p.window_days; off++) {
         const v = complete.get(centre + off);
         if (v !== undefined) pool.push(v);
       }
+      if (pool.length > before) from += 1;
     }
-    if (pool.length === 0) continue;
+    // A gauge that drops out in the same weeks of every year leaves those keys a thin pool under a "N years" label
+    // (P14f review R1-3): a key needs days from min_years years and half the nominal pool, else no row.
+    if (from < p.min_years || pool.length < minPool) continue;
     pool.sort((a, b) => a - b);
     const [p10, p50, p90] = [quantile7(pool, 0.1), quantile7(pool, 0.5), quantile7(pool, 0.9)];
     // A degenerate key (a constant or almost constant pool) has no normal band: no row, never a guess.

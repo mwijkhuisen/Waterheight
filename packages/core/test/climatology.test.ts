@@ -48,12 +48,16 @@ function reference(days: readonly DailyMean[], p: DoyParams) {
   LEN.forEach((len, m) => {
     for (let d = 1; d <= len; d++) {
       const pool: number[] = [];
+      const from = new Set<number>();
       for (const y of years)
         for (let off = -p.window_days; off <= p.window_days; off++) {
           const v = complete.get(iso(Date.UTC(y, m, d + off)));
-          if (v !== undefined) pool.push(v);
+          if (v !== undefined) {
+            pool.push(v);
+            from.add(y);
+          }
         }
-      if (pool.length === 0) continue;
+      if (from.size < p.min_years || 2 * pool.length < p.min_years * (2 * p.window_days + 1)) continue;
       const [p10, p50, p90] = [q7(pool, 0.1), q7(pool, 0.5), q7(pool, 0.9)];
       if (p10 < p90) rows.push({ md: (m + 1) * 100 + d, p10, p50, p90 });
     }
@@ -184,6 +188,24 @@ describe('doyClimatology', () => {
     );
     expect(keyOf(june?.rows ?? [], 615)).toBeUndefined();
     expect(keyOf(june?.rows ?? [], 815)).toBeDefined();
+  });
+
+  it('a key whose pool is thin or from too few years has no row (a gauge out in the same weeks every year)', () => {
+    // March missing in every year (334 of 365 days: still a complete year). 0316's window is March alone (no day),
+    // 0310 reaches six or seven February days a year (60 < 155), 0220 holds 24 a year (240): a row.
+    const noMarch = history(2001, 2010, wave).filter((d) => d.date.slice(5, 7) !== '03');
+    const set = doyClimatology(noMarch, P);
+    expect(set?.years).toBe(10);
+    for (const md of [305, 310, 316, 325]) expect(keyOf(set?.rows ?? [], md), String(md)).toBeUndefined();
+    for (const md of [101, 210, 220, 415, 1231]) expect(keyOf(set?.rows ?? [], md), String(md)).toBeDefined();
+    // August missing in three of twelve years: 0816's window is August alone, so its pool is 9 × 31 = 279 days
+    // (over 155), but from nine years
+    const twelve = history(2001, 2012, wave).filter((d) => !(d.date.slice(5, 7) === '08' && d.date < '2004'));
+    const t = doyClimatology(twelve, P);
+    expect(t?.years).toBe(12);
+    expect(keyOf(t?.rows ?? [], 816)).toBeUndefined();
+    expect(keyOf(t?.rows ?? [], 615)).toBeDefined();
+    expect(keyOf(doyClimatology(twelve, { ...P, min_years: 9 })?.rows ?? [], 816)).toBeDefined();
   });
 
   it('type 7 on the pool: 1 … 10 give P10 1.9, P50 5.5, P90 9.1', () => {

@@ -72,14 +72,23 @@ export async function travelTimesMain(
     return EXIT_CONFIG;
   }
   const conn = openDb(cfg, { max: 1, onError: (code) => log(`travel-times: connection error ${code}`) });
-  const counts: Counts = { reaches: all, eligible: reaches.length, no_series: 0, no_common: 0, queries: 0 };
+  const counts: Counts = {
+    reaches: all,
+    eligible: reaches.length,
+    no_series: 0,
+    no_common: 0,
+    short: 0,
+    queries: 0,
+    timeouts: 0,
+  };
   try {
     const pairs = await travelPairs(conn.db, reaches, params, years, counts);
     const generated = `${now.toISOString().slice(0, 19)}Z`;
     out(formatTravelEmpirical(TravelEmpirical.parse({ version: 1, generated, pairs })));
     log(
       `travel-times: reaches ${counts.reaches}, eligible ${counts.eligible}, without public series ${counts.no_series}, ` +
-        `without a common quantity ${counts.no_common}, queries ${counts.queries}, years ${years.from}-${years.to}, pairs ${pairs.length}`,
+        `without a common quantity ${counts.no_common}, with too little common history ${counts.short}, ` +
+        `queries ${counts.queries}, timeouts ${counts.timeouts}, years ${years.from}-${years.to}, pairs ${pairs.length}`,
     );
     return 0;
   } catch (err) {

@@ -97,8 +97,11 @@ export async function climatologyMain(
     log(`climatology: ${db}`);
     return EXIT_CONFIG;
   }
-  const runStart = (deps.now ?? (() => new Date()))();
-  const conn = openDb(db, { max: 2, onError: (code) => log(`climatology: connection error ${code}`) });
+  const clock = deps.now ?? (() => new Date());
+  const runStart = clock();
+  // One connection: the command never runs two statements at once, and rws_migrator has CONNECTION LIMIT 3, which
+  // a `migrate` during the run also needs (P14f review S2).
+  const conn = openDb(db, { max: 1, onError: (code) => log(`climatology: connection error ${code}`) });
   try {
     for (const family of args.families) {
       const totals: Totals = {
@@ -126,13 +129,13 @@ export async function climatologyMain(
             totals.years = [Math.min(lo, set.years), Math.max(hi, set.years)];
           }
         }
-        const counts = await store(conn.db, c, set, runStart, args.dryRun);
+        const counts = await store(conn.db, c, set, runStart, clock, args.dryRun);
         for (const k of Object.keys(counts) as (keyof Counts)[]) totals.rows[k] += counts[k];
       }
       log(
         `climatology: family ${family}${args.dryRun ? ' (dry run)' : ''}: series ${totals.considered}, ` +
           `eligible ${totals.eligible}, with a set ${totals.withSet}, ` +
-          `complete years ${totals.years === null ? 'none' : `${totals.years[0]}-${totals.years[1]}`}, ` +
+          `years per set ${totals.years === null ? 'none' : `${totals.years[0]}-${totals.years[1]}`}, ` +
           `rows new ${totals.rows.new}, changed ${totals.rows.changed}, unchanged ${totals.rows.unchanged}, ` +
           `closed ${totals.rows.closed}`,
       );
@@ -152,6 +155,7 @@ async function store(
   c: Candidate,
   set: DoySet | null,
   runStart: Date,
+  clock: () => Date,
   dryRun: boolean,
 ): Promise<Counts> {
   if (dryRun) return planOf(set, await readStored(db, c.id)).counts;
@@ -159,7 +163,7 @@ async function store(
     await lock(tx);
     const stored = await readStored(tx, c.id);
     const plan = planOf(set, stored);
-    await applyPlan(tx, c, set, stored, plan, runStart);
+    await applyPlan(tx, c, set, stored, plan, runStart, clock());
     return plan.counts;
   });
 }

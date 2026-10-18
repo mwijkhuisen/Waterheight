@@ -26,9 +26,10 @@ const flagOf = (flags: unknown, key: string) =>
   typeof flags === 'object' && flags !== null && (flags as Record<string, unknown>)[key] === true;
 
 /**
- * The family's active series with the plan's eligibility (section 1b): level (not stage) or discharge, a station
- * that is neither tidal nor impounded, and the history_export channel (without it the view hides everything older
- * than the history window, which would starve the statistic). The owner run takes only series that are not in the
+ * Every series of the family's series view with the plan's eligibility (section 1b): active, level (not stage) or
+ * discharge, a station that is neither tidal nor impounded, and the history_export channel (without it the view
+ * hides everything older than the history window, which would starve the statistic). An inactive series is read
+ * too, so that its open rows are closed (P14f review R1-2). The owner run takes only series that are not in the
  * public family: a public series is computed once, from its public view.
  */
 export async function readCandidates(db: Kysely<DB>, family: ChannelAudience): Promise<Candidate[]> {
@@ -42,13 +43,14 @@ export async function readCandidates(db: Kysely<DB>, family: ChannelAudience): P
         audience: 'public' | 'owner';
         quantity: 'H' | 'Q';
         value_kind: 'stage' | 'level' | null;
+        active: boolean;
         lic_history_export: boolean;
         flags: unknown;
       }>`
-        SELECT s.id, s.station_id, s.source_id, s.audience::text AS audience, s.quantity, s.value_kind,
+        SELECT s.id, s.station_id, s.source_id, s.audience::text AS audience, s.quantity, s.value_kind, s.active,
                s.lic_history_export, st.flags
         FROM ${sql.table(V.series)} s JOIN ${sql.table(V.station)} st ON st.id = s.station_id
-        WHERE s.active ORDER BY s.id`.execute(tx)
+        ORDER BY s.id`.execute(tx)
     ).rows;
     const publicIds =
       family === 'owner'
@@ -68,6 +70,7 @@ export async function readCandidates(db: Kysely<DB>, family: ChannelAudience): P
         quantity: r.quantity,
         unit: r.quantity === 'H' ? ('cm' as const) : ('m³/s' as const),
         eligible:
+          r.active &&
           (r.quantity === 'Q' || r.value_kind === 'level') &&
           r.lic_history_export &&
           !flagOf(r.flags, 'tidal') &&

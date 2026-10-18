@@ -113,8 +113,8 @@ beforeAll(async () => {
   });
   expect(code).toBe(0);
   expect(log).toHaveLength(2);
-  expect(log[0]).toMatch(/family public: .*with a set 1, complete years 10-10, rows new 730,/);
-  expect(log[1]).toMatch(/family owner: .*with a set 1, complete years 10-10, rows new 730,/);
+  expect(log[0]).toMatch(/family public: .*with a set 1, years per set 10-10, rows new 730,/);
+  expect(log[1]).toMatch(/family owner: .*with a set 1, years per set 10-10, rows new 730,/);
 
   publicDb = h.dbAs('rws_api', 4);
   publishDb = h.dbAs('rws_publish', 2);

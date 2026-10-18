@@ -17,7 +17,7 @@ export const TRAVEL_EMPIRICAL_HEADER = `# Empirical travel times between two pub
 #            with fewer windows than \`travel.min_windows\` of registry/climatology.yaml is left out
 #   quantity Q or H: the series whose changes were correlated (discharge where both ends have it)
 #   years    first and last UTC year of the windows behind the classes; windows: how many
-# Shipped empty: the values exist only after the command has run in production.
+# A file with generated: null and no pair is the one shipped before the command has first run in production.
 `;
 
 type PairKey = Pick<TravelEmpirical['pairs'][number], 'from_station' | 'to_station'>;
