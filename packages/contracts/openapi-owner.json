@@ -640,12 +640,22 @@
                         "first_release": {
                           "additionalProperties": false,
                           "properties": {
+                            "by_climatology": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
                             "by_section": {
                               "maximum": 9007199254740991,
                               "minimum": 0,
                               "type": "integer"
                             },
                             "classed": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "climatology": {
                               "maximum": 9007199254740991,
                               "minimum": 0,
                               "type": "integer"
@@ -672,6 +682,8 @@
                             "stations",
                             "classed",
                             "by_section",
+                            "by_climatology",
+                            "climatology",
                             "ratio"
                           ],
                           "type": "object"
@@ -679,12 +691,22 @@
                         "tier1": {
                           "additionalProperties": false,
                           "properties": {
+                            "by_climatology": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
                             "by_section": {
                               "maximum": 9007199254740991,
                               "minimum": 0,
                               "type": "integer"
                             },
                             "classed": {
+                              "maximum": 9007199254740991,
+                              "minimum": 0,
+                              "type": "integer"
+                            },
+                            "climatology": {
                               "maximum": 9007199254740991,
                               "minimum": 0,
                               "type": "integer"
@@ -711,6 +733,8 @@
                             "stations",
                             "classed",
                             "by_section",
+                            "by_climatology",
+                            "climatology",
                             "ratio"
                           ],
                           "type": "object"
@@ -729,12 +753,22 @@
                   "first_release": {
                     "additionalProperties": false,
                     "properties": {
+                      "by_climatology": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
                       "by_section": {
                         "maximum": 9007199254740991,
                         "minimum": 0,
                         "type": "integer"
                       },
                       "classed": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "climatology": {
                         "maximum": 9007199254740991,
                         "minimum": 0,
                         "type": "integer"
@@ -761,6 +795,8 @@
                       "stations",
                       "classed",
                       "by_section",
+                      "by_climatology",
+                      "climatology",
                       "ratio"
                     ],
                     "type": "object"
@@ -780,12 +816,22 @@
                   "tier1": {
                     "additionalProperties": false,
                     "properties": {
+                      "by_climatology": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
                       "by_section": {
                         "maximum": 9007199254740991,
                         "minimum": 0,
                         "type": "integer"
                       },
                       "classed": {
+                        "maximum": 9007199254740991,
+                        "minimum": 0,
+                        "type": "integer"
+                      },
+                      "climatology": {
                         "maximum": 9007199254740991,
                         "minimum": 0,
                         "type": "integer"
@@ -812,6 +858,8 @@
                       "stations",
                       "classed",
                       "by_section",
+                      "by_climatology",
+                      "climatology",
                       "ratio"
                     ],
                     "type": "object"

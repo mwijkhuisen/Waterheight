@@ -37,6 +37,7 @@ const APPLIED: Readonly<Record<string, string>> = {
   '20261115000001_p14b_ledger.sql': 'a268233201a910e106066075c1761c674574674cb1e004413ce05538c3c834b2',
   '20261115000002_p14b_guard.sql': '7bc261265b2d8bc808dc90321c6dfe9c96dbb4550bd507ccd5d092bf5f0f4a0c',
   '20261115000003_p14b_aggregate.sql': '18a12b2cbecf9a6b3a6915e4c7f080b07e958dbe0797886166043f4f014e86c8',
+  '20261116000001_p14f_climatology.sql': 'e9bc625b630f206df04ff716dd02e7310d3d7ee97a3724db83221fb651bcefa6',
 };
 
 const dir = new URL('../db/migrations/', import.meta.url);

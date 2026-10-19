@@ -7,6 +7,9 @@
 //   node scripts/gen-rivernet.ts            # rewrite registry/rivernet.yaml
 //   node scripts/gen-rivernet.ts --check    # exit 1 if the committed file differs
 //
+// registry/travel-empirical.yaml (P14f) is read too: its pairs set the travel time of a reach, so a data PR that
+// fills it changes the reaches here (the shipped file is empty and changes nothing).
+//
 // A newer geo release is adopted by refreshing the fixture from that run's
 // `rivernet-fixture` artifact, updating FIXTURE_RUN and running this script
 // (docs/runbooks/geo-refresh.md). Owner-audience rows appear as the station
@@ -17,7 +20,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { type RivernetFile, validateRivernet } from '../packages/contracts/src/rivernet.ts';
 import { buildFromFiles, readRivers } from '../tools/geo/rivernet/build.ts';
-import { place, readOverrides } from '../tools/geo/rivernet/place.ts';
+import { place, readEmpirical, readOverrides } from '../tools/geo/rivernet/place.ts';
 import { readStations } from '../tools/geo/rivernet/stations.ts';
 
 const root = join(import.meta.dirname, '..');
@@ -43,7 +46,7 @@ export async function generate(): Promise<string> {
     provenance: join(FX, 'rivernet.provenance.json'),
   });
   const rivers = readRivers();
-  const placed = place(build.edges, rivers, readStations(), readOverrides(rivers));
+  const placed = place(build.edges, rivers, readStations(), readOverrides(rivers), readEmpirical());
   const osm = (build.graph as { osm: { replication_timestamp: string } }).osm.replication_timestamp;
   const file: RivernetFile = {
     version: 1,

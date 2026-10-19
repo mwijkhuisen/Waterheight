@@ -15,6 +15,7 @@ import {
   type ReferenceRow,
   type RefIn,
   type SeriesIn,
+  utcMonthDay,
   type WarningRow,
 } from '@rws/core';
 import { parse } from 'yaml';
@@ -95,6 +96,36 @@ export type Case = {
   /** The gauge zero valid at t, or null. */
   zero: { valueM: number; datum: Datum } | null;
 };
+
+/** Where a synthetic day-of-year band sits against a case's own value: the value at or under P10, inside, at or over P90. */
+export type DoyAt = 'low' | 'normal' | 'elevated';
+
+/**
+ * A case with a day-of-year set (P14f) beside its real rows. The repository holds no ten-year history of these
+ * series, so the band is SYNTHETIC: P10 and P90 placed around the recorded value (`at`), on the value's own UTC day
+ * key, under the series' own source, as the climatology command stores them (non-exceedance, the period, the basis
+ * label). It proves how the DOY set combines with the real references, classes and areas of the case.
+ */
+export function withDoy(c: Case, at: DoyAt): Case {
+  const v = c.obs.value;
+  const d = Math.max(Math.round(Math.abs(v) * 0.1), 10);
+  const [p10, p90] = at === 'low' ? [v + d, v + 3 * d] : at === 'normal' ? [v - d, v + d] : [v - 3 * d, v - d];
+  const md = utcMonthDay(Date.parse(c.obs.ts));
+  const base = {
+    source: c.row.source,
+    unit: c.row.quantity === 'H' ? 'cm' : 'm³/s',
+    convention: 'non_exceedance' as const,
+    period: ['1991-01-01', '2000-12-31'] as const,
+    seasonFrom: md,
+    seasonTo: md,
+    priority: 0,
+    label: 'DOY P10-P90, 1991-2000, 31 d/yr',
+  };
+  return {
+    ...c,
+    refs: [...c.refs, { ...base, kind: 'P10_DOY', value: p10 }, { ...base, kind: 'P90_DOY', value: p90 }],
+  };
+}
 
 /** The classifier's input of a case; `fresh` is true everywhere (the golden is about the mapping, not capture health). */
 export function seriesIn(c: Case): SeriesIn {

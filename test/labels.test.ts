@@ -90,7 +90,9 @@ describe('registry/labels', () => {
       ...CROSSWALK.filter((r) => !r.gated && !has(r.source, r.scale, r.code)).map(
         (r) => `${r.source} ${r.scale} ${r.code}`,
       ),
-      ...REFERENCE_ROLES.filter((r) => !r.gated && !has(r.source, 'reference', r.kind)).map(
+      // the any-source DOY roles (P14f) are our own statistic, not a provider's: the web names them through the
+      // message basis_climatology, never a per-source label file
+      ...REFERENCE_ROLES.filter((r) => !r.gated && r.source !== '*' && !has(r.source, 'reference', r.kind)).map(
         (r) => `${r.source} reference ${r.kind}`,
       ),
     ];

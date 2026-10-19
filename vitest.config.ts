@@ -27,6 +27,9 @@ export default defineConfig({
         // P8a: the forecast run model (encoding, bounds, identity) and the DE-2 run schedule.
         'packages/core/src/forecast.ts',
         'packages/core/src/de2-schedule.ts',
+        // P14f: the day-of-year climatology and the travel-time lag (packages/core/test).
+        'packages/core/src/climatology.ts',
+        'packages/core/src/lag.ts',
       ],
       reporter: ['text'],
       thresholds: { lines: 90, perFile: true },

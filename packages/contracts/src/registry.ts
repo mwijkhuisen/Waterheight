@@ -360,3 +360,25 @@ export function validateRegistry(
   }
   return { problems, providers, sources, withholdings };
 }
+
+/** registry/climatology.yaml (P14f): the day-of-year climatology and the empirical travel times. */
+export const ClimatologyConfig = z.strictObject({
+  version: z.literal(1),
+  min_years: z.int().min(1).max(60),
+  window_days: z.int().min(1).max(60),
+  min_day_hours: z.int().min(1).max(24),
+  min_year_share: z.number().min(0.5).max(1),
+  percentiles: z.tuple([z.literal(10), z.literal(50), z.literal(90)]),
+  travel: z
+    .strictObject({
+      window_h: z.int().min(24).max(8784),
+      step_h: z.int().min(1).max(8784),
+      smooth_h: z.int().min(1).max(48),
+      r_min: z.number().min(0).max(1),
+      min_windows: z.int().min(1).max(1000),
+      max_lag_h: z.int().min(1).max(240),
+      min_lag_h: z.int().min(0).max(239),
+    })
+    .refine((t) => t.min_lag_h < t.max_lag_h && t.step_h <= t.window_h, 'min_lag_h < max_lag_h, step_h <= window_h'),
+});
+export type ClimatologyConfig = z.infer<typeof ClimatologyConfig>;

@@ -132,13 +132,25 @@ describe('REFERENCE_ROLES: every reference kind', () => {
     const family = familyOf(role);
     const quantity = role.basis === 'discharge' ? 'Q' : 'H';
     const unit = quantity === 'Q' ? 'm³/s' : 'cm';
+    // A DOY role (source '*') takes the row's own source, decides only as a pair of its day key (615 at T), and
+    // its partner sits far outside the values tried, so each bound is proved on its own (P14f).
+    const doy = role.form === 'doy';
+    const src = doy ? 'NL-1' : role.source;
+    const day = doy ? { seasonFrom: 615, seasonTo: 615 } : {};
+    const partner = doy
+      ? [
+          role.kind === 'P10_DOY'
+            ? ref(src, 'P90_DOY', 1e7, { unit, convention: 'non_exceedance', ...day })
+            : ref(src, 'P10_DOY', -1e7, { unit, convention: 'non_exceedance', ...day }),
+        ]
+      : [];
     const at = (v: number, bound: number, f: Family = family) =>
       classify(
         series({
           quantity,
           valueKind: quantity === 'Q' ? null : 'stage',
           value: v,
-          refs: [ref(role.source, role.kind, bound, { unit, convention: role.convention ?? null })],
+          refs: [ref(src, role.kind, bound, { unit, convention: role.convention ?? null, ...day }), ...partner],
         }),
         f,
       );
@@ -159,25 +171,27 @@ describe('REFERENCE_ROLES: every reference kind', () => {
         const hit = at(BOUND, BOUND);
         expect(hit.state).toBe(level);
         expect(hit.basis).toMatchObject({
-          source: role.source,
+          source: src,
           kind: role.group,
           measure: quantity === 'Q' ? 'discharge' : 'stage',
           ref: role.kind,
         });
         expect(at(BOUND + EPS, BOUND).state).toBe(level);
         expect(at(1e6, BOUND).state).toBe(level);
-        // just below: the level is not reached (a scale says normal below its lowest level, statistics nothing)
+        // just below: the level is not reached (a scale says normal below its lowest level, and so does a DOY set
+        // above its P10; other statistics nothing)
         const below = at(BOUND - EPS, BOUND);
-        expect(below.state).toBe(role.form === 'scale' ? 'normal' : 'no_ref');
+        expect(below.state).toBe(role.form === 'scale' || doy ? 'normal' : 'no_ref');
       } else {
         // `<=` is low at the bound, `<` is not
         const lowAtBound = role.op === '<=';
-        expect(at(BOUND, BOUND).state).toBe(lowAtBound ? 'low' : role.form === 'percentile' ? 'normal' : 'no_ref');
+        const normalAbove = role.form === 'percentile' || doy;
+        expect(at(BOUND, BOUND).state).toBe(lowAtBound ? 'low' : normalAbove ? 'normal' : 'no_ref');
         expect(at(BOUND - EPS, BOUND).state).toBe('low');
         expect(at(-1e6, BOUND).state).toBe('low');
         const above = at(BOUND + EPS, BOUND);
-        expect(above.state).toBe(role.form === 'percentile' ? 'normal' : 'no_ref');
-        expect(at(BOUND - EPS, BOUND).basis).toMatchObject({ source: role.source, kind: role.group, ref: role.kind });
+        expect(above.state).toBe(normalAbove ? 'normal' : 'no_ref');
+        expect(at(BOUND - EPS, BOUND).basis).toMatchObject({ source: src, kind: role.group, ref: role.kind });
         expect(level).toBe('low');
       }
       // an owner row is inert in the public family

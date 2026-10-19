@@ -2,8 +2,9 @@ import { Snapshot } from '@rws/contracts';
 import type { Classified } from '@rws/core';
 import { describe, expect, it } from 'vitest';
 import { publicSnapshot } from '../../src/api/data.ts';
-import { classCoverage, type StateRead } from '../../src/api/states.ts';
+import { classCoverage, readStates, type StateRead, type Static, StaticCache } from '../../src/api/states.ts';
 import { errorCode } from '../../src/db/pool.ts';
+import { fakeDb } from './fake-db.ts';
 
 // The pure parts of the P7b read on hand-made reads: the coverage report (review CR-4) and the owner-source check at
 // the public snapshot's boundary (review SR-5).
@@ -36,7 +37,7 @@ const section = (source = 'FR-5'): Classified => ({
 const none: Classified = { state: 'no_ref', basis: null, section: false, area: null, flags: FLAGS, sources: [] };
 
 /** A read of one series per entry: [station, country, classified]; every station is tier 1 and public. */
-function read(entries: [string, 'DE' | 'FR', Classified][]): StateRead {
+function read(entries: [string, 'DE' | 'FR', Classified][], doy: number[] = []): StateRead {
   return {
     t: T,
     stations: [...new Set(entries.map(([s, c]) => `${s}\n${c}`))].map((k) => {
@@ -52,6 +53,7 @@ function read(entries: [string, 'DE' | 'FR', Classified][]): StateRead {
       height: null,
     })),
     publicSeries: new Set(entries.map((_, i) => i + 1)),
+    doySeries: new Set(doy),
   };
 }
 
@@ -66,11 +68,20 @@ describe('classCoverage: by_section and the D10 mode (review CR-4)', () => {
         ['d', 'FR', none],
       ]),
     );
-    expect(c.tier1).toEqual({ stations: 4, classed: 3, by_section: 1, ratio: 0.75 });
+    expect(c.tier1).toEqual({
+      stations: 4,
+      classed: 3,
+      by_section: 1,
+      by_climatology: 0,
+      climatology: 0,
+      ratio: 0.75,
+    });
     expect(c.countries.find((x) => x.country === 'FR')?.tier1).toEqual({
       stations: 3,
       classed: 2,
       by_section: 1,
+      by_climatology: 0,
+      climatology: 0,
       ratio: 2 / 3,
     });
     // (3 − 1) / 4 = 0.5: under 60 % with gauge states, although 75 % are classed.
@@ -99,13 +110,20 @@ describe('classCoverage: by_section and the D10 mode (review CR-4)', () => {
         ['c', 'DE', gauge('DE-9')],
       ]),
     );
-    expect(c.first_release).toEqual({ stations: 3, classed: 1, by_section: 1, ratio: 1 / 3 });
+    expect(c.first_release).toEqual({
+      stations: 3,
+      classed: 1,
+      by_section: 1,
+      by_climatology: 0,
+      climatology: 0,
+      ratio: 1 / 3,
+    });
   });
 
   it('no stations: dh and a null ratio', () => {
     expect(classCoverage(read([]))).toMatchObject({
       mode: 'dh',
-      tier1: { stations: 0, classed: 0, by_section: 0, ratio: null },
+      tier1: { stations: 0, classed: 0, by_section: 0, by_climatology: 0, climatology: 0, ratio: null },
     });
   });
 });
@@ -148,4 +166,90 @@ describe('publicSnapshot fails closed on an owner-only source (review SR-5)', ()
       expect(errorCode(thrown)).toBe('owner_basis');
     });
   }
+});
+
+describe('readStates handles a failed DOY read beside a pending snapshot (P14f review round 2, X1)', () => {
+  const fixed = {
+    stations: [],
+    series: [],
+    refs: [],
+    zeros: [],
+    attached: new Map(),
+    sources: new Set<string>(),
+    attribution: [],
+    dates: new Map(),
+    history: new Map(),
+  } as unknown as Static;
+  const opts = (doy: () => Promise<never>) => ({
+    now: T,
+    current: false,
+    sections: new Map<string, string>(),
+    cache: { get: async () => fixed, doy } as unknown as StaticCache,
+  });
+
+  it('the DOY read failing first is the error of the read, never an unhandled rejection', async () => {
+    const unhandled: unknown[] = [];
+    const note = (e: unknown) => unhandled.push(e);
+    process.on('unhandledRejection', note);
+    try {
+      // The snapshot's statements answer only after 50 ms; the DOY read fails at once.
+      const db = fakeDb(() => new Promise((resolve) => setTimeout(() => resolve({ rows: [] }), 50)));
+      await expect(
+        readStates(
+          db,
+          'public',
+          T,
+          opts(() => Promise.reject(new Error('doy_failed'))),
+        ),
+      ).rejects.toThrow('doy_failed');
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', note);
+    }
+  });
+
+  it('the snapshot failing first is the error of the read, and the later DOY failure is handled', async () => {
+    const unhandled: unknown[] = [];
+    const note = (e: unknown) => unhandled.push(e);
+    process.on('unhandledRejection', note);
+    try {
+      const db = fakeDb(() => Promise.reject(new Error('snapshot_failed')));
+      const late = () => new Promise<never>((_, reject) => setTimeout(() => reject(new Error('doy_failed')), 30));
+      await expect(readStates(db, 'public', T, opts(late))).rejects.toThrow('snapshot_failed');
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', note);
+    }
+  });
+});
+
+describe('StaticCache.doy keeps no expired day (P14f review R1-5)', () => {
+  it('sweeps the day entries past their TTL when it inserts, and reads nothing for no day key', async () => {
+    let now = 0;
+    let queries = 0;
+    const db = fakeDb(async () => {
+      queries++;
+      return { rows: [] };
+    });
+    const cache = new StaticCache(60_000, () => now);
+    await cache.doy(db, 'public', [101, 102]);
+    await cache.doy(db, 'owner', [101]);
+    expect(cache.doyEntries).toBe(3);
+    expect(queries).toBe(2);
+    // within the TTL: held, no query, nothing swept
+    now = 59_999;
+    await cache.doy(db, 'public', [101, 102]);
+    expect(queries).toBe(2);
+    expect(cache.doyEntries).toBe(3);
+    // past it: a new key sweeps the three expired ones and holds only itself
+    now = 60_000;
+    await cache.doy(db, 'public', [103]);
+    expect(cache.doyEntries).toBe(1);
+    expect(queries).toBe(3);
+    // no day key: no query
+    await cache.doy(db, 'public', []);
+    expect(queries).toBe(3);
+  });
 });

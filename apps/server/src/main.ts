@@ -23,6 +23,7 @@ import { startRecorder } from './capture/scheduler.ts';
 import { seedRecords, startSeeds } from './capture/seeds.ts';
 import { loadRegistry } from './capture/specs.ts';
 import { removeStaleTmp, StateStore } from './capture/state.ts';
+import { climatologyMain } from './climatology/cli.ts';
 import { type ChannelAudience, DB_ROLE } from './db/audience.ts';
 import { type Db, dbConfig, openDb } from './db/pool.ts';
 import { healthy, startHeartbeat } from './heartbeat.ts';
@@ -30,6 +31,7 @@ import { Client } from './http/client.ts';
 import { runMigrate } from './load/migrate.ts';
 import { runLoad, runReplay } from './load/run.ts';
 import { runPublisher } from './publish/index.ts';
+import { travelTimesMain } from './travel/cli.ts';
 import { runWatchdog } from './watchdog/watchdog.ts';
 
 /** Roles of the single server image (A§4); the command picks one. */
@@ -42,6 +44,8 @@ export const ROLES = [
   'migrate',
   'basemap',
   'backfill',
+  'climatology',
+  'travel-times',
   'watchdog',
   'healthcheck',
 ] as const;
@@ -55,7 +59,8 @@ const USAGE = `usage: main.js <${ROLES.join('|')}> (capture takes --dry-run; wat
   replay takes --source <ID> [--spec <id>] --from <YYYY-MM-DD[THH:MM:SSZ]> --to <YYYY-MM-DD> [--dry-run];
   basemap takes <fetch|promote|rollback> [--build <YYYYMMDD>] [--dry-run];
   backfill takes <plan|run|status|pause|resume|abort|census> (plan --spec <id> [--from D] [--to D] [--series key,…] [--dry-run];
-  run [--until <instant>]; pause|resume|abort --job <id>; census --spec <id>))`;
+  run [--until <instant>]; pause|resume|abort --job <id>; census --spec <id>);
+  climatology takes [--dry-run] [--family public|owner] [--series <id>,…]; travel-times takes [--from YYYY] [--to YYYY])`;
 const RWS_HOST = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
 const RWS_LIMIT = 1000;
 
@@ -313,7 +318,7 @@ export function publishArgs(rest: readonly string[]): { family: 'public' | 'owne
 /**
  * Resolves with an exit code; `api`, `capture`, `load`, `publish` and `watchdog`
  * keep running until SIGINT or SIGTERM; `migrate`, `replay`, `basemap` and `backfill` are
- * one-shot (and `publish --once`).
+ * one-shot (and `publish --once`), and so are `climatology` and `travel-times` (P14f).
  */
 export function run(
   argv: readonly string[],
@@ -333,7 +338,9 @@ export function run(
     apiFamily !== undefined ||
     role === 'replay' ||
     role === 'basemap' ||
-    role === 'backfill';
+    role === 'backfill' ||
+    role === 'climatology' ||
+    role === 'travel-times';
   if (role === undefined || (rest.length > 0 && !takesArgs) || !(ROLES as readonly string[]).includes(role)) {
     log(USAGE);
     return Promise.resolve(EXIT_USAGE);
@@ -344,6 +351,8 @@ export function run(
   if (role === 'replay') return runReplay(rest, env, log);
   if (role === 'basemap') return runBasemap(rest, env, log);
   if (role === 'backfill') return backfillMain(rest, env, log);
+  if (role === 'climatology') return climatologyMain(rest, env, log);
+  if (role === 'travel-times') return travelTimesMain(rest, env, log, (text) => process.stdout.write(text));
   if (role === 'watchdog') return runWatchdog(env, dry ? 'dry-run' : once ? 'once' : 'loop', log);
   if (publish !== undefined) return runPublisher(env, publish.family, publish.once, log);
   if (role === 'capture') {

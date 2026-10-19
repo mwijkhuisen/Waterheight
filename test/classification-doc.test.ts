@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { CROSSWALK, REFERENCE_ROLES } from '../packages/core/src/index.ts';
-import { generate } from '../scripts/gen-classification.ts';
+import { CROSSWALK, DOY_KINDS, REFERENCE_ROLES } from '../packages/core/src/index.ts';
+import { climatology, generate } from '../scripts/gen-classification.ts';
 import { repoRoot } from './catalogue.ts';
 
 const committed = readFileSync(`${repoRoot}docs/classification.md`);
@@ -73,6 +73,32 @@ describe('docs/classification.md', () => {
     rows.forEach((r, i) => {
       if (r.audience === 'owner') expect(all[i]).toContain('| owner view only |');
       if (r.gated) expect(all[i]).toContain('| gated (P13) |');
+    });
+  });
+
+  it('documents the day-of-year climatology once, with N and the window of registry/climatology.yaml (P14f)', () => {
+    const c = climatology();
+    expect(c.min_years).toBe(10);
+    const doy = text.slice(text.indexOf('\n## Day-of-year climatology\n'), text.indexOf('\n## Gauge classes\n'));
+    expect(text.split('\n## Day-of-year climatology\n')).toHaveLength(2);
+    expect(doy).toContain(`at least **${c.min_years} complete UTC years**`);
+    expect(doy).toContain(`± ${c.window_days} days (${2 * c.window_days + 1} a year)`);
+    expect(doy).toContain(`${c.min_day_hours} of its 24 hours`);
+    for (const words of [
+      'neither tidal nor impounded',
+      'after every provider statistic',
+      'Open upward',
+      'never a warning',
+    ])
+      expect(doy).toContain(words);
+    expect(doy).toMatch(/instantaneous value is compared with percentiles of daily means/);
+    // each DOY kind is one row of the reference table, for any source, under the series' own source's audience
+    const rows = section(text, 'Reference kinds').filter((l) => l.includes('_DOY |'));
+    expect(rows).toHaveLength(DOY_KINDS.length);
+    DOY_KINDS.forEach((k, i) => {
+      expect(rows[i]).toMatch(
+        new RegExp(`^\\| \\* \\| ${k} \\|.*\\| statistical \\| doy \\| the series' own source \\|`),
+      );
     });
   });
 
