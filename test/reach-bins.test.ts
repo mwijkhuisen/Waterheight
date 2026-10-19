@@ -79,7 +79,7 @@ describe('binLines', () => {
 });
 
 describe('the committed fixture tiles', () => {
-  it('list the layers rivers and reach_bins, the bins with reach_id, bin, seg and tidal', () => {
+  it('list the layers rivers, reach_bins, waterbodies and canals (P17b), the bins with reach_id, bin, seg and tidal', () => {
     const buf = readFileSync(`${repoRoot}tools/geo/fixtures/rivers-fixture.pmtiles`);
     // PMTiles v3 header: magic, version 3, then the metadata offset (u64 at 24), length (u64 at 32), internal
     // compression (u8 at 97: 1 none, 2 gzip).
@@ -91,8 +91,11 @@ describe('the committed fixture tiles', () => {
     const text = (buf[97] === 2 ? gunzipSync(slice) : slice).toString('utf8');
     const meta = JSON.parse(text) as { vector_layers: { id: string; fields: Record<string, string> }[] };
     const layers = new Map(meta.vector_layers.map((l) => [l.id, l.fields]));
-    expect([...layers.keys()].sort()).toEqual(['reach_bins', 'rivers']);
+    expect([...layers.keys()].sort()).toEqual(['canals', 'reach_bins', 'rivers', 'waterbodies']);
     expect(Object.keys(layers.get('reach_bins') ?? {}).sort()).toEqual(['bin', 'reach_id', 'seg', 'tidal']);
     expect(Object.keys(layers.get('rivers') ?? {})).toContain('reach_id');
+    // The P17b layers hold reviewed ids and names only: no station field.
+    expect(Object.keys(layers.get('waterbodies') ?? {}).sort()).toEqual(['kind', 'name_en', 'name_nl', 'waterbody_id']);
+    expect(Object.keys(layers.get('canals') ?? {}).sort()).toEqual(['kind', 'name_en', 'name_nl', 'river_id']);
   });
 });

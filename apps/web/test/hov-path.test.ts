@@ -63,8 +63,16 @@ const MERGED: Record<HovPathId, readonly string[]> = {
   'rhine-waal': [],
   'rhine-lek': ['nl.rws.amerongen.beneden', 'nl.rws.driel.beneden', 'nl.rws.hagestein.beneden'],
   'rhine-ijssel': ['nl.rws.westervoort.2'],
-  meuse: ['fr.sandre.B720000004', 'nl.rws.grave.beneden', 'nl.rws.lith.beneden', 'nl.rws.sambeek.beneden'],
+  meuse: [
+    'fr.sandre.B720000004',
+    'nl.rws.grave.beneden',
+    'nl.rws.lith.beneden',
+    'nl.rws.negenoord.west',
+    'nl.rws.sambeek.beneden',
+  ],
 };
+/** The Westervoort gauges that are not the one-km pair .1 and .2 (the IJsselkop, and the Hondsbroek-Schepleij gauge of P17b). */
+const WV_OTHER = ['nl.rws.westervoort.ijsselkop', 'nl.rws.westervoort.hondsbroekschepleij.ijssel'];
 /** The Nederrijn gauges below the IJssel split: on the Lek path, not on the IJssel path. */
 const BELOW_SPLIT = [
   'nl.rws.amerongen.boven',
@@ -111,7 +119,7 @@ describe('buildPath on the fixture release', { timeout: 30_000 }, () => {
     const rivers = (p: HovPathId) => new Set(build(p).columns.map((c) => c.riverId));
     expect(rivers('rhine-waal')).toEqual(new Set(['rhine', 'waal']));
     expect(rivers('rhine-lek')).toEqual(new Set(['rhine', 'pannerdensch-kanaal', 'nederrijn', 'lek']));
-    expect(rivers('rhine-ijssel')).toEqual(new Set(['rhine', 'pannerdensch-kanaal', 'ijssel']));
+    expect(rivers('rhine-ijssel')).toEqual(new Set(['rhine', 'pannerdensch-kanaal', 'nederrijn', 'ijssel']));
     expect(rivers('meuse')).toEqual(new Set(['meuse']));
     expect(ids(build('rhine-lek').columns)).toContain('nl.rws.driel.boven');
     expect(ids(build('rhine-lek').columns)).toContain('nl.rws.krimpenaandelek.lek');
@@ -162,7 +170,7 @@ describe('buildPath on the fixture release', { timeout: 30_000 }, () => {
     expect(kmOf.get('nl.rws.eijsden.grens')).toBeGreaterThan(kmOf.get('nl.rws.lixhebiefaval') as number);
     for (const i of ['nl.rws.lanaken', 'nl.rws.herenlaak', 'nl.rws.maaseik']) expect(m).toContain(i);
     expect(m.indexOf('nl.rws.maaseik')).toBe(m.indexOf('nl.rws.herenlaak') - 1);
-    expect(m.at(-1)).toBe('nl.rws.lith.boven');
+    expect(m.slice(-2)).toEqual(['nl.rws.lith.boven', 'nl.rws.lith.sluis']); // Lith sluis (P17b) lies below the weir pair's column
   });
 
   it('never makes a column of the canal point, the unsnapped gauge, the canary or an SPW gauge', () => {
@@ -234,11 +242,11 @@ describe('buildPath on the fixture release', { timeout: 30_000 }, () => {
 describe('weir pairs and one-chainage duplicates', { timeout: 30_000 }, () => {
   it('merges a .boven/.beneden pair into one column: the lower tier, a tie the .boven', () => {
     const lith = (tiers: Record<string, 1 | 2>) =>
-      ids(build('meuse', all(tiers)).columns).filter((i) => i.startsWith('nl.rws.lith.'));
+      ids(build('meuse', all(tiers)).columns).filter((i) => i.startsWith('nl.rws.lith.') && i !== 'nl.rws.lith.sluis');
     expect(lith({})).toEqual(['nl.rws.lith.boven']);
     expect(lith({ 'nl.rws.lith.boven': 2, 'nl.rws.lith.beneden': 1 })).toEqual(['nl.rws.lith.beneden']);
     expect(lith({ 'nl.rws.lith.boven': 1, 'nl.rws.lith.beneden': 2 })).toEqual(['nl.rws.lith.boven']);
-    const beneden = build('meuse', all({ 'nl.rws.lith.boven': 2 })).columns.at(-1);
+    const beneden = build('meuse', all({ 'nl.rws.lith.boven': 2 })).columns.find((c) => c.id === 'nl.rws.lith.beneden');
     expect(beneden?.x).toBe(0 - (kmOf.get('nl.rws.lith.beneden') as number));
     // Sambeek, Grave and Driel merge the same way, each into one column.
     const pair = (p: HovPathId, base: string, tiers: Record<string, 1 | 2>) =>
@@ -255,7 +263,7 @@ describe('weir pairs and one-chainage duplicates', { timeout: 30_000 }, () => {
   it('merges stations at exactly one km: the smaller id on a tie, the lower tier before that', () => {
     const wv = (tiers: Record<string, 1 | 2>) =>
       ids(build('rhine-ijssel', all(tiers)).columns).filter(
-        (i) => i.startsWith('nl.rws.westervoort.') && i !== 'nl.rws.westervoort.ijsselkop',
+        (i) => i.startsWith('nl.rws.westervoort.') && !WV_OTHER.includes(i),
       );
     expect(kmOf.get('nl.rws.westervoort.1')).toBe(kmOf.get('nl.rws.westervoort.2'));
     expect(wv({})).toEqual(['nl.rws.westervoort.1']);
@@ -276,7 +284,7 @@ describe('weir pairs and one-chainage duplicates', { timeout: 30_000 }, () => {
       station('nl.rws.westervoort.2', { tier: 2 }),
     ];
     const cols = build('rhine-ijssel', rows, new Set(['BE-3'])).columns;
-    const wv = cols.filter((c) => c.id.startsWith('nl.rws.westervoort.') && c.id !== 'nl.rws.westervoort.ijsselkop');
+    const wv = cols.filter((c) => c.id.startsWith('nl.rws.westervoort.') && !WV_OTHER.includes(c.id));
     expect(wv.map((c) => c.id)).toEqual(['nl.rws.westervoort.2']);
     expect(wv[0]?.owner).toBe(false);
   });

@@ -35,7 +35,7 @@ const reach = (id: string): FeatureSpan => {
 const ev = (v: number, ageS = 0, limitS = 3600): EndValue => ({ v, ageS, limitS });
 const ids = (from: string, a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => `${from}.${a + i}`);
 
-const TIDAL = [...ids('scheldt', 12, 16), ...ids('ems', 30, 40), ...ids('lek', 4, 6), 'meuse.63'];
+const TIDAL = [...ids('scheldt', 12, 16), ...ids('ems', 30, 40), ...ids('lek', 4, 6), ...ids('meuse', 73, 75)];
 const MODES = ['state', 'delta', 'q'] as const;
 const colourOf = (p: ReachPaint) => (p.k === 'v' ? p.colour : p.k);
 
@@ -114,6 +114,7 @@ describe('no data', () => {
     const known = new Set(graph.stations.map((s) => s.id));
     for (const r of graph.reaches) {
       if (r.downstream.length === 0 || !r.downstream.every((d) => rivers.get(d) !== r.river_id)) continue;
+      if (r.flags?.tidal) continue; // a tidal reach is painted 'tidal' whatever flows into it (P17a: the delta channels)
       if (r.down_station_id !== null && known.has(r.down_station_id)) continue;
       expect(reachColour(reach(r.id), [ev(2), ev(3)], 'state'), r.id).toEqual({ k: 'nodata' });
     }

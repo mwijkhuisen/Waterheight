@@ -293,7 +293,7 @@ install -m 0644 -o 0 -g 0 "$repo/test/fixtures/reaches-fixture.json" "$rivers_di
 install -m 0644 -o 0 -g 0 "$repo/tools/geo/fixtures/rivers-fixture.pmtiles" "$rivers_dir/rivers-$rivers_ver.pmtiles"
 printf '{"type":"FeatureCollection","features":[]}\n' | gzip -n >"/srv/rws/public/downloads/rivers-$rivers_ver.geojson.gz"
 chmod 0644 "/srv/rws/public/downloads/rivers-$rivers_ver.geojson.gz"
-jq -e --arg v "$rivers_ver" '.schema_version == 1 and .version == $v' "$rivers_dir/reaches-$rivers_ver.json" >/dev/null ||
+jq -e --arg v "$rivers_ver" '.schema_version == 2 and .version == $v' "$rivers_dir/reaches-$rivers_ver.json" >/dev/null ||
   fail "test/fixtures/reaches-fixture.json is not version $rivers_ver"
 rivers_entry() { # <file>: the manifest entry of an installed file
   jq -n --arg f "${1##*/}" --arg s "$(sha256sum "$1" | cut -d' ' -f1)" --argjson b "$(stat -c %s "$1")" \

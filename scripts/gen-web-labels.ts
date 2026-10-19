@@ -26,6 +26,8 @@ export const slug = (s: string): string => {
 };
 export const labelKey = (l: Pick<Label, 'source' | 'scale' | 'code'>) =>
   `lbl_${slug(l.source)}_${slug(l.scale)}_${slug(l.code)}`;
+/** Whether a rivers.yaml row gets a `river_<id>` label (check-i18n too): not a canal before P17b; no `kind` is a river. */
+export const isLabelled = (r: Record<string, unknown>) => r.kind !== 'canal';
 
 const text = (v: unknown, what: string): string => {
   if (typeof v !== 'string' || v.trim() === '') throw new Error(`gen-web-labels: empty text: ${what}`);
@@ -59,7 +61,7 @@ function readInputs(root: string) {
     }
   }
   const rv = parse(readFileSync(join(root, 'registry/rivers.yaml'), 'utf8')) as { rivers: Record<string, unknown>[] };
-  const rivers: River[] = rv.rivers.map((r) => ({
+  const rivers: River[] = rv.rivers.filter(isLabelled).map((r) => ({
     id: String(r.id),
     name_nl: text(r.name_nl, `river ${String(r.id)} name_nl`),
     name_en: text(r.name_en, `river ${String(r.id)} name_en`),

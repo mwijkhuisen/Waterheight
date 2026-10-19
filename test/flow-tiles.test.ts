@@ -9,6 +9,7 @@ import { writeOutputs } from '../tools/geo/rivernet/outputs.ts';
 import { place, readOverrides } from '../tools/geo/rivernet/place.ts';
 import { readStations } from '../tools/geo/rivernet/stations.ts';
 import { repoRoot } from './catalogue.ts';
+import { fixtureWaterbodies } from './rivernet-waterbodies.ts';
 
 // The flow direction's data (P11a, issue #26 C2): the dash layer `rivers-flow` filters on the tile property `tidal`
 // and moves its dashes along the line's own direction. Both are facts of the tile input (`rivers.geojsonseq`, the file
@@ -23,7 +24,14 @@ const build = await buildFromFiles({
   provenance: `${FX}rivernet.provenance.json`,
 });
 const rivers = readRivers();
-const placed = place(build.edges, rivers, readStations(), readOverrides(rivers));
+const placed = place(
+  build.edges,
+  rivers,
+  readStations(),
+  readOverrides(rivers),
+  null,
+  await fixtureWaterbodies(rivers),
+);
 const osm = (build.graph as { osm: { replication_timestamp: string } }).osm.replication_timestamp;
 
 const tmp = mkdtempSync(join(tmpdir(), 'flow-tiles-'));
@@ -110,7 +118,11 @@ describe('the direction of the tile lines', () => {
   });
 
   it('does not draw a reach against its flow: no reach starts where one of its downstream reaches ends', () => {
+    // The tidal-zone channels (P17a, direction none) have no flow direction and may loop (the Hollandse IJssel's
+    // .1 and .7 name each other), so only reaches of directed rivers are checked.
+    const zone = new Set(rivers.rivers.filter((x) => x.tidal_zone).map((x) => x.id));
     for (const r of release.reaches) {
+      if (zone.has(r.river_id)) continue;
       const line = lineOf.get(r.id) as TileLine;
       for (const d of r.downstream) {
         const next = lineOf.get(d) as TileLine;

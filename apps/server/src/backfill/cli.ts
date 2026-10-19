@@ -1,9 +1,12 @@
 import { SPEC_RE } from '../archive/manifest.ts';
+import { ArchiveReader } from '../archive/reader.ts';
 import { Archive } from '../archive/writer.ts';
 import { captureEnv, captureUserAgent, EXIT_CONFIG, readSecret } from '../capture/env.ts';
 import { loadRegistry, type Registry } from '../capture/specs.ts';
 import { dbConfig, errorCode, openDb } from '../db/pool.ts';
 import { Client } from '../http/client.ts';
+import { readRegistry } from '../load/registry-sync.ts';
+import { type CensusArgs, census } from './census.ts';
 import { type Job, type JobStatus, type JobStore, SqlJobStore } from './job.ts';
 import { jobBudget, planChunks, unitRange } from './plan.ts';
 import { NL1_DRY_RUN, project, totals } from './project.ts';
@@ -11,7 +14,7 @@ import { PROVIDERS, type Provider } from './provider.ts';
 import { type RunResult, runBackfill } from './run.ts';
 import { ceilingMs, type LoadedBackfill, type LoadedBackfillSpec, loadBackfill, type Unit } from './spec.ts';
 
-// `backfill plan|run|status|pause|resume|abort` (P14a, plan §3.3): the history runner's command line. Arguments are
+// `backfill plan|run|status|pause|resume|abort|census` (P14a, plan §3.3; census #184): the history runner's command line. Arguments are
 // hand-rolled like replay's; every value is checked against a fixed pattern. Output is one JSON line per job and a
 // totals line, with fixed codes and never provider text. Exit codes: 0, 64 usage, 78 config, 1 failure.
 
@@ -20,13 +23,15 @@ export const EXIT_USAGE = 64;
 export const BACKFILL_USAGE = `usage: backfill plan --spec <id> [--from YYYY-MM-DD] [--to YYYY-MM-DD] [--series key,…] [--dry-run]
        backfill run [--until YYYY-MM-DDTHH:MM:SSZ]
        backfill status
-       backfill pause|resume|abort --job <id>`;
+       backfill pause|resume|abort --job <id>
+       backfill census --spec <id>`;
 
 export type BackfillArgs =
   | { cmd: 'plan'; spec: string; from: string | null; to: string | null; series: string[] | null; dryRun: boolean }
   | { cmd: 'run'; until: Date | null }
   | { cmd: 'status' }
-  | { cmd: 'pause' | 'resume' | 'abort'; job: number };
+  | { cmd: 'pause' | 'resume' | 'abort'; job: number }
+  | CensusArgs;
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 const isDay = (v: string) =>
@@ -84,6 +89,12 @@ export function parseBackfillArgs(argv: readonly string[]): BackfillArgs | strin
       const job = flags.get('--job') ?? '';
       if (!allowed(['--job']) || !/^[1-9]\d{0,9}$/.test(job)) return `backfill ${cmd}: --job <id> is required`;
       return { cmd, job: Number(job) };
+    }
+    case 'census': {
+      const spec = flags.get('--spec');
+      if (!allowed(['--spec']) || spec === undefined || !SPEC_RE.test(spec))
+        return 'backfill census: --spec <id> is required, and nothing else';
+      return { cmd, spec };
     }
     default:
       return BACKFILL_USAGE;
@@ -251,13 +262,15 @@ export async function backfillMain(
     log(args);
     return EXIT_USAGE;
   }
-  const needsRegistry = args.cmd === 'plan' || args.cmd === 'run';
+  const needsRegistry = args.cmd === 'plan' || args.cmd === 'run' || args.cmd === 'census';
   let registry: Registry | undefined;
   let config: LoadedBackfill | undefined;
+  let stations: ReturnType<typeof readRegistry> | undefined;
   if (needsRegistry) {
     try {
       registry = loadRegistry();
       config = loadBackfill(registry.hosts);
+      if (args.cmd === 'census') stations = readRegistry();
     } catch (err) {
       log(`backfill: ${err instanceof Error ? err.message : 'registry is not valid'}`);
       return EXIT_CONFIG;
@@ -265,6 +278,16 @@ export async function backfillMain(
   }
   if (args.cmd === 'plan' && args.dryRun) {
     return plan(args, config as LoadedBackfill, undefined, log);
+  }
+  // #184: the census reads the archive and the registry only; it never opens the database.
+  if (args.cmd === 'census') {
+    const reader = new ArchiveReader(env.RWS_RAW_DIR || '/data/raw');
+    return census(
+      args,
+      { config: config as LoadedBackfill, registry: stations as ReturnType<typeof readRegistry>, reader },
+      print,
+      log,
+    );
   }
   const cfg = dbConfig(env, 'rws_backfill');
   if (typeof cfg === 'string') {

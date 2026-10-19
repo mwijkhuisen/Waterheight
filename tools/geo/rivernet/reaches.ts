@@ -96,6 +96,8 @@ export function cutReaches(
 
   // 2. Links between points: pieces and joins.
   const out = new Map<string, number>();
+  // The bifurcation flag counts the links that carry flow: no direction-`none` piece (tidal zone, canal; P17a).
+  const downOut = new Map<string, number>();
   const inn = new Map<string, number>();
   const outPieces = new Map<string, Piece[]>();
   const inRivers = new Map<string, Set<string>>();
@@ -103,6 +105,7 @@ export function cutReaches(
   const add = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
   for (const p of pieces) {
     add(out, p.from);
+    if (net.edges.get(p.edge)?.direction !== 'none') add(downOut, p.from);
     add(inn, p.to);
     outPieces.set(p.from, [...(outPieces.get(p.from) ?? []), p]);
     const r = net.primary.get(p.edge) as string;
@@ -112,6 +115,7 @@ export function cutReaches(
   const joinEnds = new Set<string>();
   for (const j of net.joins) {
     add(out, j.from);
+    add(downOut, j.from);
     add(inn, j.to);
     joinEnds.add(j.from);
     joinEnds.add(j.to);
@@ -197,7 +201,7 @@ export function cutReaches(
     length_m: b.length_m,
     km_graph_from: b.km_graph_from,
     km_graph_to: b.km_graph_to,
-    flags: { tidal: false, impounded: false, bifurcation: (out.get(b.from) ?? 0) >= 2 },
+    flags: { tidal: false, impounded: false, bifurcation: (downOut.get(b.from) ?? 0) >= 2 },
     travel_time_h: null,
     travel_time_source: null,
     upstream: [...new Set(before(b.from))].sort(byString),

@@ -91,6 +91,63 @@ describe('rivers.yaml schema', () => {
   });
 });
 
+describe('rivers.yaml kind, tidal zone and mouths (P17a)', () => {
+  const mouth = (over: Record<string, unknown> = {}) => ({
+    id: 'waal-noordzee',
+    river: 'waal',
+    at: [4.1, 51.98],
+    max_m: 2000,
+    waterbody: 'noordzee',
+    evidence: 'test',
+    ...over,
+  });
+  const p17a = () => {
+    const d = valid();
+    Object.assign(at(d, 1), { kind: 'delta_channel', tidal_zone: true });
+    Object.assign(at(d, 4), { kind: 'canal' });
+    d.rivers.push(
+      river('noord', 'Noord', {
+        kind: 'delta_channel',
+        tidal_zone: true,
+        osm_way_name: 'Noord',
+        wikidata: 'Q7',
+        parent_river_id: 'waal',
+      }),
+    );
+    return { ...d, mouths: [mouth()] };
+  };
+
+  it('accepts kind, tidal_zone and mouths, all optional', () => {
+    expect(problems(p17a())).toBe('');
+  });
+
+  it('fails each mutation with its own problem', () => {
+    const cases: [string, (d: ReturnType<typeof p17a>) => void, RegExp][] = [
+      ['bad kind', (d) => (at(d, 0).kind = 'lake'), /kind/],
+      ['tidal_zone false', (d) => (at(d, 1).tidal_zone = false), /tidal_zone/],
+      ['tidal_zone on a river', (d) => (at(d, 1).kind = 'river'), /waal: tidal_zone needs kind delta_channel/],
+      ['tidal_zone without a kind', (d) => delete at(d, 1).kind, /waal: tidal_zone needs kind delta_channel/],
+      [
+        'mouth of an unknown river',
+        (d) => (d.mouths = [mouth({ river: 'nowhere' })]),
+        /mouths waal-noordzee: unknown river nowhere/,
+      ],
+      [
+        'duplicate mouth id',
+        (d) => (d.mouths = [mouth(), mouth({ river: 'rhine' })]),
+        /mouths: duplicate mouth id waal-noordzee/,
+      ],
+      ['mouth max_m over 2 km', (d) => (d.mouths = [mouth({ max_m: 2001 })]), /max_m/],
+      ['mouth unknown key', (d) => (d.mouths = [mouth({ name: 'Noordzee' })]), /name/],
+    ];
+    for (const [label, mutate, want] of cases) {
+      const d = p17a();
+      mutate(d);
+      expect(problems(d), label).toMatch(want);
+    }
+  });
+});
+
 describe('rivers.yaml travel_times (#110)', () => {
   const row = (over: Record<string, unknown> = {}) => ({
     from_station: 'de.wsv.2790020',

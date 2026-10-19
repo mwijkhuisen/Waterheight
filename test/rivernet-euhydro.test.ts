@@ -415,19 +415,19 @@ describe('euhydro CLI', () => {
     ],
     graph: { nodes: 2 },
   };
-  const work = (): string => {
+  const feature = (id: string, coordinates: [number, number][], way: number, extra: object = {}) => ({
+    type: 'Feature',
+    geometry: { type: 'LineString', coordinates },
+    properties: { id, way, rivers: ['rhine'], length_m: 1, ...extra },
+  });
+  const work = (more: ReturnType<typeof feature>[] = []): string => {
     const dir = mkdtempSync(join(tmpdir(), 'euhydro-'));
     const seg = (parsePage(body('l12-pannerdensche-kop')).segments[0] as Segment).paths[0] as [number, number][];
-    const feature = (id: string, coordinates: [number, number][], way: number) => ({
-      type: 'Feature',
-      geometry: { type: 'LineString', coordinates },
-      properties: { id, way, rivers: ['rhine'], length_m: 1 },
-    });
     writeFileSync(
       join(dir, 'reaches.geojson'),
       JSON.stringify({
         type: 'FeatureCollection',
-        features: [feature('w1.0', seg, 1), feature('w2.0', [...seg].reverse(), 2)],
+        features: [feature('w1.0', seg, 1), feature('w2.0', [...seg].reverse(), 2), ...more],
       }),
     );
     writeFileSync(join(dir, 'build-report.json'), JSON.stringify(buildReport));
@@ -498,8 +498,11 @@ describe('euhydro CLI', () => {
       disagree: 1,
       unmatched: 0,
       agreement_pct: 50,
-      agreement_basis: 'edges matched within 200 m (agree + disagree); unmatched edges are listed separately',
+      agreement_basis:
+        'directed edges outside the tidal zone; canals without a direction are not scored; edges matched within 200 m (agree + disagree); unmatched edges are listed separately',
       unmatched_edges: [],
+      unscored: [],
+      unscored_count: 0,
       endorsement: 'No endorsement by the European Union is implied',
     });
     expect(report.euhydro.source).toContain('© European Union, Copernicus Land Monitoring Service');
@@ -507,6 +510,45 @@ describe('euhydro CLI', () => {
     expect(Object.keys(report.euhydro)).toEqual([...Object.keys(report.euhydro)].sort());
     expect(text).not.toContain('paths');
     expect(text).not.toContain('6.044387'); // no EU-Hydro vertex
+  });
+
+  it('scores directed edges only and lists the tidal-zone and canal edges as unscored, sorted by edge id (P17a)', async () => {
+    // The zone and canal edges lie far off the matched segment, yet they widen the one envelope that is requested.
+    const far: [number, number][] = [
+      [4.5, 51.5],
+      [4.51, 51.51],
+    ];
+    const dir = work([
+      feature('w9.0', far, 9, { direction: 'none', direction_reason: 'tidal_zone' }),
+      feature('w10.0', far, 10, { direction: 'none', direction_reason: 'canal' }),
+      feature('w3.0', far, 3, { direction: 'downstream' }),
+    ]);
+    const boxes: string[] = [];
+    server.use(
+      http.get(QUERY, ({ request }) => {
+        boxes.push(new URL(request.url).searchParams.get('geometry') ?? '');
+        return new HttpResponse(body('l12-pannerdensche-kop'));
+      }),
+    );
+    expect(await main(['--dir', dir], CONTACT, QUIET)).toBe(0);
+    const text = readFileSync(join(dir, 'qa-report.json'), 'utf8');
+    const euhydro = JSON.parse(text).euhydro;
+    expect(euhydro).toMatchObject({
+      agree: 1,
+      disagree: 1,
+      unmatched: 1,
+      unmatched_edges: ['w3.0'],
+      agreement_pct: 50,
+    });
+    expect(euhydro.unscored).toEqual([
+      { edge: 'w10.0', way: 10, rivers: ['rhine'], reason: 'canal' },
+      { edge: 'w9.0', way: 9, rivers: ['rhine'], reason: 'tidal_zone' },
+    ]);
+    expect(euhydro.unscored_count).toBe(2);
+    expect(Object.keys(euhydro)).toEqual([...Object.keys(euhydro)].sort());
+    expect(boxes).toHaveLength(1);
+    expect(Number((boxes[0] as string).split(',')[0])).toBeLessThan(4.5);
+    expect(text).not.toContain('Rhein');
   });
 
   it('an incomplete QA still exits 0 and records the error code', async () => {

@@ -47,7 +47,13 @@ import type { Waarnemingen } from './parse.ts';
 //    other than NAP (TAW, MSL, PLAATSLR) is a duplicate and dropped, unless the
 //    registry declares that very series (the Eijsden-grens TAW twin);
 //  - series RWS publishes but that are stale or wrong are dropped by an
-//    explicit list (catalogue §1b, §2.1 pitfall 5, §3.1).
+//    explicit list (catalogue §1b, §2.1 pitfall 5, §3.1);
+//  - #184 (D2): only an instantaneous list (WaardeBewerkingsMethode NVT) is
+//    the series. A processed one, such as RWS's daily mean GEM24H, comes as a
+//    second list under the same method: of a series we store (or of its
+//    location, quantity and datum under another method) it is withheld as
+//    `processed`, never merged into the instantaneous values; under any other
+//    combination it is counted as before.
 // A value list is split whenever its metadata changes: the lists of one series
 // are merged and sorted by time. Where two lists state the same instant with
 // the same value, one row is kept (the validated one); with different values,
@@ -77,8 +83,10 @@ const UNIT: ReadonlyMap<string, string> = new Map([
   ['m3/s', 'm³/s'],
 ]);
 const QUANTITIES: ReadonlySet<string> = new Set(['WATHTE', 'Q']);
-const GAP = '99';
-const KNOWN_QUALITY: ReadonlySet<string> = new Set(['00', '10', '20', '25', '30', '40']);
+export const GAP = '99';
+export const KNOWN_QUALITY: ReadonlySet<string> = new Set(['00', '10', '20', '25', '30', '40']);
+/** The WaardeBewerkingsMethode of an instantaneous list; any other is a processed one (#184). */
+export const INSTANTANEOUS = 'NVT';
 
 /**
  * Series we never store, as key prefixes (`<code>/<Grootheid>/<Hoedanigheid>`
@@ -118,6 +126,10 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
   const maxAge = ctx.maxAgeMs === undefined ? MAX_AGE_MS : ctx.maxAgeMs;
   /** A registered `<code>/<Grootheid>/<Hoedanigheid>`, whatever its method. */
   let combinations: Set<string> | undefined;
+  const registeredCombination = (c: string) => {
+    combinations ??= new Set([...ctx.registry.keys()].map((k) => k.slice(0, k.lastIndexOf('/'))));
+    return combinations.has(c);
+  };
   const merged = new Map<string, { samples: Map<number, Sample>; conflicts: Set<number> }>();
 
   for (const { aquo, locatie, metingen } of lists) {
@@ -151,12 +163,19 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
       count(out, registered ? 'registered_dropped' : reason, n);
       continue;
     }
+    // #184: a daily mean (or any other processed list) of a combination we store is never part of its series.
+    if (
+      aquo.WaardeBewerkingsMethode.Code !== INSTANTANEOUS &&
+      (decl !== undefined || registeredCombination(combination))
+    ) {
+      count(out, 'processed', n);
+      continue;
+    }
     if (decl === undefined) {
-      combinations ??= new Set([...ctx.registry.keys()].map((k) => k.slice(0, k.lastIndexOf('/'))));
       // A registered series that now arrives under another method is not the series we declared: withheld and
       // reported, never stored under the old key. A datum duplicate is dropped. Any other series the registry
       // does not know is only counted.
-      if (combinations.has(combination)) count(out, 'unregistered_method', n);
+      if (registeredCombination(combination)) count(out, 'unregistered_method', n);
       else if (aquo.Grootheid.Code === 'WATHTE' && aquo.Hoedanigheid.Code !== 'NAP') count(out, 'datum', n);
       else out.unknown += 1;
       continue;

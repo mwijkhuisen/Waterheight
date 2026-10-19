@@ -15,7 +15,7 @@ import { join, relative, resolve, sep } from 'node:path';
 import ts from 'typescript';
 import { parse } from 'yaml';
 import { keyDrift, loadMessages } from '../apps/web/i18n-html.ts';
-import { labelKey, slug } from './gen-web-labels.ts';
+import { isLabelled, labelKey, slug } from './gen-web-labels.ts';
 
 const LOCALES = ['nl', 'en'] as const;
 /** Attributes whose value a visitor reads or hears; className, data-* and the like are not UI text. */
@@ -204,7 +204,7 @@ function catalogueProblems(root: string, messages: Map<string, Record<string, un
   const rivers = existsSync(join(root, 'registry/rivers.yaml'))
     ? (read('registry/rivers.yaml').rivers as Record<string, unknown>[])
     : [];
-  for (const r of rivers)
+  for (const r of rivers.filter(isLabelled))
     need(`river_${slug(String(r.id))}`, `river ${String(r.id)}`, { nl: r.name_nl, en: r.name_en }, false);
   return problems;
 }

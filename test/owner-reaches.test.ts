@@ -354,6 +354,9 @@ describe('synthetic release', () => {
         km_graph: km as number,
         km_to_nl_entry: 50,
         nl_entry_node: null,
+        canal: null,
+        waterbody: null,
+        waterbody_rule: null,
       })),
     ],
   });

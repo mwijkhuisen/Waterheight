@@ -49,14 +49,14 @@ describe('spansOf on the fixture release', () => {
   });
 
   it('walks every arm of a bifurcation, a reach on two paths taking the first in walk order', () => {
-    // nederrijn.3 leaves into 4 and 5; both arms end at Driel beneden.
-    for (const id of ['nederrijn.3', 'nederrijn.4', 'nederrijn.5']) {
+    // nederrijn.4 leaves into 5 and 6 (one id up since P17b placed Huissen); both arms end at Driel beneden.
+    for (const id of ['nederrijn.4', 'nederrijn.5', 'nederrijn.6']) {
       expect(at(id)?.up).toEqual(['nl.rws.driel.boven']);
       expect(at(id)?.down).toEqual(['nl.rws.driel.beneden']);
     }
-    expect(at('nederrijn.3')?.lengthKm).toBeCloseTo(0.658, 3); // 3 + 4, the first arm
-    expect(at('nederrijn.4')?.lengthKm).toBeCloseTo(0.658, 3);
-    expect(at('nederrijn.5')?.lengthKm).toBeCloseTo(0.667, 3); // 3 + 5 is only walked second
+    expect(at('nederrijn.4')?.lengthKm).toBeCloseTo(0.658, 3); // 4 + 5, the first arm
+    expect(at('nederrijn.5')?.lengthKm).toBeCloseTo(0.658, 3);
+    expect(at('nederrijn.6')?.lengthKm).toBeCloseTo(0.667, 3); // 4 + 6 is only walked second
     // scheldt.11 into 12 and 13; moselle.19 into 21 and 22.
     for (const id of ['scheldt.11', 'scheldt.12', 'scheldt.13']) expect(at(id)?.down).toEqual(['nl.rws.antwerpen']);
     // The first arm in walk order is scheldt.12 (0.406 km, ids sorted as text); via scheldt.13 (0.416 km) it is 165.581.
