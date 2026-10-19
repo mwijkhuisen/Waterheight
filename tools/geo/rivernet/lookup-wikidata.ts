@@ -1,5 +1,5 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve, sep } from 'node:path';
 import { z } from 'zod';
 import { captureEnv, captureUserAgent, EXIT_CONFIG } from '../../../apps/server/src/capture/env.ts';
 import { boundedJson } from '../../../packages/core/src/json.ts';
@@ -340,13 +340,17 @@ export async function run(
     else return usage(log);
   }
   if (!out) return usage(log);
+  // A labels file lives beside this tool (review R2-4): no path outside tools/geo/rivernet is read.
+  const labelsDir = join(ROOT, 'tools/geo/rivernet');
+  const labelsPath = resolve(ROOT, labelsFile);
+  if (!labelsPath.startsWith(`${labelsDir}${sep}`)) return usage(log);
   const ce = captureEnv(env);
   if (typeof ce === 'string') {
     log(ce);
     return EXIT_CONFIG;
   }
   try {
-    const labels = parseLabels(readFileSync(join(ROOT, labelsFile), 'utf8'));
+    const labels = parseLabels(readFileSync(labelsPath, 'utf8'));
     if (record) mkdirSync(record, { recursive: true });
     const results = await lookup(labels, {
       userAgent: captureUserAgent(ce),

@@ -282,6 +282,7 @@ export function snapReport(placed: Placed, version: string, osmStamp: string): s
           canal_distance_m: s.canal_distance_m,
           waterbody: s.waterbody,
           waterbody_rule: s.waterbody_rule,
+          waterbody_distance_m: s.waterbody_distance_m,
         })),
     },
     1,

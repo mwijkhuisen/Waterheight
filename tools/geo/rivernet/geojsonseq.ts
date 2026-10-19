@@ -42,11 +42,12 @@ export interface AreaCaps {
   maxRings: number;
 }
 
-// ponytail: generous first guesses (a lake of 100,000 positions is about 2.5 MB of text; a big lake's relation can
-// carry a name:<lang> tag for every language); revisit with the sizes of the first branch run's export.
+// Measured on the export of geo.yml run 39238147583 (P17b): 18 areas, 2.4 MB in all, at most 18,866 positions (the
+// IJsselmeer). The total bounds the memory of all areas together (review R2-1): 64 MiB is 25 times the real export.
+// A big lake's relation can carry a name:<lang> tag for every language.
 export const AREA_CAPS: AreaCaps = {
-  maxLineBytes: 64 * 1024 ** 2,
-  maxTotalBytes: 256 * 1024 ** 2,
+  maxLineBytes: 16 * 1024 ** 2,
+  maxTotalBytes: 64 * 1024 ** 2,
   maxTags: 1000,
   maxTagChars: 255,
   maxVertices: 2_000_000,

@@ -38,16 +38,23 @@ node tools/geo/rivernet/sources.ts --selection "$work"
   fail "sources.ts wrote no selection"
 qids=$(tr -d '\n' <"$work/qids.txt")
 [[ $qids =~ ^(Q[1-9][0-9]{0,9}(,Q[1-9][0-9]{0,9})*)?$ ]] || fail "bad qids.txt"
-grep -qvE '^r[1-9][0-9]*$' "$work/relations.txt" && fail "bad relations.txt"
+# A file passes only when grep finds no line outside the pattern (exit 1): a line outside it (0) or an error of grep
+# itself (2) stops the run (review R2-2: `grep … && fail` let an error through).
+only_lines() {
+  local rc=0
+  LC_ALL=C grep -qvE "$1" "$2" || rc=$?
+  ((rc == 1))
+}
+only_lines '^r[1-9][0-9]*$' "$work/relations.txt" || fail "bad relations.txt"
 [[ -s $work/waterbodies.txt ]] || fail "no water-body ids"
-grep -qvE '^[rw][1-9][0-9]*$' "$work/waterbodies.txt" && fail "bad waterbodies.txt"
+only_lines '^[rw][1-9][0-9]*$' "$work/waterbodies.txt" || fail "bad waterbodies.txt"
 
 probe=${RWS_GEO_PROBE:-0}
 [[ $probe == 0 || $probe == 1 ]] || fail "RWS_GEO_PROBE must be 0 or 1"
 if ((probe == 1)); then
   # Each name becomes one value of an osmium tag filter: ASCII letters, space, hyphen and apostrophe, or the bytes
   # of a non-ASCII UTF-8 character (accents); a comma, an equals sign or a slash would change the expression.
-  LC_ALL=C grep -qvE $'^([A-Za-z\' -]|[\x80-\xff])+$' "$work/probe-names.txt" && fail "bad probe-names.txt"
+  only_lines $'^([A-Za-z\' -]|[\x80-\xff])+$' "$work/probe-names.txt" || fail "bad probe-names.txt"
   mapfile -t probe_names <"$work/probe-names.txt"
   ((${#probe_names[@]} > 0)) || fail "no probe names"
   probe_filter=$(IFS=,; printf 'nwr/name=%s' "${probe_names[*]}")

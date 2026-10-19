@@ -192,5 +192,8 @@ describe('Wikidata lookup, water-body variant (P17b)', () => {
     expect(queries[0]).toContain('"IJsselmeer"@nl');
     expect(queries[0]).toContain('P625');
     expect(await run(['--kind', 'lake', '--out', out], env, deps, () => {})).toBe(64);
+    // A labels file outside tools/geo/rivernet is refused before anything is read (review R2-4).
+    for (const f of ['../../../etc/passwd', 'registry/rivers.yaml', '/etc/hostname', 'tools/geo/rivernet'])
+      expect(await run(['--labels', f, '--out', out], env, deps, () => {}), f).toBe(64);
   });
 });

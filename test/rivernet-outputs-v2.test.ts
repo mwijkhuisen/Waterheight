@@ -284,13 +284,19 @@ describe('snap report and audience', () => {
     });
     expect(Object.keys(r.counts)).toEqual(['public', 'public_not_shown']);
     const by = new Map(r.stations.map((s) => [s.id, s]));
-    expect(by.get('nl.t.lake2')).toMatchObject({ waterbody: 'meer', waterbody_rule: 'waterbody_shore', canal: null });
+    expect(by.get('nl.t.lake2')).toMatchObject({
+      waterbody: 'meer',
+      waterbody_rule: 'waterbody_shore',
+      waterbody_distance_m: 120,
+      canal: null,
+    });
     expect(by.get('nl.t.canal')).toMatchObject({
       rule: 'canal_edge',
       canal: 'kanaal',
       canal_distance_m: 12.5,
       waterbody: null,
       waterbody_rule: null,
+      waterbody_distance_m: null,
       river_id: null,
     });
   });
