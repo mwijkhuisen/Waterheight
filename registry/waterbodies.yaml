@@ -215,7 +215,7 @@ waterbodies:
   - id: volkerak
     # osm: the multipolygon tagged natural=water and wikidata=Q2437978, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     # Wikidata has Volkerak (Q2437978) and Zoommeer (Q3576055) as separate items and no Volkerak-Zoommeer item was
-    # found, so they stay two bodies; OSM has two polygons too (r1408100 here, the Zoommeer way w1191602077).
+    # found, so they stay two bodies; OSM has two polygons too (r1408100 here, the Zoommeer r1166442).
     kind: lake
     name_nl: "Volkerak"
     name_en: "Volkerak"
@@ -230,20 +230,22 @@ waterbodies:
       - https://www.wikidata.org/wiki/Q2437978
       - https://www.openstreetmap.org/relation/1408100
   - id: zoommeer
-    # osm: the closed way tagged natural=water and wikidata=Q3576055, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
-    # The probe also lists r1166442, a natural=water multipolygon named Zoommeer with no wikidata tag: not taken [U].
+    # osm: r1166442, the natural=water (water=lake) multipolygon named Zoommeer, from the geo.yml name probe
+    # (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682); it carries no wikidata tag, so it is taken by
+    # its name [U]. The way tagged with this QID (w1191602077) is a fragment: 275 vertices within 2 km on the extract of
+    # https://github.com/mwijkhuisen/Waterheight/actions/runs/39231149979.
     kind: lake
     name_nl: "Zoommeer"
     name_en: "Zoommeer"
     wikidata: Q3576055
-    osm: {type: way, id: 1191602077}
+    osm: {type: relation, id: 1166442}
     names: {}
     managed_level: true
     outflows: []
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q3576055
-      - https://www.openstreetmap.org/way/1191602077
+      - https://www.openstreetmap.org/relation/1166442
   - id: grevelingenmeer
     # osm: the multipolygon tagged natural=water and wikidata=Q1546115, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     # The Wikidata label is Grevelingen (the Grevelingenmeer items found by label are streets).
@@ -330,14 +332,20 @@ waterbodies:
     evidence:
       - https://www.wikidata.org/wiki/Q26080
   - id: oosterschelde
-    # osm: the multipolygon tagged natural=water and wikidata=Q1266165, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
-    # (4.1096, 51.6036) and yerseke (4.0751, 51.5062), +- margin; tholen.bergsediepsluis.buiten (4.1657, 51.5113) lies
-    # inside.
+    # point-only: OSM's relation tagged natural=water and wikidata=Q1266165 (r6846427, found by the geo.yml name probe
+    # of https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682) is the main basin only, one outer ring
+    # from 3.682 to 4.223 E: on the extract of https://github.com/mwijkhuisen/Waterheight/actions/runs/39231149979 the
+    # stations of the northern arms (Krammer, Sint-Annaland, Stavenisse) lie 0.8 to 7 km outside it, so it is not
+    # usable for containment [U]. bbox: the scheldt-type stations on the Oosterschelde, oosterschelde.14 (3.6769,
+    # 51.7201) to sintannaland (4.1096, 51.6036) and yerseke (4.0751, 51.5062), +- margin;
+    # tholen.bergsediepsluis.buiten (4.1657, 51.5113) lies inside.
     kind: estuary
     name_nl: "Oosterschelde"
     name_en: "Eastern Scheldt"
     wikidata: Q1266165
-    osm: {type: relation, id: 6846427}
+    osm: null
+    point: [3.965556, 51.553889]
+    bbox: [3.55, 51.42, 4.3, 51.78]
     names:
       NL-1: ["Oosterschelde"]
     managed_level: false
@@ -346,7 +354,6 @@ waterbodies:
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q1266165
-      - https://www.openstreetmap.org/relation/6846427
   - id: westerschelde
     # No NL-1 water_name says Westerschelde. bbox: vlissingen (3.6, 51.442), hansweert (3.9974, 51.4457) and antwerpen
     # (4.397, 51.228, the Zeeschelde) +- margin.
