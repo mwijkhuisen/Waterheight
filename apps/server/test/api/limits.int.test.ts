@@ -594,7 +594,9 @@ describe('50 identical concurrent requests are one database computation', () => 
     const m1 = spies();
     expect((await one(probe, get(cold(5)))).status).toBe(200);
     const single = { connect: m1.connect.mock.calls.length, query: m1.query.mock.calls.length };
-    expect(single.connect).toBe(2); // the classification's static rows, and the read at t
+    // The classification's static rows, the DOY rows of t's UTC day key (P14f, cached per family and day) and the
+    // read at t.
+    expect(single.connect).toBe(3);
     expect(single.query).toBeGreaterThan(2);
     vi.restoreAllMocks();
 
@@ -628,7 +630,7 @@ describe('50 identical concurrent requests are one database computation', () => 
     expect(all.filter((a) => a.coding === 'gzip').every((a) => a.encoding === 'gzip')).toBe(true);
     expect(all.filter((a) => a.coding === 'zstd').every((a) => a.encoding === 'zstd')).toBe(true);
     expect(all.filter((a) => a.coding === 'identity').every((a) => a.encoding === null)).toBe(true);
-    expect(connect.mock.calls.length).toBe(2);
+    expect(connect.mock.calls.length).toBe(3);
     expect(query.mock.calls.length).toBe(single);
   });
 
@@ -647,11 +649,12 @@ describe('50 identical concurrent requests are one database computation', () => 
     );
     expect(new Set(forecast.map((a) => a.text)).size).toBe(1);
     expect(connect.mock.calls.length).toBe(2);
-    // Ten distinct keys are ten computations (and a mixed flood of 50 over 10 keys, ten).
+    // Ten distinct keys are ten computations (and a mixed flood of 50 over 10 keys, ten), plus one read of the DOY
+    // rows of their UTC day, which the warm-up's day key did not cover (P14f).
     const keys = Array.from({ length: 10 }, (_, i) => get(cold(20 + i)));
     const before = connect.mock.calls.length;
     await Promise.all(Array.from({ length: 50 }, (_, i) => one(app, keys[i % 10] as Req)));
-    expect(connect.mock.calls.length - before).toBe(10);
+    expect(connect.mock.calls.length - before).toBe(11);
   });
 
   it('a failed computation is not shared as a body or cached: each waiter gets a fresh fixed 503, and the next call recomputes', async () => {

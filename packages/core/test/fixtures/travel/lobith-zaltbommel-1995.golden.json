@@ -1,0 +1,18 @@
+{
+  "params": {
+    "window_h": 240,
+    "step_h": 72,
+    "smooth_h": 6,
+    "r_min": 0.5,
+    "min_windows": 3,
+    "max_lag_h": 96,
+    "min_lag_h": 1
+  },
+  "length_km": 100,
+  "result": {
+    "h": [10, 20],
+    "classes": { "low": [10, 20], "mid": [14, 17], "high": [13, 17] },
+    "windows": 11,
+    "span": [0, 960]
+  }
+}

@@ -26,13 +26,15 @@
 //
 //  - P14b, the backfill recordings of the lead (too large to commit whole, kept in the git-ignored `.smoke/`):
 //    `node scripts/trim-fixtures.ts --p14b <de-8|fr-2|ch-9>` runs that source's rules (scripts/lib/trim-<id>.ts).
+//  - P14f, `node scripts/trim-fixtures.ts --p14f`: the climatology test's ten years of FR-2 QmnJ at Uckange, cut from
+//    the same `.smoke/` recording into packages/core/test/fixtures/climatology/ (CLIMATOLOGY_CUTS).
 //
 // Each gets a .meta.json (`from: 'trimmed'`, the sha256 of the recording it was
 // cut from, the rule): the rule is the only way a body is cut, never by hand.
 // The adapter tests read the metas back and check every kept feature or point
 // against the recording. Public sources only (invariant 11).
 import { createHash } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   DE7_BLOCKS,
@@ -50,7 +52,7 @@ import {
 } from './import-fixtures.ts';
 import { trim as trimCh9 } from './lib/trim-ch-9.ts';
 import { trim as trimDe8 } from './lib/trim-de-8.ts';
-import { trim as trimFr2 } from './lib/trim-fr-2.ts';
+import { CLIMATOLOGY_CUTS, trim as trimFr2 } from './lib/trim-fr-2.ts';
 
 const adapters = join(import.meta.dirname, '..', 'apps/server/src/adapters');
 
@@ -110,6 +112,12 @@ const P14B: Readonly<Record<string, (smoke: string, fixtures: string) => void>> 
 };
 
 function main(): void {
+  if (process.argv.includes('--p14f')) {
+    const out = join(import.meta.dirname, '..', 'packages/core/test/fixtures/climatology');
+    mkdirSync(out, { recursive: true });
+    trimFr2(join(import.meta.dirname, '..', '.smoke'), out, CLIMATOLOGY_CUTS);
+    return;
+  }
   const at = process.argv.indexOf('--p14b');
   if (at !== -1) {
     const id = process.argv[at + 1] ?? '';

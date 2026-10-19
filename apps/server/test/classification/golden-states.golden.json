@@ -901,5 +901,262 @@
    "impounded": false
   },
   "nap": null
+ },
+ "nl.rws.lobith.bovenrijn.tolkamer#H#doy": {
+  "doy": "normal",
+  "station": "nl.rws.lobith.bovenrijn.tolkamer",
+  "series": "H",
+  "source": "NL-1",
+  "t": "2026-09-29T13:20:00.000Z",
+  "value": 607,
+  "state": "normal",
+  "basis": {
+   "source": "NL-1",
+   "kind": "statistical",
+   "measure": "level",
+   "ref": "P10_DOY/P90_DOY",
+   "label": "DOY P10/P90 1991–2000"
+  },
+  "section": false,
+  "area": null,
+  "flags": {
+   "stale": false,
+   "suspect": false,
+   "tidal": false,
+   "impounded": false
+  },
+  "nap": {
+   "nap": {
+    "m": 6.07,
+    "pm": 0
+   }
+  }
+ },
+ "nl.rws.lobith.bovenrijn.tolkamer#Q#doy": {
+  "doy": "low",
+  "station": "nl.rws.lobith.bovenrijn.tolkamer",
+  "series": "Q",
+  "source": "NL-1",
+  "t": "2026-09-30T15:30:00.000Z",
+  "value": 552.48,
+  "state": "low",
+  "basis": {
+   "source": "NL-1",
+   "kind": "statistical",
+   "measure": "discharge",
+   "ref": "P10_DOY",
+   "label": "DOY P10/P90 1991–2000"
+  },
+  "section": false,
+  "area": null,
+  "flags": {
+   "stale": false,
+   "suspect": false,
+   "tidal": false,
+   "impounded": false
+  },
+  "nap": null
+ },
+ "nl.rws.eijsden.grens#H#doy": {
+  "doy": "elevated",
+  "station": "nl.rws.eijsden.grens",
+  "series": "H",
+  "source": "NL-1",
+  "t": "2026-09-30T15:30:00.000Z",
+  "value": 4407,
+  "state": "elevated",
+  "basis": {
+   "source": "NL-1",
+   "kind": "statistical",
+   "measure": "level",
+   "ref": "P90_DOY",
+   "label": "DOY P10/P90 1991–2000"
+  },
+  "section": false,
+  "area": null,
+  "flags": {
+   "stale": false,
+   "suspect": false,
+   "tidal": false,
+   "impounded": false
+  },
+  "nap": {
+   "nap": {
+    "m": 44.07,
+    "pm": 0
+   }
+  }
+ },
+ "nl.rws.delfzijl#H#doy": {
+  "doy": "elevated",
+  "station": "nl.rws.delfzijl",
+  "series": "H",
+  "source": "NL-1",
+  "t": "2026-09-29T15:20:00.000Z",
+  "value": 139,
+  "state": "no_ref",
+  "basis": null,
+  "section": false,
+  "area": null,
+  "flags": {
+   "stale": false,
+   "suspect": false,
+   "tidal": true,
+   "impounded": false
+  },
+  "nap": {
+   "nap": {
+    "m": 1.39,
+    "pm": 0
+   }
+  }
+ },
+ "de.wsv.25700100#H#doy": {
+  "doy": "normal",
+  "station": "de.wsv.25700100",
+  "series": "H",
+  "source": "DE-1",
+  "t": "2026-09-29T13:30:00.000Z",
+  "value": 1,
+  "state": "low",
+  "basis": {
+   "source": "DE-1",
+   "kind": "statistical",
+   "measure": "stage",
+   "ref": "MNW",
+   "label": "WSV MNW 2010–2020"
+  },
+  "section": false,
+  "area": null,
+  "flags": {
+   "stale": false,
+   "suspect": false,
+   "tidal": false,
+   "impounded": false
+  },
+  "nap": {
+   "nap": {
+    "m": 67.689,
+    "pm": 0.02
+   }
+  }
+ },
+ "de.wsv.24900108#H#doy": {
+  "doy": "elevated",
+  "station": "de.wsv.24900108",
+  "series": "H",
+  "source": "DE-1",
+  "t": "2026-09-29T13:30:00.000Z",
+  "value": 123,
+  "state": "normal",
+  "basis": {
+   "source": "DE-6",
+   "kind": "operational",
+   "measure": "stage",
+   "ref": "HE:0",
+   "label": "LHP HE:0"
+  },
+  "section": false,
+  "area": null,
+  "flags": {
+   "stale": false,
+   "suspect": false,
+   "tidal": false,
+   "impounded": false
+  },
+  "nap": {
+   "nap": {
+    "m": 84.119,
+    "pm": 0.02
+   }
+  }
+ },
+ "de.wsv.26100200#H#doy": {
+  "doy": "normal",
+  "station": "de.wsv.26100200",
+  "series": "H",
+  "source": "DE-1",
+  "t": "2026-09-29T13:30:00.000Z",
+  "value": 210,
+  "state": "normal",
+  "basis": {
+   "source": "DE-1",
+   "kind": "statistical",
+   "measure": "stage",
+   "ref": "P10_DOY/P90_DOY",
+   "label": "DOY P10/P90 1991–2000"
+  },
+  "section": false,
+  "area": null,
+  "flags": {
+   "stale": false,
+   "suspect": false,
+   "tidal": false,
+   "impounded": false
+  },
+  "nap": {
+   "nap": {
+    "m": 130.368,
+    "pm": 0.02
+   }
+  }
+ },
+ "lu.age.wasserbillig#H#doy": {
+  "doy": "normal",
+  "station": "lu.age.wasserbillig",
+  "series": "H",
+  "source": "LU-1",
+  "t": "2026-09-29T13:15:00.000Z",
+  "value": 207,
+  "state": "no_ref",
+  "basis": null,
+  "section": false,
+  "area": null,
+  "flags": {
+   "stale": false,
+   "suspect": false,
+   "tidal": false,
+   "impounded": true
+  },
+  "nap": null
+ },
+ "fr.sandre.A302009050#H#doy": {
+  "doy": "low",
+  "station": "fr.sandre.A302009050",
+  "series": "H",
+  "source": "FR-1",
+  "t": "2026-09-29T13:00:00.000Z",
+  "value": 265.8,
+  "state": "low",
+  "basis": {
+   "source": "FR-1",
+   "kind": "statistical",
+   "measure": "stage",
+   "ref": "P10_DOY",
+   "label": "DOY P10/P90 1991–2000"
+  },
+  "section": false,
+  "area": {
+   "state": "normal",
+   "basis": {
+    "source": "FR-5",
+    "kind": "area",
+    "measure": "area",
+    "ref": "SA16",
+    "label": "Vigicrues Rhin courant libre"
+   }
+  },
+  "flags": {
+   "stale": false,
+   "suspect": false,
+   "tidal": false,
+   "impounded": false
+  },
+  "nap": {
+   "zero": {
+    "m": 103.24,
+    "datum": "IGN69"
+   }
+  }
  }
 }

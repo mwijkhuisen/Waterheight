@@ -7,7 +7,12 @@ import {
   type SnapRule,
   validateSnapOverrides,
 } from '../../../packages/contracts/src/rivernet.ts';
-import type { RiversFile, TravelTime } from '../../../packages/contracts/src/rivers.ts';
+import {
+  type RiversFile,
+  type TravelEmpirical,
+  type TravelTime,
+  validateTravelEmpirical,
+} from '../../../packages/contracts/src/rivers.ts';
 import { BuildError, type Edge, ROOT } from './build.ts';
 import { buildNetwork, byString, fromSource, type LonLat, type Network, toTargets } from './network.ts';
 import { type BuiltReach, cutReaches } from './reaches.ts';
@@ -67,11 +72,27 @@ export function readOverrides(
   return overrides;
 }
 
+/** registry/travel-empirical.yaml (P14f): the travel times measured on our own history; BuildError('empirical_invalid'). */
+export function readEmpirical(path = join(ROOT, 'registry/travel-empirical.yaml')): TravelEmpirical {
+  const { problems, empirical } = validateTravelEmpirical(parse(readFileSync(path, 'utf8')));
+  if (empirical === undefined) throw new BuildError('empirical_invalid', problems);
+  return empirical;
+}
+
+// What an empirical pair carries as a derived `travel_times` entry. The basis holds no digit (the site's ETA scan
+// allows one in a travel row only beside "indicative"); the reach's source text names the quantity, classes and years.
+export const EMPIRICAL_BASIS = 'empirical: cross-correlation of level or discharge changes by flow class';
+export const EMPIRICAL_SOURCE = 'Water Radar (own computation)';
+export const EMPIRICAL_URL = 'https://github.com/mwijkhuisen/Waterheight/blob/main/registry/travel-empirical.yaml';
+export const empiricalSource = (p: TravelEmpirical['pairs'][number]): string =>
+  `empirical: Δ${p.quantity} cross-correlation, ${Object.keys(p.classes).length}/3 flow classes (terciles at ${p.from_station}), ${p.years[0]}–${p.years[1]}`;
+
 export function place(
   edges: readonly Edge[],
   rivers: RiversFile,
   stations: readonly StationInput[],
   overrides: SnapOverridesFile,
+  empirical: TravelEmpirical | null = null,
 ): Placed {
   // P17a: canals stay out of every product built from here (reaches file, tiles, bins, download) until P17b. Their own edges are dropped, and a canal id is stripped
   // from an edge it shares with a river (a canal deeper in the parent tree would otherwise be that edge's primary),
@@ -175,6 +196,38 @@ export function place(
       r.travel_time_h = [t.h[0], t.h[1]];
       r.travel_time_source = t.source;
     }
+  }
+
+  // Empirical pairs (P14f): public stations only, else the build fails (a sourced pair is dropped silently, this file
+  // is ours and a wrong id is a mistake to see). A sourced pair of rivers.yaml for the same two stations always wins;
+  // a reach without a pair keeps what it has. Each applied pair is also a derived `travel_times` entry.
+  const known = new Map(placed.map((p) => [p.id, p]));
+  const ids = (empirical?.pairs ?? []).flatMap((e) => [e.from_station, e.to_station]);
+  const unknown = ids.filter((id) => !known.has(id));
+  if (unknown.length > 0) throw new BuildError('empirical_unknown_station', [...new Set(unknown)].sort());
+  const hidden = ids.filter((id) => known.get(id)?.public !== true);
+  if (hidden.length > 0) throw new BuildError('empirical_non_public_station', [...new Set(hidden)].sort());
+  const sourced = new Set((rivers.travel_times ?? []).map((t) => `${t.from_station} ${t.to_station}`));
+  const used = new Set<string>();
+  for (const e of empirical?.pairs ?? []) {
+    const key = `${e.from_station} ${e.to_station}`;
+    if (sourced.has(key)) continue;
+    for (const r of reaches) {
+      if (r.up_station !== e.from_station || r.down_station !== e.to_station || zone.has(r.river)) continue;
+      r.travel_time_h = [e.h[0], e.h[1]];
+      r.travel_time_source = empiricalSource(e);
+      used.add(key);
+    }
+    if (used.has(key))
+      travel.push({
+        from_station: e.from_station,
+        to_station: e.to_station,
+        h: [e.h[0], e.h[1]],
+        derived: true,
+        basis: EMPIRICAL_BASIS,
+        source: EMPIRICAL_SOURCE,
+        source_url: EMPIRICAL_URL,
+      });
   }
   return { net, stations: placed, reaches, travel };
 }

@@ -26,6 +26,7 @@ const ref = (
   value: number,
   unit: string,
   convention: RefIn['convention'] = null,
+  day: number | null = null,
 ): RefIn => ({
   source,
   kind,
@@ -33,8 +34,8 @@ const ref = (
   unit,
   convention,
   period: null,
-  seasonFrom: 101,
-  seasonTo: 1231,
+  seasonFrom: day ?? 101,
+  seasonTo: day ?? 1231,
   priority: 0,
   label: null,
 });
@@ -68,7 +69,7 @@ type Setup = {
   tidal: boolean;
   impounded: boolean;
   family: Family;
-  /** The five generated sets: DE-1, DE-7, CH-2, LU-4 vigilance, LU-4 HQ. */
+  /** The seven generated sets: DE-1, DE-7, CH-2, LU-4 vigilance, LU-4 HQ, a DE-1 DOY pair, a BE-3 DOY pair. */
   sets: { source: string; kind: string; value: number }[][];
   rows: { source: string; kind: string; value: number }[];
   p05: number | null;
@@ -89,6 +90,9 @@ const setupArb: fc.Arbitrary<Setup> = fc
         chain('CH-2', ['WL2', 'WL3', 'WL4', 'WL5']),
         chain('LU-4', ['LU4_YELLOW', 'LU4_ORANGE', 'LU4_RED']),
         chain('LU-4', ['HQ2', 'HQ5', 'HQ10', 'HQ20', 'HQ50', 'HQ100']),
+        // our DOY climatology (P14f): after DE-1's own statistics, and an owner one that the public run never sees
+        chain('DE-1', ['P10_DOY', 'P90_DOY']),
+        chain('BE-3', ['P10_DOY', 'P90_DOY']),
       )
       .map((sets) => sets),
     p05: fc.option(fc.integer({ min: 0, max: 1000 }), { nil: null }),
@@ -101,7 +105,12 @@ const valueArb = fc.integer({ min: -100, max: 2200 }).map((x) => x / 2);
 
 function build(s: Setup, value: number): SeriesIn {
   const unit = s.quantity === 'H' ? 'cm' : 'm³/s';
-  const refs = s.rows.map((r) => ref(r.source, r.kind, r.value, unit));
+  // A DOY row carries its convention and the day key of T (615); the others hold all year.
+  const refs = s.rows.map((r) =>
+    r.kind.endsWith('_DOY')
+      ? ref(r.source, r.kind, r.value, unit, 'non_exceedance', 615)
+      : ref(r.source, r.kind, r.value, unit),
+  );
   if (s.p05 !== null) refs.push(ref('BE-3', 'P05', s.p05, unit, 'non_exceedance'));
   return {
     quantity: s.quantity,
@@ -128,6 +137,13 @@ function decided(s: Setup, series: SeriesIn): boolean {
     const role = referenceRole(r.source, r.kind);
     if (!visible(r.source) || role === undefined || role.op === null) continue;
     if (s.tidal && role.group !== 'operational') continue;
+    if (role.form === 'doy') {
+      // a DOY row decides only beside its pair; then every value (a stage behind a weir: only at or above P90)
+      const pair = series.refs.find((x) => x.source === r.source && x.kind !== r.kind && x.kind.endsWith('_DOY'));
+      if (pair === undefined) continue;
+      if (!skipLow || (r.kind === 'P90_DOY' ? v >= r.value : v >= pair.value)) return true;
+      continue;
+    }
     if (role.op === '>=' && v >= r.value) return true;
     if (role.op === '<=' && !(skipLow && role.group === 'statistical') && v <= r.value) return true;
   }
@@ -145,7 +161,7 @@ describe('classify properties', () => {
   // design, so a higher value can fall back to the operational state. That is priority, not a defect of one set.
   it('a higher value never gives a lower defined level', () => {
     fc.assert(
-      fc.property(setupArb, fc.integer({ min: 0, max: 4 }), valueArb, valueArb, (all, pick, a, b) => {
+      fc.property(setupArb, fc.integer({ min: 0, max: 6 }), valueArb, valueArb, (all, pick, a, b) => {
         const s = { ...all, rows: all.sets[pick] as Setup['rows'] };
         const [lo, hi] = a <= b ? [a, b] : [b, a];
         const low = classify(build(s, lo), s.family).state;
@@ -174,10 +190,10 @@ describe('classify properties', () => {
 
   it('no_ref only where no candidate decides', () => {
     fc.assert(
-      fc.property(setupArb, fc.integer({ min: 0, max: 5 }), valueArb, (all, pick, v) => {
+      fc.property(setupArb, fc.integer({ min: 0, max: 7 }), valueArb, (all, pick, v) => {
         // one source's references (or the percentile) at a time, as on a real station; with two sources of statistics
         // a passed threshold of one can be skipped for disagreeing with the other, which is priority at work
-        const s = { ...all, rows: all.sets[pick] ?? [], p05: pick === 5 ? all.p05 : null };
+        const s = { ...all, rows: all.sets[pick] ?? [], p05: pick === 7 ? all.p05 : null };
         const series = build(s, v);
         const r = classify(series, s.family);
         if (decided(s, series)) return r.state !== 'no_ref';
@@ -210,7 +226,7 @@ describe('classify properties', () => {
   it('the public result is the same whatever owner rows are added', () => {
     fc.assert(
       fc.property(setupArb, valueArb, (s, v) => {
-        const publicOnly: Setup = { ...s, rows: s.rows.filter((r) => r.source !== 'LU-4'), p05: null };
+        const publicOnly: Setup = { ...s, rows: s.rows.filter((r) => !OWNER_ONLY_SOURCES.has(r.source)), p05: null };
         const base = build(publicOnly, v);
         const withOwner = build({ ...s, family: 'public' }, v);
         const a = classify({ ...base, classes: s.classes.filter((c) => c.source !== 'BE-3') }, 'public');

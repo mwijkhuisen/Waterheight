@@ -3,18 +3,29 @@ import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { H_DESCRIPTION, Q_DESCRIPTION } from '../apps/server/src/adapters/nl-4/normalise.ts';
 import { readThresholds } from '../apps/server/src/load/thresholds.ts';
-import { BASIS_KINDS, SourcesFile, STATES, StateBasis, StationsFile } from '../packages/contracts/src/index.ts';
 import {
+  BASIS_KINDS,
+  ClimatologyConfig,
+  SourcesFile,
+  STATES,
+  StateBasis,
+  StationsFile,
+} from '../packages/contracts/src/index.ts';
+import {
+  AGENCY,
   CLASS_WINDOW_MIN,
   CROSSWALK,
   crosswalkRow,
+  DOY_KINDS,
   type Group,
   LEVEL_NORM,
   LEVELS,
   type Measure,
   nl4Stem,
+  OWNER_ONLY_SOURCES,
   PERMISSION_REQUIRED,
   REFERENCE_ROLES,
+  referenceRole,
 } from '../packages/core/src/index.ts';
 
 // Pins between the classifier's constants and the files they restate (P7b): a constant in core that no file or
@@ -55,6 +66,33 @@ describe('REFERENCE_ROLES', () => {
     }
     expect(forms.size).toBeGreaterThanOrEqual(10);
     expect([...forms].filter(([, f]) => f.size !== 1 || f.has(null)).map(([key]) => key)).toEqual([]);
+  });
+
+  it("the DOY kinds are exactly the any-source ('*') roles, of form doy, and no source names one (P14f)", () => {
+    const any = REFERENCE_ROLES.filter((r) => r.source === '*');
+    expect(any.map((r) => r.kind)).toEqual([...DOY_KINDS]);
+    expect(REFERENCE_ROLES.filter((r) => r.form === 'doy')).toEqual(any);
+    for (const r of any) {
+      expect(r).toMatchObject({ group: 'statistical', convention: 'non_exceedance', audience: 'public' });
+      expect(r.gated).toBeUndefined();
+      // the stored kind fits reference_value.kind (^[A-Z0-9_]{1,40}$) and is no plain percentile (P05 … P95)
+      expect(r.kind).toMatch(/^[A-Z0-9_]{1,40}$/);
+      expect(r.kind).not.toMatch(/^P[0-9]{2}$/);
+      // a source-specific role of the same kind would shadow the fallback of referenceRole
+      expect(REFERENCE_ROLES.filter((x) => x.kind === r.kind)).toEqual([r]);
+      expect(referenceRole('NL-1', r.kind)).toBe(r);
+      expect(referenceRole('BE-3', r.kind)).toBe(r);
+    }
+    // '*' is no source: no agency, no owner-only or permission entry (the basis source is the row's own)
+    expect(Object.keys(AGENCY)).not.toContain('*');
+    expect(OWNER_ONLY_SOURCES.has('*')).toBe(false);
+    expect(PERMISSION_REQUIRED.has('*')).toBe(false);
+  });
+
+  it('the DOY kinds are the stored percentiles of registry/climatology.yaml (P10 and P90; P50 is not stored)', () => {
+    const c = ClimatologyConfig.parse(parse(read('registry/climatology.yaml'), { maxAliasCount: 0 }));
+    expect(c.percentiles).toEqual([10, 50, 90]);
+    expect([...DOY_KINDS]).toEqual(['P10_DOY', 'P90_DOY']);
   });
 });
 

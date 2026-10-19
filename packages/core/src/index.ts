@@ -1,6 +1,7 @@
 export * from './audience.ts';
 export * from './canonical.ts';
 export * from './classify.ts';
+export * from './climatology.ts';
 export * from './crosswalk.ts';
 export * from './csv.ts';
 export * from './datums.ts';
@@ -11,6 +12,7 @@ export * from './forecast.ts';
 export * from './forecast-hold.ts';
 export * from './html.ts';
 export * from './json.ts';
+export * from './lag.ts';
 export * from './qc.ts';
 export * from './sentinels.ts';
 export * from './tiles-manifest.ts';

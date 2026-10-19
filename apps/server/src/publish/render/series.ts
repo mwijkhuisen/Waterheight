@@ -54,7 +54,10 @@ type RefRow = {
   season_to_md: number;
 };
 
-/** series/{id}/recent.json: seven days of raw observations, the run forecast/latest.json shows, the references now. */
+/**
+ * series/{id}/recent.json: seven days of raw observations, the run forecast/latest.json shows, the references now.
+ * P14f: not our day-of-year rows (730 a series would crowd out the slice of 100); a band on the chart is a follow-up.
+ */
 export async function renderStation(c: RenderCtx, id: string): Promise<StationRecent> {
   const v = VIEWS[c.family];
   const facts = [...(await readFacts(c.db, c.family)).values()].filter(
@@ -71,6 +74,7 @@ export async function renderStation(c: RenderCtx, id: string): Promise<StationRe
             SELECT series_id, source_id, kind, value, unit, priority, basis_label, season_from_md, season_to_md
             FROM ${sql.table(v.reference)}
             WHERE series_id = ANY(${ids}::int[]) AND valid @> ${new Date(c.now)}::timestamptz
+              AND kind NOT IN ('P10_DOY', 'P90_DOY')
             ORDER BY series_id, priority, source_id, kind, season_from_md, season_to_md`.execute(c.db)
         ).rows;
   const series: StationRecent['series'] = [];
