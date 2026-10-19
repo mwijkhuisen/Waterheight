@@ -108,7 +108,12 @@ Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/
 
 | | |
 |---|---|
-| Source run | not committed yet: the first branch run of P17b fills this table |
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/39238147583 (`workflow_dispatch` on `claude/p17b-waterbodies-snapping` at head `898d2a5`, attempt 2 after a Geofabrik `md5_mismatch` on baden-wuerttemberg, 2026-10-19; `rivernet build` passed, `rivernet fixture` failed only because these files were not committed yet). The OSM objects came from the name probe of run 39228736682 (Netherlands and Belgium, before a Geofabrik timeout ended it); run 39231149979 extracted the first set, in which the QID-tagged Oosterschelde relation r6846427 was only the main basin and the QID-tagged Zoommeer way w1191602077 a 2 km fragment, so the Oosterschelde became point-only and the Zoommeer took r1166442 |
+| Extracts | the 16 Geofabrik regions, replication timestamp 2026-10-18T20:25:06Z (the river files above keep 2026-10-17T20:20:51Z, R-6) |
+| Made | osmium-tool 1.19.1 in the tool image (`tools/geo/Dockerfile`), `tools/geo/rivernet/extract.sh` |
+| `waterbodies.osm.pbf` | 721,782 bytes, sha256 `cfc3cde4484bf7de56b5c02003b2c0e7f0b316d6ad3cda92dae8fd35c040e041` |
+| `rivernet.waterbodies.geojsonseq` | 2,435,334 bytes, sha256 `5e5c97a9de32d45334f1703e67f13b1528caf7095107e02a34fc80ec8c529fc1`: 18 areas (the 17 lakes, the IJmeer a multipolygon of three parts, and the Haringvliet), from 1,043 (Nijkerkernauw) to 18,866 (IJsselmeer) vertices |
+| `waterbodies.provenance.json` | 99 bytes, sha256 `3324cbb1fb89d77d5c9d3fe03a9edcacfcfd5817f3b9d6af6879b611117ff3bc` |
 
 ## `nrw/`
 
