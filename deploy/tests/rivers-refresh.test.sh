@@ -60,7 +60,7 @@ chmod +x "$T/stubs"/*
 # ---------------------------------------------------------------- fixtures
 # mkgeo <tag> <ver> [flags]: a release on the fake GitHub. Flags: badbundle (the
 # reaches bundle), badsums (the PMTiles line of SHA256SUMS is wrong), badver=<text>
-# (VERSION), badmagic, badgz, badreaches, bigtiles (over the 64 MiB cap), nosums.
+# (VERSION), badmagic, badgz, badreaches (schema 3), schema2 (a good v2 file), bigtiles (over the 64 MiB cap), nosums.
 mkgeo() {
   local tag=$1 ver=$2 flags=${3:-} d=$FIX/rel/$1 f verfile
   mkdir -p "$d"
@@ -68,7 +68,8 @@ mkgeo() {
   [[ $flags != *badmagic* ]] || printf 'XXTiles\003' >"$d/rivers-$ver.pmtiles"
   [[ $flags != *bigtiles* ]] || truncate -s 70M "$d/rivers-$ver.pmtiles"
   printf '{"schema_version":1,"version":"%s","reaches":[]}\n' "$ver" >"$d/reaches-$ver.json"
-  [[ $flags != *badreaches* ]] || printf '{"schema_version":2,"version":"%s"}\n' "$ver" >"$d/reaches-$ver.json"
+  [[ $flags != *badreaches* ]] || printf '{"schema_version":3,"version":"%s"}\n' "$ver" >"$d/reaches-$ver.json"
+  [[ $flags != *schema2* ]] || printf '{"schema_version":2,"version":"%s","reaches":[]}\n' "$ver" >"$d/reaches-$ver.json"
   printf '{"attribution":"x","features":[]}\n' | gzip -n >"$d/rivers-$ver.geojson.gz"
   [[ $flags != *badgz* ]] || printf 'not gzip' >"$d/rivers-$ver.geojson.gz"
   echo '{"stations":[]}' >"$d/snap-report.json"
@@ -275,6 +276,13 @@ for flag in badmagic badgz badreaches; do
   expect_grep 'PMTiles v3|valid gzip|schema_version or version' "$C/out"
   absent "$data/rivers-$v1.pmtiles" "$data/manifest.json"
 done
+
+case_ "a schema 2 reaches file (P17b) installs like a schema 1 one"
+setup
+mkgeo "$t1" "$v1" schema2; listing "$t1"
+run; expect_rc 0
+installed "$v1"
+valid_manifest
 
 case_ "oversize: a file over its cap fails in curl and installs nothing"
 setup
