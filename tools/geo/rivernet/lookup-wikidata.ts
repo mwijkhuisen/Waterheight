@@ -57,7 +57,24 @@ export function parseLabels(text: string): Label[] {
 
 const literal = ({ lang, label }: Label) => `"${label.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"@${lang}`;
 
-export function buildQuery(labels: readonly Label[]): string {
+export type Kind = 'river' | 'waterbody';
+
+export function buildQuery(labels: readonly Label[], kind: Kind = 'river'): string {
+  if (kind === 'waterbody')
+    // P17b: also coordinate (P625), instance of (P31) and lake outflow (P201); keeps items with any of P402, P403, P625, P201.
+    return `SELECT ?item ?label ?osm ?mouth ?mouthLabel ?country ?nl ?en ?coord ?inst ?outflow WHERE {
+  VALUES ?label { ${labels.map(literal).join(' ')} }
+  ?item rdfs:label ?label .
+  OPTIONAL { ?item wdt:P402 ?osm }
+  OPTIONAL { ?item wdt:P403 ?mouth . OPTIONAL { ?mouth rdfs:label ?mouthLabel FILTER(lang(?mouthLabel) = "en") } }
+  OPTIONAL { ?item wdt:P17 ?country }
+  OPTIONAL { ?item rdfs:label ?nl FILTER(lang(?nl) = "nl") }
+  OPTIONAL { ?item rdfs:label ?en FILTER(lang(?en) = "en") }
+  OPTIONAL { ?item wdt:P625 ?coord }
+  OPTIONAL { ?item wdt:P31 ?inst }
+  OPTIONAL { ?item wdt:P201 ?outflow }
+  FILTER(BOUND(?osm) || BOUND(?mouth) || BOUND(?coord) || BOUND(?outflow))
+}`;
   return `SELECT ?item ?label ?osm ?mouth ?mouthLabel ?country ?nl ?en WHERE {
   VALUES ?label { ${labels.map(literal).join(' ')} }
   ?item rdfs:label ?label .
@@ -103,6 +120,10 @@ export interface Candidate {
   countries: string[];
   nl: string | null;
   en: string | null;
+  /** Waterbody kind only: P625 as `lon,lat` (WKT Point), P31 and P201 items. */
+  coords?: string[];
+  instances?: string[];
+  outflows?: string[];
 }
 export interface LabelResult extends Label {
   candidates: Candidate[];
@@ -114,11 +135,22 @@ const qidOf = (t: Binding[string] | undefined): string | null => {
   if (!m) throw new LookupError('bad_value');
   return m[1] as string;
 };
+/** A P625 value `Point(lon lat)` as `lon,lat`. */
+const pointOf = (t: Binding[string] | undefined): string | null => {
+  if (!t) return null;
+  const m = /^Point\((-?\d{1,3}(?:\.\d+)?) (-?\d{1,2}(?:\.\d+)?)\)$/.exec(t.value);
+  if (!m) throw new LookupError('bad_value');
+  return `${m[1]},${m[2]}`;
+};
 const cmp = (a: string | number | null, b: string | number | null) =>
   a === b ? 0 : a === null ? -1 : b === null ? 1 : a < b ? -1 : 1;
 
 /** Groups the bindings of all batches per input label; sorted, deduplicated. Throws only LookupError. */
-export function groupCandidates(labels: readonly Label[], bindings: readonly Binding[]): LabelResult[] {
+export function groupCandidates(
+  labels: readonly Label[],
+  bindings: readonly Binding[],
+  kind: Kind = 'river',
+): LabelResult[] {
   const byLabel = new Map<string, Map<string, Candidate>>();
   for (const b of bindings) {
     const l = b.label;
@@ -145,12 +177,31 @@ export function groupCandidates(labels: readonly Label[], bindings: readonly Bin
     per.set(ck, c);
     const country = qidOf(b.country);
     if (country && !c.countries.includes(country)) c.countries.push(country);
+    if (kind === 'waterbody') {
+      const add = (k: 'coords' | 'instances' | 'outflows', v: string | null) => {
+        c[k] ??= [];
+        if (v !== null && !c[k].includes(v)) c[k].push(v);
+      };
+      add('coords', pointOf(b.coord));
+      add('instances', qidOf(b.inst));
+      add('outflows', qidOf(b.outflow));
+    }
   }
   return labels
     .map((x) => ({
       ...x,
       candidates: [...(byLabel.get(`${x.lang}:${x.label}`)?.values() ?? [])]
-        .map((c) => ({ ...c, countries: c.countries.toSorted() }))
+        .map((c) => ({
+          ...c,
+          countries: c.countries.toSorted(),
+          ...(kind === 'waterbody'
+            ? {
+                coords: (c.coords ?? []).toSorted(),
+                instances: (c.instances ?? []).toSorted(),
+                outflows: (c.outflows ?? []).toSorted(),
+              }
+            : {}),
+        }))
         .sort((a, b) => cmp(a.qid, b.qid) || cmp(a.osm_relation, b.osm_relation) || cmp(a.mouth_qid, b.mouth_qid)),
     }))
     .sort((a, b) => cmp(a.label, b.label) || cmp(a.lang, b.lang));
@@ -163,6 +214,7 @@ export interface LookupDeps {
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  kind?: Kind;
   /** Called with each raw response body (n from 1). */
   record?: (n: number, body: string) => void;
 }
@@ -213,7 +265,7 @@ export async function lookup(labels: readonly Label[], deps: LookupDeps): Promis
       if (wait > 0) await sleep(wait);
     }
     last = now();
-    url.search = new URLSearchParams({ query: buildQuery(chunk) }).toString();
+    url.search = new URLSearchParams({ query: buildQuery(chunk, deps.kind) }).toString();
     let res: Response;
     try {
       res = await doFetch(url, {
@@ -232,7 +284,7 @@ export async function lookup(labels: readonly Label[], deps: LookupDeps): Promis
     deps.record?.(i + 1, body);
     bindings.push(...parseSparql(body));
   }
-  return groupCandidates(labels, bindings);
+  return groupCandidates(labels, bindings, deps.kind);
 }
 
 export const toTsv = (results: readonly LabelResult[]): string =>
@@ -250,6 +302,9 @@ export const toTsv = (results: readonly LabelResult[]): string =>
             c.countries.join(',') || '-',
             c.nl ?? '-',
             c.en ?? '-',
+            ...(c.coords === undefined
+              ? []
+              : [c.coords.join(';') || '-', c.instances?.join(',') || '-', c.outflows?.join(',') || '-']),
           ]),
     )
     .map((cols) => `${cols.join('\t')}`.replace(/[\r\n]/g, ' '))
@@ -257,7 +312,7 @@ export const toTsv = (results: readonly LabelResult[]): string =>
 
 /** The CLI; returns the exit code (0 ok, 1 failure, 64 usage or CI, 78 without RWS_DOMAIN/RWS_CONTACT_EMAIL). */
 const usage = (log: (s: string) => void) => {
-  log('usage: --out <file.json> [--record <dir>]');
+  log('usage: --out <file.json> [--record <dir>] [--labels <file>] [--kind river|waterbody]');
   return 64;
 };
 
@@ -273,11 +328,16 @@ export async function run(
   }
   let out: string | undefined;
   let record: string | undefined;
+  let labelsFile = 'tools/geo/rivernet/wikidata-labels.txt';
+  let kind: Kind = 'river';
   for (let i = 0; i < argv.length; i += 2) {
     const v = argv[i + 1];
-    if (v === undefined || (argv[i] !== '--out' && argv[i] !== '--record')) return usage(log);
+    if (v === undefined) return usage(log);
     if (argv[i] === '--out') out = v;
-    else record = v;
+    else if (argv[i] === '--record') record = v;
+    else if (argv[i] === '--labels') labelsFile = v;
+    else if (argv[i] === '--kind' && (v === 'river' || v === 'waterbody')) kind = v;
+    else return usage(log);
   }
   if (!out) return usage(log);
   const ce = captureEnv(env);
@@ -286,10 +346,11 @@ export async function run(
     return EXIT_CONFIG;
   }
   try {
-    const labels = parseLabels(readFileSync(join(ROOT, 'tools/geo/rivernet/wikidata-labels.txt'), 'utf8'));
+    const labels = parseLabels(readFileSync(join(ROOT, labelsFile), 'utf8'));
     if (record) mkdirSync(record, { recursive: true });
     const results = await lookup(labels, {
       userAgent: captureUserAgent(ce),
+      kind,
       ...deps,
       record: (n, body) => record && writeFileSync(join(record, `sparql-${n}.json`), body),
     });
