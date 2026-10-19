@@ -13,3 +13,4 @@ export * from './static.ts';
 export * from './stations.ts';
 export * from './tables.ts';
 export * from './units.ts';
+export * from './waterbodies.ts';

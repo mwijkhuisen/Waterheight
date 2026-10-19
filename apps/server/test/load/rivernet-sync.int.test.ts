@@ -48,6 +48,7 @@ const net = (): RivernetFile => ({
     source_run: 'https://github.com/mwijkhuisen/Waterheight/actions/runs/1',
     ways_sha256: '0'.repeat(64),
     osm_replication_timestamp: '2026-10-01T20:22:06Z',
+    waterbodies_sha256: null,
   },
   stations: [
     {
@@ -60,6 +61,9 @@ const net = (): RivernetFile => ({
       km_graph: 11,
       km_to_nl_entry: 5,
       nl_entry_node: 'emmerich',
+      canal: null,
+      waterbody: null,
+      waterbody_rule: null,
     },
     {
       id: down,
@@ -71,6 +75,9 @@ const net = (): RivernetFile => ({
       km_graph: null,
       km_to_nl_entry: null,
       nl_entry_node: null,
+      canal: null,
+      waterbody: null,
+      waterbody_rule: null,
     },
     {
       id: owner,
@@ -82,6 +89,9 @@ const net = (): RivernetFile => ({
       km_graph: 3,
       km_to_nl_entry: null,
       nl_entry_node: null,
+      canal: null,
+      waterbody: null,
+      waterbody_rule: null,
     },
     {
       id: off,
@@ -93,6 +103,9 @@ const net = (): RivernetFile => ({
       km_graph: null,
       km_to_nl_entry: null,
       nl_entry_node: null,
+      canal: null,
+      waterbody: null,
+      waterbody_rule: null,
     },
     {
       id: 'xx.unknown.1',
@@ -104,6 +117,9 @@ const net = (): RivernetFile => ({
       km_graph: null,
       km_to_nl_entry: null,
       nl_entry_node: null,
+      canal: null,
+      waterbody: null,
+      waterbody_rule: null,
     },
   ],
   reaches: [
@@ -203,6 +219,9 @@ describe('rivernet sync', { timeout: 120_000 }, () => {
       km_system: 'RHEIN-km (TEST)',
       km_to_nl_entry: 5,
       nl_entry_node: 'emmerich',
+      canal: null,
+      waterbody: null,
+      waterbody_rule: null,
       reach: 'rhine.1',
     });
     expect(by[down].reach).toBe('rhine.2');

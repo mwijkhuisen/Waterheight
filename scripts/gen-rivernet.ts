@@ -54,6 +54,7 @@ export async function generate(): Promise<string> {
       source_run: FIXTURE_RUN,
       ways_sha256: createHash('sha256').update(readFileSync(ways)).digest('hex'),
       osm_replication_timestamp: osm,
+      waterbodies_sha256: null,
     },
     stations: [...placed.stations]
       .sort((a, b) => (a.id < b.id ? -1 : 1))
@@ -67,6 +68,9 @@ export async function generate(): Promise<string> {
         km_graph: s.km_graph,
         km_to_nl_entry: s.km_to_nl_entry,
         nl_entry_node: s.nl_entry_node,
+        canal: s.canal,
+        waterbody: s.waterbody,
+        waterbody_rule: s.waterbody_rule,
       })),
     reaches: placed.reaches.map((r) => ({
       id: r.id,

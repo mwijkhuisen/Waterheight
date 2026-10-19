@@ -6,6 +6,7 @@ import {
   type SnapOverridesFile,
   type SnapRule,
   validateSnapOverrides,
+  type WaterbodyRule,
 } from '../../../packages/contracts/src/rivernet.ts';
 import {
   type RiversFile,
@@ -13,11 +14,13 @@ import {
   type TravelTime,
   validateTravelEmpirical,
 } from '../../../packages/contracts/src/rivers.ts';
+import type { WaterbodiesFile } from '../../../packages/contracts/src/waterbodies.ts';
 import { BuildError, type Edge, ROOT } from './build.ts';
 import { buildNetwork, byString, fromSource, type LonLat, type Network, toTargets } from './network.ts';
 import { type BuiltReach, cutReaches } from './reaches.ts';
 import { nearestOnRiver, type Placement, snapStations } from './snap.ts';
 import type { StationInput } from './stations.ts';
+import { readWaterbodies, type WaterbodyInput } from './waterbodies.ts';
 
 // P6b placement (ADR-0012): every registry station snapped, given chainage and
 // a reach; the reaches cut at public stations only. Pure: graph edges, rivers,
@@ -48,6 +51,14 @@ export interface PlacedStation {
   km_graph: number | null;
   km_to_nl_entry: number | null;
   nl_entry_node: string | null;
+  /** P17b (D-3): the canal whose edge the station snapped to (rule canal_edge; river, placement and reach null). */
+  canal: string | null;
+  canal_distance_m: number | null;
+  /** P17b: the station's water body by identity (override or exact name), independent of the edge placement. */
+  waterbody: string | null;
+  waterbody_rule: WaterbodyRule | null;
+  /** Metres to the polygon's shore (0 inside); null for a point-only body or no identity. */
+  waterbody_distance_m: number | null;
 }
 
 export interface Placed {
@@ -56,17 +67,23 @@ export interface Placed {
   reaches: BuiltReach[];
   /** The curated travel-time pairs whose two stations are public and placed. */
   travel: TravelTime[];
+  /** P17b: the water bodies the placement read (null: none given, no station gets one). */
+  waterbodies: WaterbodyInput | null;
+  /** P17b: the edges of canals only (direction_reason canal), before place() drops them: the `canals` tile layer. */
+  canalEdges: readonly Edge[];
 }
 
 const km2 = (m: number) => Math.round(m / 10) / 100;
 
 export function readOverrides(
   rivers: RiversFile,
+  waterbodies: WaterbodiesFile | null = readWaterbodies(rivers),
   path = join(ROOT, 'registry/snap-overrides.yaml'),
 ): SnapOverridesFile {
   const { problems, overrides } = validateSnapOverrides(
     parse(readFileSync(path, 'utf8')),
     new Set(rivers.rivers.map((r) => r.id)),
+    new Set((waterbodies?.waterbodies ?? []).map((w) => w.id)),
   );
   if (overrides === undefined) throw new BuildError('overrides_invalid', problems);
   return overrides;
@@ -93,7 +110,9 @@ export function place(
   stations: readonly StationInput[],
   overrides: SnapOverridesFile,
   empirical: TravelEmpirical | null = null,
+  waterbodies: WaterbodyInput | null = null,
 ): Placed {
+  const canalEdges = edges.filter((e) => e.direction_reason === 'canal');
   // P17a: canals stay out of every product built from here (reaches file, tiles, bins, download) until P17b. Their own edges are dropped, and a canal id is stripped
   // from an edge it shares with a river (a canal deeper in the parent tree would otherwise be that edge's primary),
   // so no canal has an edge in the network and a canal junction cuts no river's reach.
@@ -152,6 +171,11 @@ export function place(
       km_graph: snap.placement !== null && snap.river !== null ? km2(kmAt(snap.river, snap.placement)) : null,
       km_to_nl_entry: at?.km ?? null,
       nl_entry_node: at?.id ?? null,
+      canal: null,
+      canal_distance_m: null,
+      waterbody: null,
+      waterbody_rule: null,
+      waterbody_distance_m: null,
     };
   });
 
@@ -229,5 +253,5 @@ export function place(
         source_url: EMPIRICAL_URL,
       });
   }
-  return { net, stations: placed, reaches, travel };
+  return { net, stations: placed, reaches, travel, waterbodies, canalEdges };
 }

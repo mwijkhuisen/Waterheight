@@ -21,7 +21,9 @@ import { z } from 'zod';
 // alphabetically first of them is its `up_station_id` (and the
 // `down_station_id` of the reaches ending there).
 
-export const REACHES_SCHEMA_VERSION = 1;
+export const REACHES_SCHEMA_VERSION = 2;
+/** The water-body kinds (P17b, registry/waterbodies.yaml). */
+export const WATERBODY_KINDS = ['lake', 'closed_estuary', 'estuary', 'sea'] as const;
 export const RIVERS_VERSION_RE = /^[0-9]{8}$/;
 export const OSM_ATTRIBUTION = '© OpenStreetMap contributors';
 export const OSM_ATTRIBUTION_URL = 'https://www.openstreetmap.org/copyright';
@@ -128,8 +130,25 @@ export const StationTravelTime = z
   .refine((t) => travelShapeProblem(t) === null, 'exactly one of h and d, and a single value needs its label');
 export type StationTravelTime = z.infer<typeof StationTravelTime>;
 
+// P17b (schema 2): the water bodies of registry/waterbodies.yaml with the public stations in each (sorted; a lake
+// station has no river, so it need not be in `stations`), the reviewed D27 reference gauge (null until P18b) and the
+// outflows; and the river mouths of rivers.yaml. Schema 1 files have neither key, schema 2 files have both.
+export const ReachWaterbody = z.strictObject({
+  id: Slug,
+  kind: z.enum(WATERBODY_KINDS),
+  name_nl: Name,
+  name_en: Name,
+  stations: z.array(StationRef).max(2_000),
+  reference_station_id: StationRef.nullable(),
+  outflows: z.array(z.strictObject({ to: Slug, via: Name })).max(20),
+});
+export type ReachWaterbody = z.infer<typeof ReachWaterbody>;
+
+export const ReachMouth = z.strictObject({ id: Slug, river_id: Slug, waterbody_id: Slug });
+export type ReachMouth = z.infer<typeof ReachMouth>;
+
 export const ReachesFile = z.strictObject({
-  schema_version: z.literal(REACHES_SCHEMA_VERSION),
+  schema_version: z.literal([1, 2]),
   version: z.string().regex(RIVERS_VERSION_RE),
   attribution: z.literal(OSM_ATTRIBUTION),
   attribution_url: z.literal(OSM_ATTRIBUTION_URL),
@@ -142,6 +161,8 @@ export const ReachesFile = z.strictObject({
   reaches: z.array(Reach).max(50_000),
   stations: z.array(ReachStation).max(10_000),
   travel_times: z.array(StationTravelTime).max(1_000),
+  waterbodies: z.array(ReachWaterbody).max(500).optional(),
+  mouths: z.array(ReachMouth).max(100).optional(),
 });
 export type ReachesFile = z.infer<typeof ReachesFile>;
 
@@ -172,5 +193,37 @@ export function checkReaches(f: ReachesFile): string[] {
     for (const s of [t.from_station_id, t.to_station_id])
       if (!stations.has(s)) problems.push(`travel time: unknown station ${s}`);
   for (const e of f.nl_entry_nodes) if (!rivers.has(e.river_id)) problems.push(`entry ${e.id}: unknown river`);
+  problems.push(...checkWaterbodies(f));
+  return problems;
+}
+
+/** P17b: schema 2 has `waterbodies` and `mouths`, schema 1 neither; their references resolve. */
+export function checkWaterbodies(
+  f: Pick<ReachesFile, 'schema_version' | 'rivers' | 'waterbodies' | 'mouths'>,
+): string[] {
+  if (f.schema_version === 1)
+    return f.waterbodies === undefined && f.mouths === undefined ? [] : ['schema 1 has no waterbodies or mouths'];
+  if (f.waterbodies === undefined || f.mouths === undefined) return ['schema 2 needs waterbodies and mouths'];
+  const problems: string[] = [];
+  const bodies = new Set<string>();
+  for (const w of f.waterbodies) {
+    if (bodies.has(w.id)) problems.push(`waterbody ${w.id} twice`);
+    bodies.add(w.id);
+    if (w.stations.some((s, i) => i > 0 && !((w.stations[i - 1] as string) < s)))
+      problems.push(`waterbody ${w.id}: stations not sorted and unique`);
+    if (w.reference_station_id !== null && !w.stations.includes(w.reference_station_id))
+      problems.push(`waterbody ${w.id}: reference station not among its stations`);
+  }
+  for (const w of f.waterbodies)
+    for (const o of w.outflows)
+      if (!bodies.has(o.to) || o.to === w.id) problems.push(`waterbody ${w.id}: bad outflow ${o.to}`);
+  const rivers = new Set(f.rivers.map((r) => r.id));
+  const mouths = new Set<string>();
+  for (const m of f.mouths) {
+    if (mouths.has(m.id)) problems.push(`mouth ${m.id} twice`);
+    mouths.add(m.id);
+    if (!rivers.has(m.river_id)) problems.push(`mouth ${m.id}: unknown river ${m.river_id}`);
+    if (!bodies.has(m.waterbody_id)) problems.push(`mouth ${m.id}: unknown waterbody ${m.waterbody_id}`);
+  }
   return problems;
 }

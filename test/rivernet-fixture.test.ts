@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { PENDING_WATERBODY_IDS } from '../packages/contracts/src/rivers.ts';
 import { slug } from '../scripts/gen-web-labels.ts';
 import {
   BuildError,
@@ -352,10 +351,9 @@ describe('the fixture graph (P6a criterion)', () => {
       return false;
     };
 
-    it('resolves every mouth of rivers.yaml to a node of its river and a pending water body', () => {
+    it('resolves every mouth of rivers.yaml to a node of its river (the water body: validateWaterbodies)', () => {
       expect(mouths.map((m) => m.id)).toEqual((rivers.mouths ?? []).map((m) => m.id).sort());
       for (const m of mouths) {
-        expect(PENDING_WATERBODY_IDS as readonly string[], m.id).toContain(m.waterbody);
         expect(
           edges.some((e) => e.rivers.includes(m.river) && (e.from === m.node || e.to === m.node)),
           m.id,

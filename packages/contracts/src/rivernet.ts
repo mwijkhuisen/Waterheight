@@ -18,11 +18,16 @@ const Reason = z.string().min(1).max(500);
 const KmSystem = z.string().min(1).max(80);
 
 /**
- * One reviewed placement. Exactly one of `river` (snap to the nearest edge of
- * that river within `max_m`, default 500 m), `canal` (a canal point: no river,
- * never on a river), `unsnapped`, or `by_km` (a lock-channel gauge whose
- * coordinates lie off the river line: placed by its official km between two
- * anchors of the same river and km system, as a gauge without coordinates).
+ * One reviewed placement. At most one of `river` (snap to the nearest edge of
+ * that river within `max_m`, default 500 m; a `kind: canal` id of rivers.yaml
+ * snaps to that canal's edge instead, P17b), `canal` (a canal point not in the
+ * graph: no river, never on a river), `unsnapped`, or `by_km` (a lock-channel
+ * gauge whose coordinates lie off the river line: placed by its official km
+ * between two anchors of the same river and km system, as a gauge without
+ * coordinates). `waterbody` (P17b) names the station's water body of
+ * registry/waterbodies.yaml, independent of the edge placement, within
+ * `waterbody_max_m` of a polygon's shore (default 500 m). An entry holds an
+ * edge key, a `waterbody`, or both.
  */
 export const SnapOverride = z
   .strictObject({
@@ -35,13 +40,21 @@ export const SnapOverride = z
       .strictObject({ value: z.number().min(-100).max(2000), system: KmSystem, evidence: Reason })
       .optional(),
     max_m: z.number().positive().max(2000).optional(),
+    waterbody: Slug.optional(),
+    waterbody_max_m: z.number().positive().max(2000).optional(),
     reason: Reason,
   })
-  .refine((o) => [o.river, o.canal, o.unsnapped, o.by_km].filter((x) => x !== undefined).length === 1, {
-    message: 'exactly one of river, canal, unsnapped and by_km',
+  .refine((o) => [o.river, o.canal, o.unsnapped, o.by_km].filter((x) => x !== undefined).length <= 1, {
+    message: 'at most one of river, canal, unsnapped and by_km',
+  })
+  .refine((o) => [o.river, o.canal, o.unsnapped, o.by_km, o.waterbody].some((x) => x !== undefined), {
+    message: 'one of river, canal, unsnapped, by_km and waterbody',
   })
   .refine((o) => o.river !== undefined || (o.km_official === undefined && o.max_m === undefined), {
     message: 'km_official and max_m need a river',
+  })
+  .refine((o) => o.waterbody !== undefined || o.waterbody_max_m === undefined, {
+    message: 'waterbody_max_m needs a waterbody',
   });
 export type SnapOverride = z.infer<typeof SnapOverride>;
 
@@ -65,10 +78,14 @@ export const SnapOverridesFile = z.strictObject({
 });
 export type SnapOverridesFile = z.infer<typeof SnapOverridesFile>;
 
-/** Schema plus uniqueness and river references (`rivers`: the ids of rivers.yaml). */
+/**
+ * Schema plus uniqueness, river and water-body references (`rivers`: the ids of rivers.yaml; `waterbodies`: the ids
+ * of registry/waterbodies.yaml).
+ */
 export function validateSnapOverrides(
   input: unknown,
   rivers: ReadonlySet<string>,
+  waterbodies: ReadonlySet<string>,
 ): { problems: string[]; overrides?: SnapOverridesFile } {
   const parsed = SnapOverridesFile.safeParse(input);
   if (!parsed.success) return { problems: [z.prettifyError(parsed.error)] };
@@ -80,6 +97,8 @@ export function validateSnapOverrides(
     seen.add(o.station);
     if (o.river !== undefined && !rivers.has(o.river))
       problems.push(`stations: ${o.station}: unknown river ${o.river}`);
+    if (o.waterbody !== undefined && !waterbodies.has(o.waterbody))
+      problems.push(`stations: ${o.station}: unknown waterbody ${o.waterbody}`);
   }
   const waters = new Set<string>();
   for (const w of f.waters) {
@@ -94,13 +113,15 @@ export function validateSnapOverrides(
 /**
  * How a station was placed. Placed: override (a reviewed river), name (its
  * published water body), official_km (no coordinates: between two anchors of
- * the same km system). Not placed: canal, unsnapped (reviewed), no_coordinates,
- * water_not_in_rivers, no_edge_within_500m.
+ * the same km system). On a canal edge (P17b): canal_edge (no river, reach or
+ * chainage). Not placed: canal (a canal not in the graph), unsnapped
+ * (reviewed), no_coordinates, water_not_in_rivers, no_edge_within_500m.
  */
 export const SNAP_RULES = [
   'override',
   'name',
   'official_km',
+  'canal_edge',
   'canal',
   'unsnapped',
   'no_coordinates',
@@ -109,6 +130,20 @@ export const SNAP_RULES = [
 ] as const;
 export type SnapRule = (typeof SNAP_RULES)[number];
 export const PLACED_RULES: ReadonlySet<SnapRule> = new Set(['override', 'name', 'official_km']);
+
+/**
+ * How a station got its water body (P17b), by identity only (a `waterbody` override or an exact published name):
+ * waterbody_contains (inside the polygon), waterbody_shore (within 500 m of it, or the override's waterbody_max_m),
+ * waterbody_named (a point-only body, the station inside its bbox); waterbody_too_far: identified, but farther from
+ * the polygon, so no body.
+ */
+export const WATERBODY_RULES = [
+  'waterbody_contains',
+  'waterbody_shore',
+  'waterbody_named',
+  'waterbody_too_far',
+] as const;
+export type WaterbodyRule = (typeof WATERBODY_RULES)[number];
 
 const Km = z.number().min(-5000).max(5000);
 
@@ -122,6 +157,10 @@ export const RivernetStation = z.strictObject({
   km_graph: Km.nullable(),
   km_to_nl_entry: Km.nullable(),
   nl_entry_node: Slug.nullable(),
+  /** P17b: the canal whose edge the station snapped to (rule canal_edge); never a river. */
+  canal: Slug.nullable(),
+  waterbody: Slug.nullable(),
+  waterbody_rule: z.enum(WATERBODY_RULES).nullable(),
 });
 export type RivernetStation = z.infer<typeof RivernetStation>;
 
@@ -144,6 +183,11 @@ export const RivernetFile = z.strictObject({
     source_run: z.string().regex(/^https:\/\/github\.com\/mwijkhuisen\/Waterheight\/actions\/runs\/[0-9]+$/),
     ways_sha256: z.string().regex(/^[0-9a-f]{64}$/),
     osm_replication_timestamp: z.iso.datetime(),
+    /** P17b: the committed water-body fixture (tools/geo/fixtures/rivernet.waterbodies.geojsonseq), null before it exists. */
+    waterbodies_sha256: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .nullable(),
   }),
   stations: z.array(RivernetStation),
   reaches: z.array(RivernetReach),
@@ -168,6 +212,12 @@ export function validateRivernet(input: unknown): { problems: string[]; rivernet
     stations.add(s.id);
     if (s.reach !== null && !reaches.has(s.reach)) problems.push(`stations: ${s.id}: unknown reach ${s.reach}`);
     if (s.reach !== null && s.river === null) problems.push(`stations: ${s.id}: a reach without a river`);
+    if ((s.canal !== null) !== (s.rule === 'canal_edge'))
+      problems.push(`stations: ${s.id}: canal exactly on canal_edge`);
+    if (s.canal !== null && (s.river !== null || s.reach !== null || s.km_graph !== null))
+      problems.push(`stations: ${s.id}: a canal station has no river, reach or km_graph`);
+    if ((s.waterbody !== null) !== (s.waterbody_rule !== null && s.waterbody_rule !== 'waterbody_too_far'))
+      problems.push(`stations: ${s.id}: waterbody exactly with a waterbody rule that assigns one`);
   }
   for (const r of f.reaches)
     for (const s of [r.up_station, r.down_station])
