@@ -12,6 +12,10 @@ import { fractionText, intlLocale, listText } from './numbers.ts';
 
 const na = (locale: Locale) => m.stat_na({}, { locale });
 
+/** The agency of a row; source '*' is our own computation (P14f: the day-of-year roles), no agency's. */
+const agencyOf = (source: string, locale: Locale): string =>
+  source === '*' ? m.method_agency_own({}, { locale }) : (METHOD_AGENCIES[source] ?? na(locale));
+
 /** What a class or reference measures: the gauge's stage, a discharge, or an area. */
 export function measureWord(basis: 'stage' | 'discharge' | 'area', locale: Locale): string {
   switch (basis) {
@@ -29,7 +33,8 @@ export const groupWord = (
   group: 'operational' | 'statistical' | 'provider_class' | 'area',
   source: string,
   locale: Locale,
-) => basisKind({ kind: group, source }, locale);
+  ref?: string,
+) => basisKind({ kind: group, source, ...(ref === undefined ? {} : { ref }) }, locale);
 
 export interface ClassRowView {
   key: string;
@@ -47,7 +52,7 @@ export const classRows = (locale: Locale): ClassRowView[] =>
   METHOD_CLASSES.map((c) => ({
     key: `${c.source}\n${c.scale}\n${c.code}`,
     source: c.source,
-    agency: METHOD_AGENCIES[c.source] ?? na(locale),
+    agency: agencyOf(c.source, locale),
     scale: c.scale,
     code: c.code,
     level: stateWord(c.level, locale),
@@ -79,6 +84,8 @@ function formWord(form: MethodReference['form'], locale: Locale): string {
       return m.method_form_stats({}, o);
     case 'percentile':
       return m.method_form_percentile({}, o);
+    case 'doy':
+      return m.method_form_doy({}, o);
     case null:
       return na(locale);
   }
@@ -100,12 +107,13 @@ export const referenceRows = (locale: Locale): ReferenceRowView[] =>
   METHOD_REFERENCES.map((r) => ({
     key: `${r.source}\n${r.kind}`,
     source: r.source,
-    agency: METHOD_AGENCIES[r.source] ?? na(locale),
+    agency: agencyOf(r.source, locale),
     short: r.short,
     rule: ruleWord(r.op, locale),
     level: r.level === null ? na(locale) : stateWord(r.level, locale),
-    measure: measureWord(r.basis, locale),
-    group: r.group === null ? na(locale) : groupWord(r.group, r.source, locale),
+    // A DOY role's basis is a placeholder: the set follows its series, a level or a discharge (P14f).
+    measure: r.source === '*' ? m.method_measure_series({}, { locale }) : measureWord(r.basis, locale),
+    group: r.group === null ? na(locale) : groupWord(r.group, r.source, locale, r.kind),
     form: formWord(r.form, locale),
   }));
 

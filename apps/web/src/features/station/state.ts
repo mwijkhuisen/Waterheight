@@ -21,11 +21,13 @@ export const stateWord = (state: Value['state'], locale: Locale): string =>
   })[state]({}, { locale });
 
 /** The kind of a basis in words; the NL-4 legend carries its "not an official warning" disclaimer (C39). */
-export function basisKind(basis: Pick<Basis, 'kind' | 'source'>, locale: Locale): string {
+export function basisKind(basis: Pick<Basis, 'kind' | 'source'> & { ref?: string }, locale: Locale): string {
   switch (basis.kind) {
     case 'operational':
       return m.basis_operational({}, { locale });
     case 'statistical':
+      // P14f: our own day-of-year P10/P90 (a ref part ending in _DOY, also inside a collapse "MNW/MHW/P90_DOY").
+      if (basis.ref?.split('/').some((k) => k.endsWith('_DOY')) === true) return m.basis_climatology({}, { locale });
       return m.basis_statistical({}, { locale });
     case 'area':
       return m.basis_area({}, { locale });

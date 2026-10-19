@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { TravelLabel, travelShapeProblem } from './reaches.ts';
+import { TravelLabel, TravelRange, travelShapeProblem } from './reaches.ts';
 
 // The river registry (registry/rivers.yaml; P6a): the rivers the graph pipeline
 // builds, their OSM selection and the verbatim spellings providers use.
@@ -176,4 +176,54 @@ export function validateRivers(input: unknown): { problems: string[]; rivers?: R
     dup('travel_times pair', pairs, `${t.from_station} ${t.to_station}`, 'travel_times');
   }
   return problems.length > 0 ? { problems } : { problems, rivers: f };
+}
+
+// registry/travel-empirical.yaml (P14f, plan section 3.6): travel times we measured ourselves from the stored
+// history, written by `main.js travel-times` and adopted by a reviewed data PR; the geo build reads it beside
+// rivers.yaml. Public stations only (the command reads the public views, the geo build refuses anything else).
+const FlowClasses = z.strictObject({
+  low: TravelRange.optional(),
+  mid: TravelRange.optional(),
+  high: TravelRange.optional(),
+});
+const Year = z.int().min(1900).max(2200);
+
+export const TravelEmpiricalPair = z.strictObject({
+  from_station: StationRef,
+  to_station: StationRef,
+  /** The envelope of the flow classes that qualified. */
+  h: TravelRange,
+  classes: FlowClasses,
+  quantity: z.enum(['Q', 'H']),
+  years: z.tuple([Year, Year]),
+  /** Windows behind the classes that qualified. */
+  windows: z.int().min(1).max(100_000),
+});
+export type TravelEmpiricalPair = z.infer<typeof TravelEmpiricalPair>;
+
+export const TravelEmpirical = z.strictObject({
+  version: z.literal(1),
+  generated: z.iso.datetime().nullable(),
+  pairs: z.array(TravelEmpiricalPair).max(2000),
+});
+export type TravelEmpirical = z.infer<typeof TravelEmpirical>;
+
+/** The schema, plus what it cannot say alone: one entry per pair, h the envelope of its classes, years in order. */
+export function validateTravelEmpirical(input: unknown): { problems: string[]; empirical?: TravelEmpirical } {
+  const parsed = TravelEmpirical.safeParse(input);
+  if (!parsed.success) return { problems: [z.prettifyError(parsed.error)] };
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  for (const p of parsed.data.pairs) {
+    const id = `${p.from_station} ${p.to_station}`;
+    if (seen.has(id)) problems.push(`travel-empirical ${id}: twice`);
+    seen.add(id);
+    if (p.from_station === p.to_station) problems.push(`travel-empirical ${id}: from and to are the same`);
+    if (p.years[0] > p.years[1]) problems.push(`travel-empirical ${id}: years out of order`);
+    const ranges = Object.values(p.classes).filter((r): r is [number, number] => r !== undefined);
+    if (ranges.length === 0) problems.push(`travel-empirical ${id}: no flow class`);
+    else if (Math.min(...ranges.map((r) => r[0])) !== p.h[0] || Math.max(...ranges.map((r) => r[1])) !== p.h[1])
+      problems.push(`travel-empirical ${id}: h is not the envelope of its classes`);
+  }
+  return problems.length > 0 ? { problems } : { problems, empirical: parsed.data };
 }

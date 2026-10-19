@@ -2394,6 +2394,8 @@ describe('api states and class coverage (P7b)', () => {
     stations,
     classed,
     by_section,
+    by_climatology: 0,
+    climatology: 0,
     ratio: stations === 0 ? null : classed / stations,
   });
   it('class coverage prints numbers and country codes', () => {

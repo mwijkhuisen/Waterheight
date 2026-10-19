@@ -61,7 +61,7 @@ const sources = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const share = { stations: 10, classed: 6, by_section: 2, ratio: 0.6 };
+const share = { stations: 10, classed: 6, by_section: 2, by_climatology: 1, climatology: 3, ratio: 0.6 };
 const coverage = {
   t: ago(0),
   mode: 'state',
@@ -159,6 +159,13 @@ describe('ClassCoverage', () => {
     expect(ok(withShare({ by_section: 1.5 }))).toBe(false);
     const { by_section: _, ...noSection } = share;
     expect(ok({ ...coverage, tier1: noSection })).toBe(false);
+    // P14f: the day-of-year counts are required and bounded like the others.
+    const { by_climatology: _c, ...noByClimatology } = share;
+    const { climatology: _d, ...noClimatology } = share;
+    expect(ok({ ...coverage, tier1: noByClimatology })).toBe(false);
+    expect(ok({ ...coverage, tier1: noClimatology })).toBe(false);
+    expect(ok(withShare({ by_climatology: -1 }))).toBe(false);
+    expect(ok(withShare({ climatology: 1.5 }))).toBe(false);
     expect(ok(withShare({ x: 1 }))).toBe(false);
     const c = (country: string) => ({ country, tier1: share, first_release: share });
     expect(ok({ ...coverage, countries: ['NL', 'DE', 'BE', 'FR', 'LU', 'CH'].map(c) })).toBe(true);

@@ -2,7 +2,9 @@
 // packages/core/src/crosswalk.ts. Only rows a public view may show go in: a row of `audience: public`, not `gated`,
 // of a source that registry/sources.yaml lists as public. The owner and permission sources' rows, their flags and
 // their agencies stay out of the public bundle (the root of @rws/core is banned in the web anyway). A reference
-// role carries no `flag` and no `convention`; AGENCY keeps the sources that have a row in the file.
+// role carries no `flag` and no `convention`; AGENCY keeps the sources that have a row in the file. The any-source
+// DOY roles (P14f, source `'*'`: our own climatology of a series, under that series' audience) go in too; `'*'` has
+// no agency, the page names it with the message method_agency_own.
 // Usage: node scripts/gen-web-method.ts [--check] [repo-root]   (--check diffs and exits 1)
 import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -28,7 +30,7 @@ export function generate(root: string): string {
   };
   const isPublic = new Set(reg.sources.filter((s) => s.audience === 'public').map((s) => s.id));
   const shown = (r: { source: string; audience: string; gated?: true }) =>
-    r.audience === 'public' && r.gated !== true && isPublic.has(r.source);
+    r.audience === 'public' && r.gated !== true && (isPublic.has(r.source) || r.source === '*');
   const classes = CROSSWALK.filter(shown).map((r) => ({
     source: r.source,
     scale: r.scale,
@@ -69,6 +71,7 @@ export type MethodClass = {
 };
 
 export type MethodReference = {
+  /** '*': our own day-of-year climatology, of any source (the series' own). */
   source: string;
   kind: string;
   /** A value at or above, at or below, or below the reference reaches the level; null: shown, never classifies. */
@@ -76,7 +79,7 @@ export type MethodReference = {
   level: 'low' | 'normal' | 'elevated' | 'high' | 'extreme' | null;
   basis: 'stage' | 'discharge' | 'area';
   group: 'operational' | 'statistical' | null;
-  form: 'scale' | 'stats' | 'percentile' | null;
+  form: 'scale' | 'stats' | 'percentile' | 'doy' | null;
   short: string;
 };
 

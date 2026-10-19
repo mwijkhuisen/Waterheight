@@ -6,9 +6,9 @@ Every value gets one state on the scale `no_ref < low < normal < elevated < high
 
 ## Rules
 
-- **Priority groups:** operational (the agency's gauge class, then its thresholds), then statistical references, then the provider's display classes (NL-4). Within operational the published class comes first: our comparison of the value with the thresholds can lag it or disagree at a boundary (BAFU danger level 2 with Q under WL2 is elevated). Area classes apply only where no gauge state exists.
+- **Priority groups:** operational (the agency's gauge class, then its thresholds), then statistical references (the providers' statistics by source, then our own day-of-year climatology), then the provider's display classes (NL-4). Within operational the published class comes first: our comparison of the value with the thresholds can lag it or disagree at a boundary (BAFU danger level 2 with Q under WL2 is elevated). Area classes apply only where no gauge state exists.
 - **Combining:** each candidate gives an interval on low..extreme and, where it decides, a point level. Candidates are taken in group order; each one narrows the interval when it intersects it. One that does not is outranked (the higher priority wins), but the interval collapses to the edge nearest to it: below AGE orange with HQ10 passed is elevated, so a higher value never gives a lower level. The state is the interval when one level is left, else the first point inside it, else `no_ref`. The basis is the first candidate whose point is the state; after a collapse that no point names, both decisive candidates (source, kind and measure of the one that narrowed the interval, both refs joined by `/` and both labels by ` / `: `AGE < orange / AGE HQ10`); else the last one that narrowed the interval. A scale's "below its lowest level" reads `< Info 1` in the label.
-- **Set forms:** `scale` is an agency's full scale (below its lowest level is normal); `stats` are statistics, not warnings (normal only between a low bound and an `elevated` bound); `percentile` is low at or below the low bound, else normal, never an alert level.
+- **Set forms:** `scale` is an agency's full scale (below its lowest level is normal); `stats` are statistics, not warnings (normal only between a low bound and an `elevated` bound); `percentile` is low at or below the low bound, else normal, never an alert level; `doy` is our day-of-year climatology, open upward (below).
 - **No-flood classes** (marked in the tables) give only "not elevated": interval low..normal, point normal. Classes marked `no_ref` give no candidate.
 - **Gauge beats area:** an area class colours a value only when its gauge state is `no_ref` (`section: true`); otherwise it is returned beside the state. The highest area level wins. A gauge class reaches the station's series of its basis quantity, else the station's other series. The Basis column names a row's usual quantity; a state reports what it measures from the series it classifies: `stage`, `level` (an absolute level: a lake, a NAP level series), `discharge` or `area` (an NL-4 class on a Q series is discharge, a BAFU danger level on a lake is level: KG-185).
 - **Tidal** reaches (D12) are classed from operational candidates only. **Impounded** stage series skip the statistical low bounds.
@@ -35,6 +35,17 @@ Every value gets one state on the scale `no_ref < low < normal < elevated < high
 | NGF1884 | not converted |  | no usable NAP offset: the published offsets are contradicted at shared gauges (C40, D16) |
 | LOCAL | not converted |  | local gauge zero without a known height |
 | MSL | not converted |  | station-specific datum |
+
+## Day-of-year climatology
+
+Our own statistic of a series' own history (P14f; D18 extension, owner 2026-10-18), not a provider's: the kinds `P10_DOY` and `P90_DOY` (source `*` in the reference table: each row carries the series' own source, so that source's audience applies). The label names no agency: `DOY P10/P90 1991–2000`, the first and last complete year used. The parameters are those of `registry/climatology.yaml`.
+
+- **Eligible:** a primary level or discharge series (a stage relative to a gauge zero is not), at a station that is neither tidal nor impounded, whose history the licence lets us export, with at least **10 complete UTC years**. A complete day has a sample in at least 20 of its 24 hours; a complete year has at least 90 % complete days. A series with fewer years has no rows and keeps its other bases or `no_ref`.
+- **The pool of a day:** the daily means (the mean of a UTC day's hourly means) of the dates within ± 15 days (31 a year) of that day of the year, in every complete year. A window may reach into the year before or after, and a 29 February inside it counts. There are 365 day keys: on 29 February the 28 February row applies. Days and day keys are UTC.
+- **Percentiles:** P10, P50 and P90 of the pool (Hyndman–Fan type 7); P10 and P90 are stored. A day whose P10 is not below its P90 has no row.
+- **Order:** within the statistical group after every provider statistic (provider statistics narrow first: DE-1 MNW/MHW/HSW, DE-7 MNW/MHW, LU-4 HQ, BE-3 P05); it ranks above the NL-4 display class.
+- **Open upward:** at or below P10 is low; between P10 and P90 is normal (interval normal..extreme); at or above P90 is elevated (interval elevated..extreme). It never gives high or extreme; above P10 it never caps a later candidate from above (an NL-4 high class still shows above it), while at or below P10 it is [low, low] (the owner decision); a later candidate below its lower edge collapses to that edge (an NL-4 low class between P10 and P90 is normal).
+- **Caveats:** elevated from the climatology means unusual for the date, never a warning: about 10 % of station-days are elevated by construction. An instantaneous value is compared with percentiles of daily means, so a series with a daily cycle passes P90 more often than 10 % of the time. 10 years give 310 daily means per day key, but they are autocorrelated: the effective sample is of the order of 10 to 30 independent values, enough for an ordinal "unusual for the date", not for flood statistics.
 
 ## Gauge classes
 
@@ -176,6 +187,8 @@ Area scales: DE-6 alert, FR-5 section, CH-5 section, LU-5 zone, DE-10 region.
 | DE-10 | HW20 | ≥ → extreme | stage | statistical | stats | gated (P13) |  |
 | DE-10 | HW50 | ≥ → extreme | stage | statistical | stats | gated (P13) |  |
 | DE-10 | HW100 | ≥ → extreme | stage | statistical | stats | gated (P13) |  |
+| * | P10_DOY | ≤ → low | the series (level or discharge) | statistical | doy | the series' own source | convention non_exceedance; our day-of-year climatology (P14f): at or below P10 of the date is low |
+| * | P90_DOY | ≥ → elevated | the series (level or discharge) | statistical | doy | the series' own source | convention non_exceedance; our day-of-year climatology (P14f): at or above P90 of the date is elevated (unusual for the date, never a warning) |
 
 ## Agencies in basis labels
 

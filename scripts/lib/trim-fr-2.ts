@@ -50,9 +50,23 @@ const CUTS: readonly Cut[] = [
   { name: 'fr-2-elab-page', from: 'fr-2-uckange-qmnj-page', variant: 'A850061001/QmnJ', rule: false },
 ];
 
-/** `smoke`: the `.smoke/` directory; `fixtures`: the adapter's fixtures directory. */
-export function trim(smoke: string, fixtures: string): void {
-  for (const c of CUTS) {
+/**
+ * P14f: the real input of the day-of-year climatology test (packages/core/test/climatology.test.ts), cut from the
+ * same Uckange recording: exactly ten complete UTC years, so N = 10 gives a set and N = 11 none.
+ */
+export const CLIMATOLOGY_CUTS: readonly Cut[] = [
+  {
+    name: 'uckange-qmnj-1991-2000',
+    from: 'fr-2-uckange-qmnj-1981',
+    variant: 'A850061001/QmnJ',
+    rule: 'the records of data with date_obs_elab from 1991-01-01 to 2000-12-31, count adjusted (ten complete years)',
+    cut: (all) => all.filter((r) => dayOf(r) >= '1991-01-01' && dayOf(r) <= '2000-12-31'),
+  },
+];
+
+/** `smoke`: the `.smoke/` directory; `fixtures`: the adapter's fixtures directory (or P14f's, with its cuts). */
+export function trim(smoke: string, fixtures: string, cuts: readonly Cut[] = CUTS): void {
+  for (const c of cuts) {
     const rawFile = join(smoke, `${c.from}.raw`);
     if (!existsSync(rawFile)) {
       console.log(`${c.name}: no recording ${c.from} in ${smoke}, skipped`);

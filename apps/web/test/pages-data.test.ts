@@ -20,6 +20,8 @@ const share = (stations: number, classed: number) => ({
   stations,
   classed,
   by_section: 0,
+  by_climatology: 0,
+  climatology: 0,
   ratio: stations === 0 ? null : classed / stations,
 });
 const classCoverage = (tier1: [number, number], first: [number, number]) => ({

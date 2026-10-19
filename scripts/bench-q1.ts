@@ -1,6 +1,6 @@
 import { DisplayWindow } from '../apps/server/src/api/window.ts';
 import { createApp } from '../apps/server/src/app.ts';
-import { OBS_AT } from '../apps/server/src/db/audience.ts';
+import { OBS_AT, VIEWS } from '../apps/server/src/db/audience.ts';
 import { openApiDb } from '../apps/server/src/main.ts';
 import { createTestDb } from '../apps/server/test/db/testdb.ts';
 
@@ -48,6 +48,18 @@ async function seedClassification(series: number, days: number) {
      FROM (SELECT id FROM series ORDER BY id LIMIT 100) s,
           (VALUES ('NL4_FROM', 150, 101, 1231, 1), ('NL4_TO', 250, 101, 1231, 1),
                   ('NL4_FROM', 200, 401, 930, 2), ('NL4_TO', 300, 401, 930, 2)) k(kind, value, f, t, p)`,
+  );
+  // P14f: the day-of-year rows of 300 series, 2 kinds × 365 day keys (a non-leap MMDD list: the CHECK refuses 0229),
+  // so that the day read of a cold /snapshot is measured at the size of 300 eligible series.
+  await t.admin.query(
+    `INSERT INTO reference_value (series_id, source_id, kind, value, unit, semantics, percentile_convention, period,
+                                  season_from_md, season_to_md, priority, basis_label, valid)
+     SELECT s.id, 'NL-1', k.kind, k.base + (s.id % 30), 'cm', 'statistical', 'non_exceedance',
+            daterange('2010-01-01', '2020-01-01'), d.md, d.md, 0, 'DOY P10-P90, 2010-2019, 31 d/yr',
+            tstzrange(now() - interval '400 days', NULL)
+     FROM (SELECT id FROM series ORDER BY id LIMIT 300) s,
+          (VALUES ('P10_DOY', 100), ('P90_DOY', 800)) k(kind, base),
+          (SELECT to_char(g, 'MMDD')::int AS md FROM generate_series(date '2001-01-01', date '2001-12-31', interval '1 day') g) d`,
   );
   await t.admin.query(
     `INSERT INTO class_obs (subject_type, subject_id, ts, source_id, provider_code, provider_label, level_norm, batch_id)
@@ -143,6 +155,24 @@ try {
     console.error('bench-q1: FAIL: not a backward index scan on (series_id, ts)');
     failed = true;
   }
+  // P14f: the day read of a cold /snapshot (readDoy): one UTC day key through the reference view, as rws_api. The
+  // literal kind list is what lets the partial index of 20261116000001 apply through the view.
+  const doyPlan = (
+    await api.query({
+      text: `EXPLAIN (ANALYZE, BUFFERS) SELECT series_id, source_id, kind, value, unit, season_from_md, valid
+             FROM ${VIEWS.public.reference} WHERE kind IN ('P10_DOY', 'P90_DOY') AND season_from_md = ANY($1::int[])`,
+      values: [[1026]],
+      rowMode: 'array',
+    })
+  ).rows
+    .map((r: unknown[]) => String(r[0]))
+    .join('\n');
+  console.log(doyPlan);
+  console.log(
+    /reference_value_doy/.test(doyPlan)
+      ? 'DOY day read: uses the partial index reference_value_doy'
+      : 'DOY day read: does NOT use the partial index reference_value_doy',
+  );
   const times: number[] = [];
   let rows = 0;
   for (let i = 0; i < RUNS + 3; i++) {

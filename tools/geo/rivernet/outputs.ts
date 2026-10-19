@@ -15,7 +15,7 @@ import type { RiversFile } from '../../../packages/contracts/src/rivers.ts';
 import { BIN_MINZOOM, binCount, binLines } from './bins.ts';
 import { BuildError, canonicalJson, type Edge, MAX_WAYS_BYTES, readRivers } from './build.ts';
 import { InputError } from './geojsonseq.ts';
-import { type Placed, place, readOverrides } from './place.ts';
+import { type Placed, place, readEmpirical, readOverrides } from './place.ts';
 import { readStations } from './stations.ts';
 
 // The public P6b outputs (A§9.1; release assets of geo.yml):
@@ -248,7 +248,7 @@ if (import.meta.main) {
     const rivers = readRivers();
     const { edges, osmStamp } = readGraphDir(graph);
     const stations = readStations();
-    const placed = place(edges, rivers, stations, readOverrides(rivers));
+    const placed = place(edges, rivers, stations, readOverrides(rivers), readEmpirical());
     writeOutputs(out, placed, rivers, version, osmStamp);
     if (nonpublic !== undefined)
       writeFileSync(
