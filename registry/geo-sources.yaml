@@ -44,7 +44,10 @@ nrw_stations:
 # Canal traps (P6b's snapping tests, catalogue §5.3 step 5): canals that run beside the rivers. They are in the
 # extract and the fixture so that P6b can prove no station snaps to them; the graph builder never makes them edges.
 # P17a: the canals with ID evidence (Julianakanaal, Zuid-Willemsvaart and the others) are `kind: canal` rows of
-# registry/rivers.yaml and so edges (direction none, not public before P17b); only the canals below stay traps.
+# registry/rivers.yaml and so edges (direction none; from P17b drawn in the tile layer `canals` and the download, never
+# in `rivers`); only the canals below stay traps. The water bodies (P17b) are not selected here: their OSM ids come from
+# registry/waterbodies.yaml and are extracted on their own, into the fixture files waterbodies.osm.pbf,
+# rivernet.waterbodies.geojsonseq and waterbodies.provenance.json beside the four rivernet.* river files.
 canal_traps:
   - name: Albertkanaal
     osm_relation_id: null

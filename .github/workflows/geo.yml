@@ -9,6 +9,9 @@
 #   rivernet-build    downloads the 16 Geofabrik extracts (download.geofabrik.de) one at a time, filters, merges and
 #                     builds the graph, then runs the EU-Hydro agreement check (the EU-Hydro MapServer), the P6b outputs
 #                     and the tiles. Schedule and dispatch only; uploads two artifacts (geo-assets and rivernet-fixture).
+#                     P17b: also the water bodies of registry/waterbodies.yaml (three more rivernet-fixture files, the
+#                     tile layers `waterbodies` and `canals`); the dispatch input `probe` adds the one-off OSM name
+#                     probe of the water bodies as a third artifact, rivernet-probe.
 #   rivernet-publish  main only: reads and checks VERSION, signs the assets keyless (Sigstore) and publishes the
 #                     `geo-YYYY-MM-DD` release (the date of VERSION) through the GitHub API. The only job with a
 #                     write token; it has no checkout and runs no repository code.
@@ -32,6 +35,7 @@ on:
       - registry/stations/**
       - registry/rivernet.yaml
       - registry/snap-overrides.yaml
+      - registry/waterbodies.yaml
       - registry/travel-empirical.yaml
       - registry/sources.yaml
       - registry/seed/de-7-waters.csv
@@ -41,6 +45,11 @@ on:
   schedule:
     - cron: '23 4 3 * *'
   workflow_dispatch:
+    inputs:
+      probe:
+        description: Also write the OSM name probe of the water bodies (artifact rivernet-probe; P17b, one-off)
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -134,19 +143,23 @@ jobs:
         run: |
           set -euo pipefail
           ver=20261001
+          # P17b: the committed water-body export (gzipped when large); until it is committed this step fails.
+          wb=tools/geo/fixtures/rivernet.waterbodies.geojsonseq
+          if [[ ! -f $wb && -f $wb.gz ]]; then wb=$wb.gz; fi
           for n in 1 2; do
-            node tools/geo/rivernet/outputs.ts --graph "$RUNNER_TEMP/build$n" --version "$ver" \
-              --out "$RUNNER_TEMP/p6b$n" --nonpublic "$RUNNER_TEMP/nonpublic$n.txt"
-            tools/geo/rivernet/tiles.sh build "$RUNNER_TEMP/p6b$n/rivers.geojsonseq" "$RUNNER_TEMP/p6b$n/rivers-$ver.pmtiles" \
-              "$RUNNER_TEMP/p6b$n/reach-bins.geojsonseq"
-            tools/geo/rivernet/tiles.sh decode "$RUNNER_TEMP/p6b$n/rivers-$ver.pmtiles" "$RUNNER_TEMP/p6b$n/decoded.json"
+            d=$RUNNER_TEMP/p6b$n
+            node tools/geo/rivernet/outputs.ts --graph "$RUNNER_TEMP/build$n" --waterbodies "$wb" --version "$ver" \
+              --out "$d" --nonpublic "$RUNNER_TEMP/nonpublic$n.txt"
+            tools/geo/rivernet/tiles.sh build "$d/rivers-$ver.pmtiles" rivers:"$d/rivers.geojsonseq" \
+              reach_bins:"$d/reach-bins.geojsonseq" waterbodies:"$d/waterbodies.geojsonseq" canals:"$d/canals.geojsonseq"
+            tools/geo/rivernet/tiles.sh decode "$d/rivers-$ver.pmtiles" "$d/decoded.json"
           done
           {
             echo '### Outputs and tiles (fixture)'
             echo
           } >>"$GITHUB_STEP_SUMMARY"
-          echo "- tile input features: $(wc -l <"$RUNNER_TEMP/p6b1/rivers.geojsonseq") reaches (layer rivers), $(wc -l <"$RUNNER_TEMP/p6b1/reach-bins.geojsonseq") position bins (layer reach_bins)" >>"$GITHUB_STEP_SUMMARY"
-          for f in "reaches-$ver.json" "rivers-$ver.geojson.gz" snap-report.json rivers.geojsonseq reach-bins.geojsonseq decoded.json; do
+          echo "- tile input features: $(wc -l <"$RUNNER_TEMP/p6b1/rivers.geojsonseq") reaches (layer rivers), $(wc -l <"$RUNNER_TEMP/p6b1/reach-bins.geojsonseq") position bins (layer reach_bins), $(wc -l <"$RUNNER_TEMP/p6b1/waterbodies.geojsonseq") water bodies (layer waterbodies), $(wc -l <"$RUNNER_TEMP/p6b1/canals.geojsonseq") canal edges (layer canals)" >>"$GITHUB_STEP_SUMMARY"
+          for f in "reaches-$ver.json" "rivers-$ver.geojson.gz" snap-report.json rivers.geojsonseq reach-bins.geojsonseq waterbodies.geojsonseq canals.geojsonseq decoded.json; do
             a=$(sha256sum "$RUNNER_TEMP/p6b1/$f" | cut -d' ' -f1)
             b=$(sha256sum "$RUNNER_TEMP/p6b2/$f" | cut -d' ' -f1)
             [[ $a == "$b" ]] || { echo "not identical: $f" >&2; exit 1; }
@@ -156,13 +169,14 @@ jobs:
           if cmp -s "$RUNNER_TEMP/p6b1/$t" "$RUNNER_TEMP/p6b2/$t"; then same=identical; else same=DIFFERENT; fi
           echo "- $t: $(stat -c %s "$RUNNER_TEMP/p6b1/$t") bytes, sha256 $(sha256sum "$RUNNER_TEMP/p6b1/$t" | cut -d' ' -f1); the two runs are byte-$same (reported only; the decoded tiles are compared)" >>"$GITHUB_STEP_SUMMARY"
           echo "pmtiles bytes of the two runs: $same"
-          (($(stat -c %s "$RUNNER_TEMP/p6b1/$t") < 30000000)) || { echo "$t is 30 MB or more" >&2; exit 1; }
+          (($(stat -c %s "$RUNNER_TEMP/p6b1/$t") < 40000000)) || { echo "$t is 40 MB or more" >&2; exit 1; }
           # No id of a station that is not public occurs in any public output. The list is never uploaded.
           [[ -s $RUNNER_TEMP/nonpublic1.txt ]] || { echo "empty non-public list" >&2; exit 1; }
           gzip -dc "$RUNNER_TEMP/p6b1/rivers-$ver.geojson.gz" >"$RUNNER_TEMP/p6b1/download.json"
           if grep -F -f "$RUNNER_TEMP/nonpublic1.txt" "$RUNNER_TEMP/p6b1/decoded.json" "$RUNNER_TEMP/p6b1/reaches-$ver.json" \
             "$RUNNER_TEMP/p6b1/download.json" "$RUNNER_TEMP/p6b1/snap-report.json" \
-            "$RUNNER_TEMP/p6b1/reach-bins.geojsonseq" >/dev/null; then
+            "$RUNNER_TEMP/p6b1/reach-bins.geojsonseq" "$RUNNER_TEMP/p6b1/waterbodies.geojsonseq" \
+            "$RUNNER_TEMP/p6b1/canals.geojsonseq" >/dev/null; then
             echo "a non-public station id occurs in a public output" >&2
             exit 1
           fi
@@ -209,9 +223,20 @@ jobs:
         env:
           RWS_DOMAIN: ${{ vars.RWS_DOMAIN }}
           RWS_CONTACT_EMAIL: ${{ vars.RWS_CONTACT_EMAIL }}
+          RWS_GEO_PROBE: ${{ inputs.probe && '1' || '0' }}
         run: tools/geo/rivernet/extract.sh "$RUNNER_TEMP/geo" "$RUNNER_TEMP/out"
-      # Uploaded before the build, so that a build failure still leaves the extract to inspect.
+      # P17b, one-off: the objects named like a water body, per region (ids and tags only), for curating the OSM ids.
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: rivernet-probe
+          path: ${{ runner.temp }}/geo/probe/*.opl
+          retention-days: 14
+          if-no-files-found: ignore
+      # Uploaded before the build (and after a failed extract: the river files are written first), so that a build
+      # failure still leaves the extract to inspect.
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
         with:
           name: rivernet-fixture
           path: |
@@ -219,6 +244,9 @@ jobs:
             ${{ runner.temp }}/out/rivernet.ways.geojsonseq
             ${{ runner.temp }}/out/rivernet.relations.opl
             ${{ runner.temp }}/out/rivernet.provenance.json
+            ${{ runner.temp }}/out/waterbodies.osm.pbf
+            ${{ runner.temp }}/out/rivernet.waterbodies.geojsonseq
+            ${{ runner.temp }}/out/waterbodies.provenance.json
           retention-days: 14
           if-no-files-found: error
       - name: Build the graph
@@ -238,16 +266,19 @@ jobs:
           set -euo pipefail
           VER=$(date -u +%Y%m%d)
           a=$RUNNER_TEMP/out/assets
-          node tools/geo/rivernet/outputs.ts --graph "$a" --version "$VER" --out "$a"
-          tools/geo/rivernet/tiles.sh build "$a/rivers.geojsonseq" "$a/rivers-$VER.pmtiles" "$a/reach-bins.geojsonseq"
+          node tools/geo/rivernet/outputs.ts --graph "$a" --waterbodies "$RUNNER_TEMP/out/rivernet.waterbodies.geojsonseq" \
+            --version "$VER" --out "$a"
+          tools/geo/rivernet/tiles.sh build "$a/rivers-$VER.pmtiles" rivers:"$a/rivers.geojsonseq" \
+            reach_bins:"$a/reach-bins.geojsonseq" waterbodies:"$a/waterbodies.geojsonseq" canals:"$a/canals.geojsonseq"
           {
             echo '### Tiles'
             echo
-            echo "- tile input features: $(wc -l <"$a/rivers.geojsonseq") reaches (layer rivers), $(wc -l <"$a/reach-bins.geojsonseq") position bins (layer reach_bins)"
+            echo "- tile input features: $(wc -l <"$a/rivers.geojsonseq") reaches (layer rivers), $(wc -l <"$a/reach-bins.geojsonseq") position bins (layer reach_bins), $(wc -l <"$a/waterbodies.geojsonseq") water bodies (layer waterbodies), $(wc -l <"$a/canals.geojsonseq") canal edges (layer canals)"
             echo "- rivers-$VER.pmtiles: $(stat -c %s "$a/rivers-$VER.pmtiles") bytes"
           } >>"$GITHUB_STEP_SUMMARY"
-          rm -f "$a/rivers.geojsonseq" "$a/reach-bins.geojsonseq" # the tiles inputs are not assets
-          (($(stat -c %s "$a/rivers-$VER.pmtiles") < 30000000)) || { echo "rivers-$VER.pmtiles is 30 MB or more" >&2; exit 1; }
+          # the tiles inputs are not assets
+          rm -f "$a/rivers.geojsonseq" "$a/reach-bins.geojsonseq" "$a/waterbodies.geojsonseq" "$a/canals.geojsonseq"
+          (($(stat -c %s "$a/rivers-$VER.pmtiles") < 40000000)) || { echo "rivers-$VER.pmtiles is 40 MB or more" >&2; exit 1; }
       - name: Checksums and summary
         run: |
           set -euo pipefail

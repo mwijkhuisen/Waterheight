@@ -100,6 +100,16 @@ Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/
 
 A refresh replaces the four files from a newer run's artifact (at most 15 MB for the PBF, a test checks it), updates this table, and regenerates the golden only after reviewing every changed bifurcation.
 
+## `waterbodies.osm.pbf` and its export (P17b)
+
+`waterbodies.osm.pbf`, `rivernet.waterbodies.geojsonseq` (gzipped as `rivernet.waterbodies.geojsonseq.gz` if it is over about 20 MB) and `waterbodies.provenance.json` are the three water-body files of the `rivernet-fixture` artifact of a `geo.yml` branch run (issue #65), committed unchanged. They are added beside the river files above, which that run does **not** refresh (owner decision R-6: the four `rivernet.*` river files stay byte-identical, so the reach ids of the committed tiles and reaches fixture stay as they are). `extract.sh` takes them from each region's download before it is deleted: `osmium getid -r` of the OSM objects of `registry/waterbodies.yaml` (`sources.ts --selection` writes them to `waterbodies.txt`; a point-only body has none), the regions merged with `-H` and `time-filter` like the river extract, then `getid -r --remove-tags` once more (an id no region holds fails `waterbody_missing`; a referenced way keeps no tag, so no island ring becomes an area of its own), written with no metadata. The export is the tool image's `osmium export -f geojsonseq -a type,id --geometry-types=polygon` of the PBF, which the `rivernet fixture` job re-exports and compares byte for byte (`export-check.sh`). `waterbodies.provenance.json` is `{schema_version: 1, osmium, replication_timestamp}`, the timestamp of that run's `rivernet.provenance.json`. `outputs.ts --waterbodies` reads the export (`loadWaterbodyInput`: every polygon body exactly once, no other area) and `registry/rivernet.yaml` pins its sha256 (`fixture.waterbodies_sha256`).
+
+Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/copyright).
+
+| | |
+|---|---|
+| Source run | not committed yet: the first branch run of P17b fills this table |
+
 ## `nrw/`
 
 `stations-sample.json` is cut from one real answer of `https://www.hochwasserportal.nrw/data/internet/stations/stations.json` (LANUK NRW, 568,467 bytes, 620 stations), recorded on 2026-10-03 by `node tools/geo/rivernet/record-nrw-waters.ts --save .smoke/nrw` with one request. It holds 6 whole objects, values unchanged: the first 5 in file order, the first with `site_no` 102 (WSV; its water is kept out by the recorder) and the first 3 with a non-empty `WTO_OBJECT`. `stations-sample.golden.json` is the strict parser's output (`parseNrwStations`); `stations-sample.meta.json` states the rule and the sha256 of the full body. The source is DL-DE Zero 2.0 (catalogue §2.3), not synthetic. Provider text in it is data. `registry/seed/de-7-waters.csv` is the recorder's output for the registered DE-7 stations, which `scripts/gen-de7-stations.ts` reads.

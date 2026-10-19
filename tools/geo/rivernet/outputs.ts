@@ -7,6 +7,7 @@ import {
   ODBL_URL,
   OSM_ATTRIBUTION,
   OSM_ATTRIBUTION_URL,
+  REACHES_SCHEMA_VERSION,
   type ReachesFile,
   ReachesFile as ReachesSchema,
   RIVERS_VERSION_RE,
@@ -15,14 +16,20 @@ import type { RiversFile } from '../../../packages/contracts/src/rivers.ts';
 import { BIN_MINZOOM, binCount, binLines } from './bins.ts';
 import { BuildError, canonicalJson, type Edge, MAX_WAYS_BYTES, readRivers } from './build.ts';
 import { InputError } from './geojsonseq.ts';
+import { byString } from './network.ts';
 import { type Placed, place, readEmpirical, readOverrides } from './place.ts';
 import { readStations } from './stations.ts';
+import { loadWaterbodyInput, readWaterbodies, type WaterbodyInput } from './waterbodies.ts';
 
 // The public P6b outputs (A§9.1; release assets of geo.yml):
-//   reaches-<ver>.json       public reaches in graph order, public stations with km (ReachesFile)
-//   rivers-<ver>.geojson.gz  the ODbL download: one line per reach, names, flags; no station data
+//   reaches-<ver>.json       public reaches in graph order, public stations with km (ReachesFile); from P17b (schema 2)
+//                            also the water bodies with their public stations, and the river mouths
+//   rivers-<ver>.geojson.gz  the ODbL download: one line per reach, names, flags, then (P17b) the water bodies and the
+//                            canal lines, each with `layer`; no station data
 //   rivers.geojsonseq        the same lines for tippecanoe (rivers-<ver>.pmtiles layer `rivers`; not an asset)
 //   reach-bins.geojsonseq    each drawn reach in 1…8 position bins (layer `reach_bins`, #112; not an asset)
+//   waterbodies.geojsonseq   P17b: each water body's polygon, or its point (layer `waterbodies`; not an asset)
+//   canals.geojsonseq        P17b: the canal edges, never in `rivers` (layer `canals`, D-3; not an asset)
 //   snap-report.json         public stations per id; counts per rule of public-audience stations only
 //   VERSION
 // Only public stations appear in them (invariants 8, 11): owner and off
@@ -34,12 +41,27 @@ export const LICENCE_NOTE =
 
 const km3 = (m: number) => Math.round(m) / 1000;
 const km2 = (m: number) => Math.round(m / 10) / 100;
+const byId = <T extends { id: string }>(a: T, b: T) => byString(a.id, b.id);
+
+interface Feature {
+  type: 'Feature';
+  geometry: { type: string; coordinates: unknown };
+  properties: Record<string, unknown>;
+}
+
+/** The water bodies the placement read: every P17b writer needs them, so none writes without (fail closed). */
+function bodiesOf(placed: Placed): WaterbodyInput {
+  if (placed.waterbodies === null) throw new BuildError('waterbodies_missing', []);
+  return placed.waterbodies;
+}
 
 export function reachesFile(placed: Placed, rivers: RiversFile, version: string, osmStamp: string): ReachesFile {
   const used = new Set(placed.reaches.map((r) => r.river));
   const stations = placed.stations.filter((s) => s.public && s.river !== null).sort((a, b) => (a.id < b.id ? -1 : 1));
+  const shown = new Set(placed.stations.filter((s) => s.public).map((s) => s.id));
+  const bodies = [...bodiesOf(placed).file.waterbodies].sort(byId);
   const file: ReachesFile = {
-    schema_version: 1,
+    schema_version: REACHES_SCHEMA_VERSION,
     version,
     attribution: OSM_ATTRIBUTION,
     attribution_url: OSM_ATTRIBUTION_URL,
@@ -95,6 +117,24 @@ export function reachesFile(placed: Placed, rivers: RiversFile, version: string,
       to_station_id: to_station,
       ...value,
     })),
+    // Public stations only: an owner or off station in a lake is in no body's list (invariants 8 and 11).
+    waterbodies: bodies.map((w) => {
+      if (w.reference_station !== null && !shown.has(w.reference_station))
+        throw new BuildError('reference_station_not_public', [w.id]);
+      return {
+        id: w.id,
+        kind: w.kind,
+        name_nl: w.name_nl,
+        name_en: w.name_en,
+        stations: placed.stations
+          .filter((s) => s.public && s.waterbody === w.id)
+          .map((s) => s.id)
+          .sort(byString),
+        reference_station_id: w.reference_station,
+        outflows: w.outflows.map((o) => ({ to: o.to, via: o.via })),
+      };
+    }),
+    mouths: (rivers.mouths ?? []).map((m) => ({ id: m.id, river_id: m.river, waterbody_id: m.waterbody })).sort(byId),
   };
   const parsed = ReachesSchema.safeParse(file);
   if (!parsed.success) throw new BuildError('reaches_invalid', [parsed.error.issues[0]?.path.join('.') ?? '']);
@@ -142,6 +182,43 @@ function binFeatures(placed: Placed): string[] {
   );
 }
 
+/** The `waterbodies` layer (P17b): each body's polygon, or its point when it is point-only; no station data. */
+function waterbodyFeatures(placed: Placed): Feature[] {
+  const wb = bodiesOf(placed);
+  return [...wb.file.waterbodies].sort(byId).map((w) => {
+    const area = wb.areas.get(w.id);
+    let geometry: Feature['geometry'];
+    if (w.osm === null && w.point !== undefined) geometry = { type: 'Point', coordinates: w.point };
+    else if (w.osm !== null && area !== undefined) geometry = { type: 'MultiPolygon', coordinates: area.polygons };
+    else throw new BuildError('waterbody_unassembled', [w.id]);
+    return {
+      type: 'Feature',
+      geometry,
+      properties: { waterbody_id: w.id, kind: w.kind, name_nl: w.name_nl, name_en: w.name_en },
+    };
+  });
+}
+
+/** The `canals` layer (P17b, D-3): one line per canal edge, named after its canal; never in `rivers`. */
+function canalFeatures(placed: Placed, rivers: RiversFile): Feature[] {
+  const canals = new Map(rivers.rivers.filter((r) => r.kind === 'canal').map((r) => [r.id, r]));
+  return [...placed.canalEdges].sort(byId).map((e) => {
+    const c = [...e.rivers]
+      .sort(byString)
+      .map((r) => canals.get(r))
+      .find((r) => r !== undefined);
+    if (c === undefined) throw new BuildError('canal_edge_without_canal', [e.id]);
+    return {
+      type: 'Feature',
+      geometry: { type: 'LineString', coordinates: e.coords },
+      properties: { river_id: c.id, name_nl: c.name_nl, name_en: c.name_en, kind: 'canal' },
+    };
+  });
+}
+
+const seq = (features: Feature[]) => features.map((f) => `${JSON.stringify(f)}\n`).join('');
+const inLayer = (layer: string) => (f: Feature) => JSON.stringify({ ...f, properties: { ...f.properties, layer } });
+
 /** The ODbL download: attribution and licence ahead of the features, so the first bytes carry them. */
 export function downloadText(placed: Placed, rivers: RiversFile, version: string, osmStamp: string): string {
   const head = JSON.stringify({
@@ -155,17 +232,26 @@ export function downloadText(placed: Placed, rivers: RiversFile, version: string
     version,
     osm_replication_timestamp: osmStamp,
   }).slice(0, -1);
-  return `${head},"features":[\n${lineFeatures(placed, rivers).join(',\n')}\n]}\n`;
+  const features = [
+    ...lineFeatures(placed, rivers),
+    ...waterbodyFeatures(placed).map(inLayer('waterbody')),
+    ...canalFeatures(placed, rivers).map(inLayer('canal')),
+  ];
+  return `${head},"features":[\n${features.join(',\n')}\n]}\n`;
 }
 
 export function snapReport(placed: Placed, version: string, osmStamp: string): string {
   // Counts per rule of the shown stations and of the public-audience ones not shown (mirrors, sources without
   // `display`); owner and off stations are not counted at all, so the report does not depend on them.
   const counts: Record<string, Record<string, number>> = { public: {}, public_not_shown: {} };
+  const waterbodyCounts: Record<string, Record<string, number>> = { public: {}, public_not_shown: {} };
   for (const s of placed.stations) {
     if (s.audience !== 'public') continue;
-    const c = counts[s.public ? 'public' : 'public_not_shown'] as Record<string, number>;
+    const group = s.public ? 'public' : 'public_not_shown';
+    const c = counts[group] as Record<string, number>;
     c[s.rule] = (c[s.rule] ?? 0) + 1;
+    const w = waterbodyCounts[group] as Record<string, number>;
+    if (s.waterbody_rule !== null) w[s.waterbody_rule] = (w[s.waterbody_rule] ?? 0) + 1;
   }
   return canonicalJson(
     {
@@ -175,6 +261,7 @@ export function snapReport(placed: Placed, version: string, osmStamp: string): s
       version,
       osm_replication_timestamp: osmStamp,
       counts,
+      waterbody_counts: waterbodyCounts,
       stations: placed.stations
         .filter((s) => s.public)
         .sort((a, b) => (a.id < b.id ? -1 : 1))
@@ -191,6 +278,10 @@ export function snapReport(placed: Placed, version: string, osmStamp: string): s
           km_graph: s.km_graph,
           km_to_nl_entry: s.km_to_nl_entry,
           nl_entry_node: s.nl_entry_node,
+          canal: s.canal,
+          canal_distance_m: s.canal_distance_m,
+          waterbody: s.waterbody,
+          waterbody_rule: s.waterbody_rule,
         })),
     },
     1,
@@ -220,12 +311,14 @@ export function writeOutputs(out: string, placed: Placed, rivers: RiversFile, ve
   );
   writeFileSync(join(out, 'rivers.geojsonseq'), `${lineFeatures(placed, rivers).join('\n')}\n`);
   writeFileSync(join(out, 'reach-bins.geojsonseq'), `${binFeatures(placed).join('\n')}\n`);
+  writeFileSync(join(out, 'waterbodies.geojsonseq'), seq(waterbodyFeatures(placed)));
+  writeFileSync(join(out, 'canals.geojsonseq'), seq(canalFeatures(placed, rivers)));
   writeFileSync(join(out, 'snap-report.json'), snapReport(placed, version, osmStamp));
   writeFileSync(join(out, 'VERSION'), `${version}\n`);
 }
 
 const USAGE =
-  'usage: node tools/geo/rivernet/outputs.ts --graph <dir> --version <YYYYMMDD> --out <dir> [--nonpublic <file>]';
+  'usage: node tools/geo/rivernet/outputs.ts --graph <dir> --waterbodies <geojsonseq[.gz]> --version <YYYYMMDD> --out <dir> [--nonpublic <file>]';
 
 if (import.meta.main) {
   const args = process.argv.slice(2);
@@ -233,22 +326,34 @@ if (import.meta.main) {
   for (let i = 0; i < args.length; i += 2) {
     const k = args[i] ?? '';
     const v = args[i + 1];
-    if (!['--graph', '--version', '--out', '--nonpublic'].includes(k) || v === undefined || k.slice(2) in opt) {
+    if (
+      !['--graph', '--waterbodies', '--version', '--out', '--nonpublic'].includes(k) ||
+      v === undefined ||
+      k.slice(2) in opt
+    ) {
       console.error(USAGE);
       process.exit(64);
     }
     opt[k.slice(2)] = v;
   }
-  const { graph, version, out, nonpublic } = opt;
-  if (graph === undefined || version === undefined || out === undefined || !RIVERS_VERSION_RE.test(version)) {
+  const { graph, waterbodies, version, out, nonpublic } = opt;
+  if (
+    graph === undefined ||
+    waterbodies === undefined ||
+    version === undefined ||
+    out === undefined ||
+    !RIVERS_VERSION_RE.test(version)
+  ) {
     console.error(USAGE);
     process.exit(64);
   }
   try {
     const rivers = readRivers();
+    const bodies = readWaterbodies(rivers);
+    const input = await loadWaterbodyInput(bodies, waterbodies);
     const { edges, osmStamp } = readGraphDir(graph);
     const stations = readStations();
-    const placed = place(edges, rivers, stations, readOverrides(rivers), readEmpirical());
+    const placed = place(edges, rivers, stations, readOverrides(rivers, bodies), readEmpirical(), input);
     writeOutputs(out, placed, rivers, version, osmStamp);
     if (nonpublic !== undefined)
       writeFileSync(
@@ -259,7 +364,10 @@ if (import.meta.main) {
           .join(''),
       );
     const shown = placed.stations.filter((s) => s.public && s.river !== null).length;
-    console.log(`outputs: ${placed.reaches.length} reaches, ${shown} public stations placed, version ${version}`);
+    const inBody = placed.stations.filter((s) => s.public && s.waterbody !== null).length;
+    console.log(
+      `outputs: ${placed.reaches.length} reaches, ${shown} public stations placed, ${bodies.waterbodies.length} water bodies (${inBody} public stations in one), ${placed.canalEdges.length} canal edges, version ${version}`,
+    );
   } catch (err) {
     if (err instanceof BuildError || err instanceof InputError) console.error(`outputs: ${err.message}`);
     else console.error('outputs: unexpected error', err instanceof Error ? err.name : '');
