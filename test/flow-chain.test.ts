@@ -65,10 +65,16 @@ describe('the fixture chains', () => {
 
   it('climbs back through the split: Nijmegen, Pannerdensche Kop, Lobith, Emmerich', () => {
     const ids = stemIds(chain(graph, rivers, NIJMEGEN, everyone));
-    expect(ids.slice(0, 4)).toEqual(['nl.rws.millingenaanderijn', PANNERDEN, LOBITH, 'de.wsv.2790020']);
+    expect(ids.slice(0, 5)).toEqual([
+      'nl.rws.millingenaanderijn',
+      PANNERDEN,
+      'nl.rws.lobith.bovenrijn.haven', // P17b: the Lobith harbour gauge lies 1.7 km below the Lobith gauge
+      LOBITH,
+      'de.wsv.2790020',
+    ]);
     // the Rhine above the split is the same chain as Lobith's
     const lobith = stemIds(chain(graph, rivers, LOBITH, everyone));
-    expect(ids.slice(3)).toEqual(lobith);
+    expect(ids.slice(4)).toEqual(lobith);
   });
 
   it('has the Meuse chain of the public Eijsden: a gap with the Sambre, then Chooz up to Saint-Mihiel', () => {

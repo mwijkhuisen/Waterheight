@@ -26,6 +26,7 @@ import { place, readOverrides } from '../tools/geo/rivernet/place.ts';
 import { readSources } from '../tools/geo/rivernet/sources.ts';
 import { readStations } from '../tools/geo/rivernet/stations.ts';
 import { repoRoot } from './catalogue.ts';
+import { fixtureWaterbodies } from './rivernet-waterbodies.ts';
 
 // The P6a criterion on the committed fixture PBF's osmium exports (tools/geo/fixtures/README.md):
 // the graph is acyclic, the Pannerdensche Kop and the IJsselkop each have 2 downstream edges, the
@@ -297,8 +298,8 @@ describe('the fixture graph (P6a criterion)', () => {
     }
   });
 
-  it('lets no canal reach, station, river entry or label into a public output (P17a)', SLOW, () => {
-    const placed = place(edges, rivers, readStations(), readOverrides(rivers));
+  it('lets no canal reach, station, river entry or label into a public output (P17a)', SLOW, async () => {
+    const placed = place(edges, rivers, readStations(), readOverrides(rivers), null, await fixtureWaterbodies(rivers));
     expect(placed.reaches.filter((r) => canalIds.has(r.river))).toEqual([]);
     expect(placed.stations.filter((s) => s.river !== null && canalIds.has(s.river))).toEqual([]);
     const file = reachesFile(placed, rivers, '20261018', '2026-10-17T20:20:51Z');

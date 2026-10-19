@@ -6,6 +6,7 @@ import { reachesFile } from '../tools/geo/rivernet/outputs.ts';
 import { place, readOverrides } from '../tools/geo/rivernet/place.ts';
 import { readStations } from '../tools/geo/rivernet/stations.ts';
 import { repoRoot } from './catalogue.ts';
+import { fixtureWaterbodies } from './rivernet-waterbodies.ts';
 
 // The shared fixture river release of P11a (issue #26): the production placement and reachesFile on the committed
 // tools/geo/fixtures inputs, as the e2e release 20261003 (E2E_RIVERS). The web e2e, the compose e2e and the chain,
@@ -23,7 +24,14 @@ describe('the fixture river release', () => {
       provenance: `${FX}rivernet.provenance.json`,
     });
     const rivers = readRivers();
-    const placed = place(build.edges, rivers, readStations(), readOverrides(rivers));
+    const placed = place(
+      build.edges,
+      rivers,
+      readStations(),
+      readOverrides(rivers),
+      null,
+      await fixtureWaterbodies(rivers),
+    );
     const osm = (build.graph as { osm: { replication_timestamp: string } }).osm.replication_timestamp;
     const text = canonicalJson(reachesFile(placed, rivers, '20261003', osm));
     if (process.env.UPDATE_FIXTURE === '1') writeFileSync(REACHES_FIXTURE, text);
