@@ -314,6 +314,25 @@ describe('load and replay of the fixture archive', { timeout: 60_000 }, () => {
     expect(await loader.backlog()).toEqual({ ...NONE, public: NONE });
     h.alerts.length = 0;
   });
+
+  it('a backfill line has no age of its own: a reused file’s slice is not hours of backlog (P14b)', async () => {
+    const file = join(h.raw, '_manifest', '2026-09-30.jsonl');
+    const append = (l: object) => appendFileSync(file, `${JSON.stringify(l)}\n`);
+    // A DE-8 slice line appended now carries the decade file's one fetch, two hours back.
+    const fetched = new Date('2026-09-30T08:00:00Z');
+    const now = new Date(fetched.getTime() + 2 * 3_600_000);
+    append(bareLine('DE-8', 'de-8-backfill-w', fetched, { status: 304, retention: 'backfill' }));
+    const loader = h.loader();
+    // Waiting, so never "nothing to load" (the nightly gate), but 0 s old, in the full and in the public figures.
+    expect(await loader.backlog(now)).toMatchObject({ files: 1, age_s: 0, public: { files: 1, age_s: 0 } });
+    expect(nothingToLoad(await loader.backlog(now))).toBe(false);
+    // A live line behind it keeps its own age: a slice that holds the tail still shows as backlog.
+    append(bareLine('DE-1', 'de-1-basin', new Date(now.getTime() - 20 * 60_000), { status: 304 }));
+    expect(await loader.backlog(now)).toMatchObject({ files: 1, age_s: 1200, public: { age_s: 1200 } });
+    expect(await loader.tick()).toEqual({ lines: 2, loaded: 0 });
+    expect(await loader.backlog(now)).toEqual({ ...NONE, public: NONE });
+    expect(h.alerts).toEqual([]);
+  });
 });
 
 describe('atomicity: a payload is one transaction', { timeout: 60_000 }, () => {

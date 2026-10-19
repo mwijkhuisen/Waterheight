@@ -114,7 +114,8 @@ export type TickOptions = {
  * Manifest bytes not consumed yet, and how old the oldest whole unconsumed
  * manifest line is. A damaged line is skipped (the next tick steps over it),
  * and a torn last line is not whole: `age_s` is null when no whole line is
- * left to load, whatever `bytes` still reports.
+ * left to load, whatever `bytes` still reports. A backfill line has no age of
+ * its own (P14b): it is 0 when only backfill lines wait, never null.
  */
 export type Backlog = { files: number; bytes: number; age_s: number | null };
 
@@ -441,9 +442,12 @@ export class Loader {
       if (size <= offset) continue;
       files += 1;
       bytes += size - offset;
-      const at = await this.firstLineAt(file, offset);
+      const at = await this.firstLineAt(file, offset, now.getTime());
       if (at !== null && (oldest === null || at < oldest)) oldest = at;
-      const p = owner.size === 0 ? { bytes: size - offset, at } : await this.publicPart(file, offset, size, owner);
+      const p =
+        owner.size === 0
+          ? { bytes: size - offset, at }
+          : await this.publicPart(file, offset, size, owner, now.getTime());
       if (p.bytes > 0) pub.files += 1;
       pub.bytes += p.bytes;
       if (p.at !== null && (pub.oldest === null || p.at < pub.oldest)) pub.oldest = p.at;
@@ -462,9 +466,11 @@ export class Loader {
     offset: number,
     size: number,
     owner: ReadonlySet<string>,
+    now: number,
   ): Promise<{ bytes: number; at: number | null }> {
     let bytes = 0;
     let at: number | null = null;
+    let backfill = false;
     try {
       for (let pos = offset; pos < size; ) {
         if (pos - offset >= PUBLIC_SCAN_BYTES) {
@@ -483,7 +489,9 @@ export class Loader {
           // A damaged line names no source we can trust: it counts.
           if (line === null || !owner.has(line.source)) {
             bytes += raw.end - pos;
-            if (line !== null) at ??= Date.parse(line.fetched_at.end ?? line.fetched_at.start);
+            const from = line === null ? null : this.waitsFrom(line);
+            if (from === undefined) backfill = true;
+            else if (from !== null) at ??= from;
           }
           pos = raw.end;
         }
@@ -491,29 +499,46 @@ export class Loader {
     } catch {
       return { bytes: size - offset, at: Date.parse(`${file.slice(0, 10)}T00:00:00Z`) };
     }
-    return { bytes, at };
+    return { bytes, at: at ?? (backfill ? now : null) };
   }
 
   /**
    * When the first whole unconsumed manifest line of a file was fetched: a
    * damaged line is skipped, and null means no whole line is left (only an
    * unfinished last line, which the recorder is still writing, or tore). A
-   * file that cannot be read counts from its day.
+   * file that cannot be read counts from its day. P14b: backfill lines are
+   * stepped over to the first live line (`waitsFrom`); with none behind them
+   * they count from `now`, and past PUBLIC_SCAN_BYTES of them from the day.
    */
-  private async firstLineAt(file: string, offset: number): Promise<number | null> {
+  private async firstLineAt(file: string, offset: number, now: number): Promise<number | null> {
+    let backfill = false;
     try {
       for (let at = offset; ; ) {
+        if (backfill && at - offset >= PUBLIC_SCAN_BYTES) return Date.parse(`${file.slice(0, 10)}T00:00:00Z`);
         const chunk = await this.deps.reader.lines(file, at, 64 * 1024);
-        if (chunk.length === 0) return null;
+        if (chunk.length === 0) return backfill ? now : null;
         for (const raw of chunk) {
           const line = parseLine(raw.text);
-          if (line !== null) return Date.parse(line.fetched_at.end ?? line.fetched_at.start);
+          const from = line === null ? null : this.waitsFrom(line);
+          if (from === undefined) backfill = true;
+          else if (from !== null) return from;
         }
         at = (chunk.at(-1) as RawLine).end;
       }
     } catch {
       return Date.parse(`${file.slice(0, 10)}T00:00:00Z`);
     }
+  }
+
+  /**
+   * When a line's wait for the loader began, for the backlog's age: its fetch, or undefined for a backfill line
+   * (P14b). A reused DE-8 decade file's slice lines all carry the file's one fetch, so a slice appended a moment ago
+   * would read as hours behind and hold the runner on `backlog`; its turn is the runner's (`unloaded`), and the live
+   * lines behind it keep their own age.
+   */
+  private waitsFrom(line: ManifestLine): number | undefined {
+    if (this.specOf(line.source, line.spec)?.spec.backfill === true) return undefined;
+    return Date.parse(line.fetched_at.end ?? line.fetched_at.start);
   }
 
   private stalledFor(): number {
