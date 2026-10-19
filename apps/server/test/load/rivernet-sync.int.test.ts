@@ -1,4 +1,4 @@
-import type { RivernetFile, RiversFile } from '@rws/contracts';
+import type { RivernetFile, RiversFile, WaterbodiesFile } from '@rws/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { readStations } from '../../../../tools/geo/rivernet/stations.ts';
 import { VIEWS } from '../../src/db/audience.ts';
@@ -20,6 +20,9 @@ const ids = (source: string, audience: string) => [
   ...new Set(registry.stations.filter((s) => s.source === source && s.audience === audience).map((s) => s.id)),
 ];
 const [up, down] = ids('DE-1', 'public') as [string, string];
+const primary = [
+  ...new Set(registry.stations.filter((s) => s.role === 'primary' && s.audience === 'public').map((s) => s.id)),
+][0] as string;
 const owner = ids('BE-3', 'owner')[0] as string;
 const off = ids('LU-1', 'off')[0] as string;
 
@@ -148,10 +151,25 @@ const net = (): RivernetFile => ({
   ],
 });
 
-async function sync(rn: RivernetFile | null) {
+const body = (id: string, reference: string | null) => ({
+  id,
+  kind: 'lake' as const,
+  name_nl: id.toUpperCase(),
+  name_en: `${id}-en`,
+  wikidata: 'Q2',
+  osm: { type: 'relation' as const, id: 2 },
+  names: { 'NL-1': [id] },
+  managed_level: true,
+  outflows: [],
+  reference_station: reference,
+  evidence: ['https://example.org/e'],
+});
+const bodies = (...b: ReturnType<typeof body>[]) => ({ version: 1, waterbodies: b }) as unknown as WaterbodiesFile;
+
+async function sync(rn: RivernetFile | null, wb: WaterbodiesFile | null = null) {
   const { db, close } = h.dbAs('rws_migrator', 1);
   try {
-    return await syncRegistry(db, registry, { rivers, rivernet: rn });
+    return await syncRegistry(db, registry, { rivers, rivernet: rn, waterbodies: wb });
   } finally {
     await close();
   }
@@ -210,7 +228,7 @@ describe('rivernet sync', { timeout: 120_000 }, () => {
       },
     ]);
     const st = await q(
-      `SELECT s.id, s.river_id, s.km_official, s.km_system, s.km_to_nl_entry, s.nl_entry_node, r.river_id || '.' || r.seq AS reach FROM station s LEFT JOIN reach r ON r.id = s.reach_id WHERE s.id = ANY(ARRAY['${up}','${down}','${owner}','${off}'])`,
+      `SELECT s.id, s.river_id, s.km_official, s.km_system, s.km_to_nl_entry, s.nl_entry_node, s.waterbody_id, r.river_id || '.' || r.seq AS reach FROM station s LEFT JOIN reach r ON r.id = s.reach_id WHERE s.id = ANY(ARRAY['${up}','${down}','${owner}','${off}'])`,
     );
     const by = Object.fromEntries(st.map((x) => [x.id, x]));
     expect(by[up]).toMatchObject({
@@ -219,9 +237,7 @@ describe('rivernet sync', { timeout: 120_000 }, () => {
       km_system: 'RHEIN-km (TEST)',
       km_to_nl_entry: 5,
       nl_entry_node: 'emmerich',
-      canal: null,
-      waterbody: null,
-      waterbody_rule: null,
+      waterbody_id: null,
       reach: 'rhine.1',
     });
     expect(by[down].reach).toBe('rhine.2');
@@ -261,6 +277,60 @@ describe('rivernet sync', { timeout: 120_000 }, () => {
     expect((await q(`SELECT r.seq FROM station s JOIN reach r ON r.id = s.reach_id WHERE s.id = '${up}'`))[0]).toEqual({
       seq: 1,
     });
+  });
+
+  it('syncs water bodies, sets and keeps station.waterbody_id, deletes a body that left the file', async () => {
+    const withBody = (id: string, b: string | null, canal: string | null = null): RivernetFile => {
+      const n = net();
+      if (!n.stations.some((s) => s.id === id))
+        n.stations.push({ ...(n.stations[3] as RivernetFile['stations'][number]), id });
+      n.stations = n.stations.map((s) =>
+        s.id === id
+          ? {
+              ...s,
+              waterbody: b,
+              waterbody_rule: b === null ? null : 'waterbody_named',
+              canal,
+              river: canal ? null : s.river,
+            }
+          : s,
+      ) as RivernetFile['stations'];
+      return n;
+    };
+    await sync(withBody(primary, 'meer-a'), bodies(body('meer-a', primary), body('meer-b', null)));
+    expect(await q('SELECT id, kind, names, managed_level FROM waterbody ORDER BY id')).toEqual([
+      {
+        id: 'meer-a',
+        kind: 'lake',
+        names: { nl: 'MEER-A', en: 'meer-a-en', sources: { 'NL-1': ['meer-a'] } },
+        managed_level: true,
+      },
+      {
+        id: 'meer-b',
+        kind: 'lake',
+        names: { nl: 'MEER-B', en: 'meer-b-en', sources: { 'NL-1': ['meer-b'] } },
+        managed_level: true,
+      },
+    ]);
+    const wb = async (id: string) => (await q(`SELECT waterbody_id FROM station WHERE id = '${id}'`))[0];
+    expect(await wb(primary)).toEqual({ waterbody_id: 'meer-a' });
+    expect(await wb(down)).toEqual({ waterbody_id: null });
+    // No rivernet file: the stored value stays.
+    await sync(null, bodies(body('meer-a', primary), body('meer-b', null)));
+    expect(await wb(primary)).toEqual({ waterbody_id: 'meer-a' });
+    // A canal station keeps river_id null.
+    await sync(withBody(owner, null, 'canal-x'), bodies(body('meer-a', primary)));
+    expect((await q(`SELECT river_id FROM station WHERE id = '${owner}'`))[0]).toEqual({ river_id: null });
+    // meer-a left: its stations are nulled, then it is deleted.
+    await sync(null, bodies(body('meer-b', null)));
+    expect(await wb(primary)).toEqual({ waterbody_id: null });
+    expect(await q('SELECT id FROM waterbody')).toEqual([{ id: 'meer-b' }]);
+  });
+
+  it('refuses a reference_station that is an owner or off station', async () => {
+    for (const bad of [owner, off, 'xx.unknown.1'])
+      await expect(sync(null, bodies(body('meer-c', bad)))).rejects.toThrow(/reference_station/);
+    expect(await q(`SELECT id FROM waterbody WHERE id = 'meer-c'`)).toEqual([]);
   });
 
   it('the public station view holds exactly the ids the placement calls public', async () => {

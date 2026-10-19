@@ -352,6 +352,7 @@ export interface Station {
   river_id: string | null;
   tier: number;
   water_name: string | null;
+  waterbody_id: string | null;
 }
 
 export interface StationAlias {
@@ -413,6 +414,16 @@ export interface WarningArea {
   valid: string;
 }
 
+export interface Waterbody {
+  id: string;
+  kind: string;
+  managed_level: boolean;
+  name_en: string;
+  name_nl: string;
+  names: Generated<Json>;
+  wikidata: string;
+}
+
 export interface DB {
   app_meta: AppMeta;
   attribution: Attribution;
@@ -445,4 +456,5 @@ export interface DB {
   twin: Twin;
   twin_check: TwinCheck;
   warning_area: WarningArea;
+  waterbody: Waterbody;
 }

@@ -401,6 +401,9 @@
     },
     "warning_area_id_seq": {
       "rws_load": "USAGE"
+    },
+    "waterbody": {
+      "rws_backup": "SELECT"
     }
   },
   "functions": {
