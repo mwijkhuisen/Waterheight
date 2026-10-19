@@ -35,7 +35,7 @@ const reach = (id: string): FeatureSpan => {
 const ev = (v: number, ageS = 0, limitS = 3600): EndValue => ({ v, ageS, limitS });
 const ids = (from: string, a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => `${from}.${a + i}`);
 
-const TIDAL = [...ids('scheldt', 12, 16), ...ids('ems', 30, 40), ...ids('lek', 4, 6), 'meuse.63'];
+const TIDAL = [...ids('scheldt', 12, 16), ...ids('ems', 30, 40), ...ids('lek', 4, 6), ...ids('meuse', 73, 75)];
 const MODES = ['state', 'delta', 'q'] as const;
 const colourOf = (p: ReachPaint) => (p.k === 'v' ? p.colour : p.k);
 

@@ -9,6 +9,7 @@ import { writeOutputs } from '../tools/geo/rivernet/outputs.ts';
 import { place, readOverrides } from '../tools/geo/rivernet/place.ts';
 import { readStations } from '../tools/geo/rivernet/stations.ts';
 import { repoRoot } from './catalogue.ts';
+import { fixtureWaterbodies } from './rivernet-waterbodies.ts';
 
 // The flow direction's data (P11a, issue #26 C2): the dash layer `rivers-flow` filters on the tile property `tidal`
 // and moves its dashes along the line's own direction. Both are facts of the tile input (`rivers.geojsonseq`, the file
@@ -23,7 +24,14 @@ const build = await buildFromFiles({
   provenance: `${FX}rivernet.provenance.json`,
 });
 const rivers = readRivers();
-const placed = place(build.edges, rivers, readStations(), readOverrides(rivers));
+const placed = place(
+  build.edges,
+  rivers,
+  readStations(),
+  readOverrides(rivers),
+  null,
+  await fixtureWaterbodies(rivers),
+);
 const osm = (build.graph as { osm: { replication_timestamp: string } }).osm.replication_timestamp;
 
 const tmp = mkdtempSync(join(tmpdir(), 'flow-tiles-'));

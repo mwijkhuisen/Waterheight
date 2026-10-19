@@ -18,6 +18,7 @@ import {
 import { readStations } from '../tools/geo/rivernet/stations.ts';
 import { repoRoot } from './catalogue.ts';
 import { chain, chainNode, overrides, river, riversFile, station } from './rivernet-synth.ts';
+import { fixtureWaterbodies } from './rivernet-waterbodies.ts';
 
 // P14f, plan section 3.6: the geo build reads registry/travel-empirical.yaml. A pair of public stations sets
 // reach.travel_time_h and its source text and appends a derived travel_times entry; a sourced pair of rivers.yaml
@@ -222,9 +223,10 @@ const build = await buildFromFiles({
   relations: `${FX}rivernet.relations.opl`,
   provenance: `${FX}rivernet.provenance.json`,
 });
+const bodies = await fixtureWaterbodies(rivers);
 const stations = readStations();
-const base = place(build.edges, rivers, stations, readOverrides(rivers));
-const withFile = place(build.edges, rivers, stations, readOverrides(rivers), empirical);
+const base = place(build.edges, rivers, stations, readOverrides(rivers), null, bodies);
+const withFile = place(build.edges, rivers, stations, readOverrides(rivers), empirical, bodies);
 const osm = (build.graph as { osm: { replication_timestamp: string } }).osm.replication_timestamp;
 
 describe('the committed fixture graph with a fixture file', () => {
@@ -263,10 +265,17 @@ describe('the committed fixture graph with a fixture file', () => {
   });
 
   it('is byte-stable and independent of the order of the pairs', SLOW, () => {
-    const reversed = place(build.edges, rivers, stations, readOverrides(rivers), {
-      ...empirical,
-      pairs: [...empirical.pairs].reverse(),
-    });
+    const reversed = place(
+      build.edges,
+      rivers,
+      stations,
+      readOverrides(rivers),
+      {
+        ...empirical,
+        pairs: [...empirical.pairs].reverse(),
+      },
+      bodies,
+    );
     expect(JSON.stringify(reachesFile(reversed, rivers, '20261120', osm).reaches)).toBe(
       JSON.stringify(reachesFile(withFile, rivers, '20261120', osm).reaches),
     );

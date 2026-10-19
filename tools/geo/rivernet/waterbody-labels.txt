@@ -1,0 +1,50 @@
+# One lang:label per line: water bodies (lakes, estuaries, seas) to look up on Wikidata (opt-in, lookup-wikidata.ts --kind waterbody; P17b).
+nl:IJsselmeer
+en:IJsselmeer
+nl:Markermeer
+en:Markermeer
+nl:Ketelmeer
+en:Ketelmeer
+nl:Zwarte Meer
+en:Zwarte Meer
+nl:Vossemeer
+en:Vossemeer
+nl:Drontermeer
+nl:Veluwemeer
+en:Veluwemeer
+nl:Wolderwijd
+en:Wolderwijd
+nl:Nuldernauw
+nl:Nijkerkernauw
+nl:Eemmeer
+en:Eemmeer
+nl:Gooimeer
+en:Gooimeer
+nl:Volkerak
+en:Volkerak
+nl:Zoommeer
+en:Zoommeer
+nl:Volkerak-Zoommeer
+nl:Grevelingenmeer
+nl:Grevelingen
+en:Lake Grevelingen
+nl:Veerse Meer
+en:Veerse Meer
+nl:Haringvliet
+en:Haringvliet
+nl:Noordzee
+en:North Sea
+nl:Waddenzee
+en:Wadden Sea
+nl:Oosterschelde
+en:Eastern Scheldt
+nl:Westerschelde
+en:Western Scheldt
+nl:Eems-Dollard
+en:Ems-Dollart
+nl:Dollard
+nl:IJmeer
+en:IJmeer
+nl:Zandkreek
+nl:Ramsdiep
+nl:Zwanediep

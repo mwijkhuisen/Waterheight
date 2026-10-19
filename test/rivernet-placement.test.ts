@@ -22,6 +22,7 @@ import { readSources } from '../tools/geo/rivernet/sources.ts';
 import { readStations } from '../tools/geo/rivernet/stations.ts';
 import { repoRoot } from './catalogue.ts';
 import { station } from './rivernet-synth.ts';
+import { fixtureWaterbodies } from './rivernet-waterbodies.ts';
 
 // The P6b placement criteria (issue #21) on the committed fixture graph (tools/geo/fixtures, OSM 2026-10-01):
 // the golden list, no name-mismatched snap on a canal trap, the §0.6 points, monotone chainage, paths to the
@@ -40,7 +41,8 @@ const build = await buildFromFiles(files);
 const rivers = readRivers();
 const stations = readStations();
 const overridesFile = readOverrides(rivers);
-const placed = place(build.edges, rivers, stations, overridesFile);
+const bodies = await fixtureWaterbodies(rivers);
+const placed = place(build.edges, rivers, stations, overridesFile, null, bodies);
 const net = placed.net;
 const osm = (build.graph as { osm: { replication_timestamp: string } }).osm.replication_timestamp;
 const by = new Map(placed.stations.map((s) => [s.id, s]));
@@ -58,7 +60,7 @@ const outputs = (p: Placed) => {
   return dir;
 };
 const read = (dir: string, name: string) => readFileSync(join(dir, name), 'utf8');
-/** The four files a public reader gets. */
+/** The files a public reader gets (P17b: the water-body and canal tile inputs too). */
 const publicBytes = (p: Placed) => {
   const dir = outputs(p);
   return {
@@ -66,6 +68,8 @@ const publicBytes = (p: Placed) => {
     download: gunzipSync(readFileSync(join(dir, `rivers-${VERSION}.geojson.gz`))).toString('utf8'),
     tiles: read(dir, 'rivers.geojsonseq'),
     snap: read(dir, 'snap-report.json'),
+    waterbodies: read(dir, 'waterbodies.geojsonseq'),
+    canals: read(dir, 'canals.geojsonseq'),
   };
 };
 const full = publicBytes(placed);
@@ -367,8 +371,11 @@ function sequence(river: string, first: string, last: string): PlacedStation[] {
     const toLast = e.id === edgeOf(get(last)).id || bwd.has(e.to);
     return fromFirst && toLast;
   };
+  // P17b placed more stations on these edges (Lobith haven 1.7 km below the Lobith gauge, Lith sluis 190 m below Lith):
+  // the sequence ends at `last`, a station further down the same edge is not part of it.
+  const end = rawKm(get(last)) + 10;
   return placed.stations
-    .filter((s) => s.river === river && s.placement !== null && onPath(s))
+    .filter((s) => s.river === river && s.placement !== null && onPath(s) && rawKm(s) <= end)
     .sort((a, b) => rawKm(a) - rawKm(b) || (a.id < b.id ? -1 : 1));
 }
 /** km_graph in metres before the 10 m rounding of the published value. */
@@ -614,9 +621,10 @@ describe('owner and off audiences', () => {
   const nonPublic = placed.stations.filter((s) => !s.public);
   const ownerRows = registryRows.filter((r) => r.audience === 'owner');
   // A label equal to a public river's name or spelling (the SPW 'Semois') is not a leak of the owner row.
-  const riverWords = new Set(
-    rivers.rivers.flatMap((r) => [r.name_nl, r.name_en, r.id, ...r.aliases, ...Object.values(r.names).flat()]),
-  );
+  const riverWords = new Set([
+    ...rivers.rivers.flatMap((r) => [r.name_nl, r.name_en, r.id, ...r.aliases, ...Object.values(r.names).flat()]),
+    ...bodies.file.waterbodies.flatMap((b) => [b.name_nl, b.name_en, b.id, ...Object.values(b.names).flat()]),
+  ]);
   const secrets = [
     ...new Set(
       ownerRows.flatMap((r) => [r.name, r.water_name ?? '']).filter((t) => t.length >= 6 && !riverWords.has(t)),
@@ -628,6 +636,8 @@ describe('owner and off audiences', () => {
     ['download', downloadText(placed, rivers, VERSION, osm)],
     ['tiles', full.tiles],
     ['snap report', snap],
+    ['waterbodies tiles', full.waterbodies],
+    ['canals tiles', full.canals],
   ];
 
   it('keeps every non-public station id, owner name and canary out of every public output', SLOW, () => {
@@ -655,10 +665,17 @@ describe('owner and off audiences', () => {
     const keep = stations.filter((s) => s.audience === 'public');
     expect(keep.length).toBeLessThan(stations.length);
     const ids = new Set(keep.map((s) => s.id));
-    const only = place(build.edges, rivers, keep, {
-      ...overridesFile,
-      stations: overridesFile.stations.filter((o) => ids.has(o.station)),
-    });
+    const only = place(
+      build.edges,
+      rivers,
+      keep,
+      {
+        ...overridesFile,
+        stations: overridesFile.stations.filter((o) => ids.has(o.station)),
+      },
+      null,
+      bodies,
+    );
     expect(publicBytes(only)).toEqual(full);
   });
 
@@ -693,10 +710,17 @@ describe('owner and off audiences', () => {
         river_hint: null,
       },
     );
-    const withCanary = place(build.edges, rivers, [...stations, canary], {
-      ...overridesFile,
-      stations: [...overridesFile.stations, { station: 'nl.canary.owner', river: 'rhine', reason: 'canary' }],
-    });
+    const withCanary = place(
+      build.edges,
+      rivers,
+      [...stations, canary],
+      {
+        ...overridesFile,
+        stations: [...overridesFile.stations, { station: 'nl.canary.owner', river: 'rhine', reason: 'canary' }],
+      },
+      null,
+      bodies,
+    );
     const c = withCanary.stations.find((s) => s.id === 'nl.canary.owner') as PlacedStation;
     expect(c).toMatchObject({ river: 'rhine', rule: 'override', public: false });
     expect(c.reach).not.toBeNull();
@@ -706,6 +730,127 @@ describe('owner and off audiences', () => {
     expect(c.placement?.distance_m).toBeLessThan(200);
     expect(publicBytes(withCanary)).toEqual(full);
     expect(publicBytes(withCanary).reaches).not.toContain('nl.canary.owner');
+  });
+
+  describe('planted in a lake and on a canal (P17b, invariants 8 and 11)', () => {
+    // Owner stations (BE-3, LU-2), the owner canary and a real `off` NL-1 structure row, each with a water-body
+    // override and set 300 m apart in the middle of the Markermeer polygon (9.7 km from its shore); a fifth owner
+    // station sits on a graph canal with a river override naming the canal (it becomes canal_edge).
+    const centre = inputs.get('nl.rws.markermeer.midden') as { lon: number; lat: number };
+    const offRow = stations.find(
+      (s) => s.source === 'NL-1' && s.audience === 'off' && /\.(sluis|kolk|schuif)/.test(s.id) && s.lon !== null,
+    ) as (typeof stations)[number];
+    const lakeAt = (i: number): LonLat => [centre.lon + (i * 300) / 68_000, centre.lat];
+    const canalEdge = placed.canalEdges.find((e) => e.coords.length >= 2) as (typeof placed.canalEdges)[number];
+    const canalId = canalEdge.rivers.find((r) => rivers.rivers.some((x) => x.id === r && x.kind === 'canal')) as string;
+    const canalAt = canalEdge.coords[Math.floor(canalEdge.coords.length / 2)] as LonLat;
+    const owner = (id: string, source: string, at: LonLat, name: string) =>
+      station(id, at, { source, audience: 'owner', public: false, water_name: name, river_hint: null });
+    const plantedStations = [
+      owner('be.spw.PLANT1', 'BE-3', lakeAt(1), 'Plantmeer Zuid'),
+      owner('lu.age-json.plant2', 'LU-2', lakeAt(2), 'Plantmeer Noord'),
+      owner('nl.canary.owner', 'BE-3', lakeAt(3), 'Plantmeer Midden'),
+      { ...offRow, lon: lakeAt(4)[0], lat: lakeAt(4)[1] },
+      owner('be.spw.PLANT5', 'BE-3', canalAt, 'Plantkanaal'),
+    ];
+    const plantedIds = plantedStations.map((s) => s.id);
+    const plantedOverrides = {
+      ...overridesFile,
+      stations: [
+        ...overridesFile.stations.filter((o) => o.station !== offRow.id),
+        ...plantedStations.slice(0, 4).map((s) => ({ station: s.id, waterbody: 'markermeer', reason: 'planted' })),
+        { station: 'be.spw.PLANT5', river: canalId, waterbody: 'ijsselmeer', reason: 'planted' },
+      ],
+    };
+    const withPlanted = place(
+      build.edges,
+      rivers,
+      [...stations.filter((s) => s.id !== offRow.id), ...plantedStations],
+      plantedOverrides,
+      null,
+      bodies,
+    );
+    const row = (id: string) => withPlanted.stations.find((s) => s.id === id) as PlacedStation;
+
+    it('places them as the lake and canal cases they are', SLOW, () => {
+      expect(offRow, 'a real off NL-1 structure row').toBeDefined();
+      for (const id of plantedIds.slice(0, 4))
+        expect(row(id), id).toMatchObject({
+          waterbody: 'markermeer',
+          waterbody_rule: 'waterbody_contains',
+          public: false,
+        });
+      expect(row('be.spw.PLANT5')).toMatchObject({ rule: 'canal_edge', canal: canalId, river: null, reach: null });
+      expect(row('be.spw.PLANT5').waterbody_rule).toBe('waterbody_too_far');
+    });
+
+    it('keeps them out of every public output, ids, names and canaries', SLOW, () => {
+      const dir = outputs(withPlanted);
+      const files = {
+        reaches: read(dir, `reaches-${VERSION}.json`),
+        download: gunzipSync(readFileSync(join(dir, `rivers-${VERSION}.geojson.gz`))).toString('utf8'),
+        snap: read(dir, 'snap-report.json'),
+        waterbodies: read(dir, 'waterbodies.geojsonseq'),
+        canals: read(dir, 'canals.geojsonseq'),
+        tiles: read(dir, 'rivers.geojsonseq'),
+      };
+      const reaches = JSON.parse(files.reaches) as {
+        stations: { id: string }[];
+        waterbodies: { id: string; stations: string[] }[];
+      };
+      const markermeer = reaches.waterbodies.find((w) => w.id === 'markermeer');
+      expect(markermeer?.stations.length).toBeGreaterThan(0);
+      for (const id of plantedIds) {
+        expect(
+          reaches.stations.map((s) => s.id),
+          id,
+        ).not.toContain(id);
+        for (const w of reaches.waterbodies) expect(w.stations, `${w.id} lists ${id}`).not.toContain(id);
+      }
+      for (const [what, text] of Object.entries(files)) {
+        expect(
+          plantedIds.filter((id) => text.includes(id)),
+          `${what}: ids`,
+        ).toEqual([]);
+        expect(
+          ['Plantmeer', 'Plantkanaal'].filter((t) => text.includes(t)),
+          `${what}: names`,
+        ).toEqual([]);
+        expect(
+          CANARY_RENDERINGS.filter((c) => text.includes(c)),
+          `${what}: canary`,
+        ).toEqual([]);
+      }
+    });
+
+    it('gives the same public bytes as without them', SLOW, () => {
+      expect(publicBytes(withPlanted)).toEqual(full);
+    });
+
+    it('refuses a reference_station that is an owner or an off station', SLOW, () => {
+      for (const id of ['nl.canary.owner', offRow.id]) {
+        const input = {
+          file: {
+            ...bodies.file,
+            waterbodies: bodies.file.waterbodies.map((w) =>
+              w.id === 'markermeer' ? { ...w, reference_station: id } : w,
+            ),
+          },
+          areas: bodies.areas,
+        };
+        const p = place(
+          build.edges,
+          rivers,
+          [...stations.filter((s) => s.id !== offRow.id), ...plantedStations],
+          plantedOverrides,
+          null,
+          input,
+        );
+        expect(() => reachesFile(p, rivers, VERSION, osm), id).toThrowError(
+          expect.objectContaining({ code: 'reference_station_not_public' }),
+        );
+      }
+    });
   });
 });
 
@@ -772,7 +917,7 @@ describe('determinism and the generated file', () => {
   it('writes byte-identical files twice, and from the stations in reverse order', SLOW, () => {
     const a = outputs(placed);
     const b = outputs(placed);
-    const c = outputs(place(build.edges, rivers, [...stations].reverse(), overridesFile));
+    const c = outputs(place(build.edges, rivers, [...stations].reverse(), overridesFile, null, bodies));
     const names = readdirSync(a).sort();
     expect(names).toEqual(
       [
@@ -780,6 +925,8 @@ describe('determinism and the generated file', () => {
         `rivers-${VERSION}.geojson.gz`,
         'reach-bins.geojsonseq',
         'rivers.geojsonseq',
+        'waterbodies.geojsonseq',
+        'canals.geojsonseq',
         'snap-report.json',
         'VERSION',
       ].sort(),

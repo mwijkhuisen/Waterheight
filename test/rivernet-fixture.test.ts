@@ -6,7 +6,6 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
-import { PENDING_WATERBODY_IDS } from '../packages/contracts/src/rivers.ts';
 import { slug } from '../scripts/gen-web-labels.ts';
 import {
   BuildError,
@@ -27,6 +26,7 @@ import { place, readOverrides } from '../tools/geo/rivernet/place.ts';
 import { readSources } from '../tools/geo/rivernet/sources.ts';
 import { readStations } from '../tools/geo/rivernet/stations.ts';
 import { repoRoot } from './catalogue.ts';
+import { fixtureWaterbodies } from './rivernet-waterbodies.ts';
 
 // The P6a criterion on the committed fixture PBF's osmium exports (tools/geo/fixtures/README.md):
 // the graph is acyclic, the Pannerdensche Kop and the IJsselkop each have 2 downstream edges, the
@@ -298,8 +298,8 @@ describe('the fixture graph (P6a criterion)', () => {
     }
   });
 
-  it('lets no canal reach, station, river entry or label into a public output (P17a)', SLOW, () => {
-    const placed = place(edges, rivers, readStations(), readOverrides(rivers));
+  it('lets no canal reach, station, river entry or label into a public output (P17a)', SLOW, async () => {
+    const placed = place(edges, rivers, readStations(), readOverrides(rivers), null, await fixtureWaterbodies(rivers));
     expect(placed.reaches.filter((r) => canalIds.has(r.river))).toEqual([]);
     expect(placed.stations.filter((s) => s.river !== null && canalIds.has(s.river))).toEqual([]);
     const file = reachesFile(placed, rivers, '20261018', '2026-10-17T20:20:51Z');
@@ -352,10 +352,9 @@ describe('the fixture graph (P6a criterion)', () => {
       return false;
     };
 
-    it('resolves every mouth of rivers.yaml to a node of its river and a pending water body', () => {
+    it('resolves every mouth of rivers.yaml to a node of its river (the water body: validateWaterbodies)', () => {
       expect(mouths.map((m) => m.id)).toEqual((rivers.mouths ?? []).map((m) => m.id).sort());
       for (const m of mouths) {
-        expect(PENDING_WATERBODY_IDS as readonly string[], m.id).toContain(m.waterbody);
         expect(
           edges.some((e) => e.rivers.includes(m.river) && (e.from === m.node || e.to === m.node)),
           m.id,

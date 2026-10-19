@@ -53,6 +53,7 @@ const rivernet = (
       source_run: 'https://github.com/mwijkhuisen/Waterheight/actions/runs/1',
       ways_sha256: '0'.repeat(64),
       osm_replication_timestamp: '2026-10-01T00:00:00Z',
+      waterbodies_sha256: null,
     },
     stations: [...new Set(reaches.flatMap((r) => [r.up, r.down]).filter((s): s is string => s !== null))].map((id) => ({
       id,
@@ -64,6 +65,9 @@ const rivernet = (
       km_graph: null,
       km_to_nl_entry: null,
       nl_entry_node: null,
+      canal: null,
+      waterbody: null,
+      waterbody_rule: null,
     })),
     reaches: reaches.map((r) => {
       const [river, seq] = r.id.split('.') as [string, string];
@@ -154,6 +158,7 @@ beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), 'travel-'));
   mkdirSync(dir, { recursive: true });
   copyFileSync(new URL('rivers.yaml', REGISTRY_DIR), join(dir, 'rivers.yaml'));
+  copyFileSync(new URL('waterbodies.yaml', REGISTRY_DIR), join(dir, 'waterbodies.yaml'));
   writeFileSync(
     join(dir, 'rivernet.yaml'),
     rivernet([

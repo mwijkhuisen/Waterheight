@@ -3,7 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { parse, stringify } from 'yaml';
-import { ROOT, readSources, selection } from '../tools/geo/rivernet/sources.ts';
+import { validateRivers } from '../packages/contracts/src/rivers.ts';
+import { validateWaterbodies, type WaterbodiesFile, type Waterbody } from '../packages/contracts/src/waterbodies.ts';
+import { probeNames, ROOT, readSources, selection, waterbodyIds } from '../tools/geo/rivernet/sources.ts';
 
 const IDS = [
   'netherlands',
@@ -123,5 +125,56 @@ describe('selection', () => {
   });
   it('is empty without selections', () => {
     expect(selection({ rivers: [river(1, null, 'Q1')] }, { canal_traps: [] })).toEqual({ relations: 'r1\n', qids: '' });
+  });
+});
+
+describe('the water-body selection (P17b)', () => {
+  const body = (id: string, osm: Waterbody['osm'], names: Waterbody['names'] = {}): Waterbody => ({
+    id,
+    kind: 'lake',
+    name_nl: `${id} nl`,
+    name_en: `${id} en`,
+    wikidata: 'Q1',
+    osm,
+    names,
+    managed_level: true,
+    outflows: [],
+    reference_station: null,
+    evidence: ['https://example.org/e'],
+  });
+  const file = (...waterbodies: Waterbody[]): WaterbodiesFile => ({ version: 1, waterbodies });
+
+  it('lists the OSM objects, relations first, each by number, and no point-only body', () => {
+    const f = file(
+      body('a', { type: 'way', id: 30 }),
+      body('b', { type: 'relation', id: 200 }),
+      body('c', null),
+      body('d', { type: 'way', id: 4 }),
+      body('e', { type: 'relation', id: 9 }),
+    );
+    expect(waterbodyIds(f)).toBe('r9\nr200\nw4\nw30\n');
+    expect(waterbodyIds(file(body('c', null)))).toBe('');
+  });
+
+  it('names every name_nl and published spelling once, sorted', () => {
+    const f = file(
+      body('a', null, { 'NL-1': ['Markermeer', 'IJmeer'], 'NL-2': ['Markermeer'] }),
+      body('b', null, { 'NL-1': ['Rivière'] }),
+    );
+    expect(probeNames(f)).toBe('IJmeer\nMarkermeer\nRivière\na nl\nb nl\n');
+  });
+
+  it('gives extract.sh lines its patterns accept from the committed registry/waterbodies.yaml', () => {
+    const rivers = validateRivers(parse(readFileSync(join(ROOT, 'registry/rivers.yaml'), 'utf8'))).rivers;
+    const { waterbodies } = validateWaterbodies(
+      parse(readFileSync(join(ROOT, 'registry/waterbodies.yaml'), 'utf8')),
+      rivers ?? null,
+    );
+    expect(waterbodies).toBeDefined();
+    const f = waterbodies as WaterbodiesFile;
+    // the shell checks: `^[rw][1-9][0-9]*$` per id line, and per probe name ASCII letters, space, hyphen, apostrophe
+    // or a non-ASCII character
+    expect(waterbodyIds(f)).toMatch(/^([rw][1-9][0-9]*\n)+$/);
+    for (const n of probeNames(f).split('\n').slice(0, -1)) expect(n).toMatch(/^(?:[A-Za-z' -]|\P{ASCII})+$/u);
   });
 });

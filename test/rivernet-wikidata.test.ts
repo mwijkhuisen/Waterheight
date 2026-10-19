@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import fc from 'fast-check';
 import { HttpResponse, http } from 'msw';
 import { describe, expect, it } from 'vitest';
@@ -143,5 +145,55 @@ describe('Wikidata lookup', () => {
         }
       }),
     );
+  });
+});
+
+describe('Wikidata lookup, water-body variant (P17b)', () => {
+  const row = {
+    item: { type: 'uri', value: 'http://www.wikidata.org/entity/Q1' },
+    label: { type: 'literal', value: 'Meer', 'xml:lang': 'nl' },
+    coord: { type: 'literal', value: 'Point(5.4 52.8)' },
+    inst: { type: 'uri', value: 'http://www.wikidata.org/entity/Q23397' },
+    outflow: { type: 'uri', value: 'http://www.wikidata.org/entity/Q2' },
+  };
+  const l = [{ lang: 'nl', label: 'Meer' }];
+
+  it('asks for P625, P31 and P201 and keeps the river query unchanged', () => {
+    expect(buildQuery(l, 'waterbody')).toMatch(/wdt:P625[\s\S]*wdt:P31[\s\S]*wdt:P201[\s\S]*BOUND\(\?coord\)/);
+    expect(buildQuery(l)).toBe(buildQuery(l, 'river'));
+    expect(buildQuery(l)).not.toContain('P625');
+  });
+
+  it('groups coordinate, instance and outflow; a bad point is bad_value', () => {
+    const other = { ...row, inst: { ...row.inst, value: 'http://www.wikidata.org/entity/Q3' } };
+    const got = groupCandidates(l, [row, other], 'waterbody');
+    expect(got[0]?.candidates[0]).toMatchObject({
+      qid: 'Q1',
+      coords: ['5.4,52.8'],
+      instances: ['Q23397', 'Q3'],
+      outflows: ['Q2'],
+    });
+    const bad = { ...row, coord: { type: 'literal', value: 'x' } };
+    expect(() => groupCandidates(l, [bad], 'waterbody')).toThrow(LookupError);
+  });
+
+  it('--labels and --kind select the file and the query', async () => {
+    const queries: string[] = [];
+    server.use(
+      http.get(WIKIDATA_ENDPOINT, ({ request }) => {
+        queries.push(new URL(request.url).searchParams.get('query') ?? '');
+        return new HttpResponse(empty);
+      }),
+    );
+    const out = join(mkdtempSync(join(tmpdir(), 'wd-')), 'o.json');
+    const env = { RWS_DOMAIN: 'example.org', RWS_CONTACT_EMAIL: 'a@example.org' };
+    const args = ['--labels', 'tools/geo/rivernet/waterbody-labels.txt', '--kind', 'waterbody', '--out', out];
+    expect(await run(args, env, deps, () => {})).toBe(0);
+    expect(queries[0]).toContain('"IJsselmeer"@nl');
+    expect(queries[0]).toContain('P625');
+    expect(await run(['--kind', 'lake', '--out', out], env, deps, () => {})).toBe(64);
+    // A labels file outside tools/geo/rivernet is refused before anything is read (review R2-4).
+    for (const f of ['../../../etc/passwd', 'registry/rivers.yaml', '/etc/hostname', 'tools/geo/rivernet'])
+      expect(await run(['--labels', f, '--out', out], env, deps, () => {}), f).toBe(64);
   });
 });

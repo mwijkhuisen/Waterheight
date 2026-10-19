@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KM_DIRECTIONS, PENDING_WATERBODY_IDS, validateRivers } from '../src/index.ts';
+import { KM_DIRECTIONS, validateRivers } from '../src/index.ts';
 
 // registry/rivers.yaml (P6a): the schema and its cross-checks, on a small in-test document.
 
@@ -119,7 +119,6 @@ describe('rivers.yaml kind, tidal zone and mouths (P17a)', () => {
 
   it('accepts kind, tidal_zone and mouths, all optional', () => {
     expect(problems(p17a())).toBe('');
-    expect(PENDING_WATERBODY_IDS).toEqual(['eems-dollard', 'ketelmeer', 'noordzee', 'westerschelde', 'zwarte-meer']);
   });
 
   it('fails each mutation with its own problem', () => {
@@ -137,11 +136,6 @@ describe('rivers.yaml kind, tidal zone and mouths (P17a)', () => {
         'duplicate mouth id',
         (d) => (d.mouths = [mouth(), mouth({ river: 'rhine' })]),
         /mouths: duplicate mouth id waal-noordzee/,
-      ],
-      [
-        'unknown waterbody',
-        (d) => (d.mouths = [mouth({ waterbody: 'ijsselmeer' })]),
-        /mouths waal-noordzee: unknown waterbody ijsselmeer/,
       ],
       ['mouth max_m over 2 km', (d) => (d.mouths = [mouth({ max_m: 2001 })]), /max_m/],
       ['mouth unknown key', (d) => (d.mouths = [mouth({ name: 'Noordzee' })]), /name/],

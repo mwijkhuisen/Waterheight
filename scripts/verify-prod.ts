@@ -1203,6 +1203,14 @@ export function checkRiversReaches(
   else {
     const unknown = f.stations.filter((st) => !stationIds.has(st.id)).length;
     if (unknown > 0) problems.push(`${unknown} of ${f.stations.length} stations are not in /api/v1/stations`);
+    // Schema 2 (P17b): the water bodies name stations too, and a reference gauge is one of them.
+    const bodies = f.waterbodies ?? [];
+    const named = bodies.flatMap((w) => [
+      ...w.stations,
+      ...(w.reference_station_id === null ? [] : [w.reference_station_id]),
+    ]);
+    const unlisted = named.filter((id) => !stationIds.has(id)).length;
+    if (unlisted > 0) problems.push(`${unlisted} of ${named.length} water-body stations are not in /api/v1/stations`);
   }
   return problems.length === 0
     ? pass(check, `${m.current.reaches.file}: ${f.reaches.length} reaches, ${f.stations.length} stations, all public`)

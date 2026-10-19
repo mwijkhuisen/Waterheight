@@ -1,0 +1,60 @@
+# Golden water-body and channel list for P17b (D-3, R-2): 40 hand-checked public NL-1 stations, one per row, read from
+# registry/stations/nl-1.yaml (name, water_name, coordinates), the TABLE of scripts/rws-inventory.ts (class) and
+# registry/waterbodies.yaml / registry/rivers.yaml (the target). test/waterbody-snap.test.ts (written later) asserts every
+# row 100%: the expected water body, delta channel or graph canal after place() on the committed fixtures.
+#   station  registry station id
+#   target   the water-body id (lake, coast, scheldt, offshore) or the delta-channel / canal id (delta, canal) the station
+#            lands on; for lake, coast, scheldt and offshore it is the `waterbody`, for delta (and the two rows that carry
+#            both) the `river`, for canal the `canal` of rivernet.yaml
+#   class    the P15 water type of the TABLE (lake, coast, scheldt, offshore, delta, canal)
+#   reason   the evidence read from the station's row, one sentence (not copied from the override)
+# Rows that carry both an edge and a body: nl.rws.hellevoetsluis (river haringvliet + waterbody haringvliet) and
+# nl.rws.rilland.bath (river scheldt + waterbody westerschelde); target names the body for rilland.bath and the channel for
+# hellevoetsluis (its body is the same id). nl.rws.antwerpen is on the Zeeschelde above the border: river only, no body. Name matches (no override): nuldernauw, ketelhaven.ketelmeer,
+# lemmer.ijsselmeer, markermeer.midden, dinteloord.volkerak, eemshaven.waddenzee, oosterschelde.4. ramspolbrug.ramsdiep is an override (no Ramsdiep body since B4c).
+version: 1
+stations:
+  # lake (12)
+  - { station: nl.rws.nijkerk.nuldernauw, target: nuldernauw, class: lake, reason: "water_name Nuldernauw is the exact NL-1 spelling of the Nuldernauw body; the gauge (5.4753 E, 52.2628 N) lies inside the Nuldernauw polygon r1204375, 11 m from its edge on the extract of geo.yml run 39231149979 (OSM 2026-10-18)" }
+  - { station: nl.rws.ketelhaven.ketelmeer, target: ketelmeer, class: lake, reason: "water_name Ketelmeer, gauge at the Ketelhaven (5.7627 E, 52.5825 N) inside the Ketelmeer polygon r1316262, 62 m from its edge on the extract of geo.yml run 39231149979 (OSM 2026-10-18)" }
+  - { station: nl.rws.ramspolbrug.ramsdiep, target: ketelmeer, class: lake, reason: "water_name Ramsdiep names no body (no water polygon in OSM); the Ramsdiep flows into the Ketelmeer, and the gauge lies inside the Ketelmeer polygon r1316262, 38 m from its edge and 117 m from the Zwarte Meer polygon on the extract of geo.yml run 39231149979 (OSM 2026-10-18), so only an override gives the body" }
+  - { station: nl.rws.lemmer.ijsselmeer, target: ijsselmeer, class: lake, reason: "water_name IJsselmeer at the Lemmer outer harbour (5.71 E, 52.838 N), inside the IJsselmeer polygon r945096, 82 m from its edge on the extract of geo.yml run 39231149979 (OSM 2026-10-18)" }
+  - { station: nl.rws.markermeer.midden, target: markermeer, class: lake, reason: "water_name Markermeer, a gauge in mid-lake (5.2312 E, 52.5317 N): inside the Markermeer polygon r49368, 9766 m from its nearest edge on the extract of geo.yml run 39231149979 (OSM 2026-10-18)" }
+  - { station: nl.rws.dinteloord.volkerak, target: volkerak, class: lake, reason: "water_name Volkerak at Dinteloord (4.3165 E, 51.6529 N), inside the Volkerak polygon r1408100, 481 m from its edge on the extract of geo.yml run 39231149979 (OSM 2026-10-18)" }
+  - { station: nl.rws.kadoelen.zwanediep, target: zwarte-meer, class: lake, reason: "water_name Zwanediep is named by no body, but Kadoelen (5.9816 E, 52.6582 N) is the Zwanediep mouth into the Zwarte Meer, 293 m from the Zwarte Meer polygon r1316264's shore on the extract of geo.yml run 39231149979 (OSM 2026-10-18), so only an override gives the body" }
+  - { station: nl.rws.almere.hollandsebrug, target: gooimeer, class: lake, reason: "no water_name; the Hollandse Brug at 5.1376 E, 52.3265 N crosses the Gooimeer between Almere and Muiden, 89 m from the Gooimeer polygon r1204456's shore on the extract of geo.yml run 39231149979 (OSM 2026-10-18)" }
+  - { station: nl.rws.bommenede, target: grevelingenmeer, class: lake, reason: "no water_name; Bommenede (3.9743 E, 51.7387 N) is a harbour on the Grevelingen, inside the Grevelingenmeer polygon r940363, 515 m from its edge on the extract of geo.yml run 39231149979 (OSM 2026-10-18)" }
+  - { station: nl.rws.kats.zandkreekdam, target: veerse-meer, class: lake, reason: "no water_name; Kats at the Zandkreekdam (3.8657 E, 51.5420 N) is the east end of the Veerse Meer, 40 m from the Veerse Meer polygon r1188130's shore on the extract of geo.yml run 39231149979 (OSM 2026-10-18), and the row is typed lake not scheldt" }
+  - { station: nl.rws.eemdijk, target: eemmeer, class: lake, reason: "no water_name; Eemdijk (5.3224 E, 52.2612 N) is where the Eem enters the Eemmeer, 1223 m from the Eemmeer polygon r1204424's shore on the extract of geo.yml run 39231149979 (OSM 2026-10-18), so the override raises waterbody_max_m to 1500" }
+  - { station: nl.rws.amsterdam.schellingwouderbrug, target: ijmeer, class: lake, reason: "no water_name; the Schellingwouderbrug (4.9675 E, 52.3787 N) spans the Buiten-IJ at the mouth of the IJmeer, inside the IJmeer polygon r1321001, 8 m from its edge on the extract of geo.yml run 39231149979 (OSM 2026-10-18)" }
+  # coast, scheldt, offshore (10)
+  - { station: nl.rws.eemshaven.waddenzee, target: waddenzee, class: coast, reason: "water_name Waddenzee at the Eemshaven (6.8217 E, 53.4744 N), on the Wadden Sea coast of Groningen" }
+  - { station: nl.rws.haringvliet.10, target: noordzee, class: coast, reason: "water_name Haringvliet but at 3.8606 E, 51.8628 N, about 14 km west of the Haringvliet sluices in the open sea, so the override gives Noordzee against the name" }
+  - { station: nl.rws.delfzijl, target: eems-dollard, class: coast, reason: "Delfzijl (6.931 E, 53.328 N) is the Ems-Dollard port; the existing entry leaves it without an edge and only the body is added" }
+  - { station: nl.rws.hoekvanholland, target: noordzee, class: coast, reason: "Hoek van Holland (4.1198 E, 51.9769 N) is the sea end of the Nieuwe Waterweg; unsnapped from the edge graph, the North Sea by override" }
+  - { station: nl.rws.scheveningen, target: noordzee, class: coast, reason: "Scheveningen (4.2636 E, 52.0990 N) is on the open Holland coast" }
+  - { station: nl.rws.rilland.bath, target: westerschelde, class: scheldt, reason: "Rilland, Bath (4.2101 E, 51.3988 N) is on the Westerschelde just below the Belgian border (catalogue §3.4), placed on the scheldt edge 397 m away and inside the Westerschelde bbox" }
+  - { station: nl.rws.oosterschelde.4, target: oosterschelde, class: scheldt, reason: "water_name Oosterschelde at 3.6934 E, 51.6551 N, in the middle of the Oosterschelde bbox" }
+  - { station: nl.rws.yerseke, target: oosterschelde, class: scheldt, reason: "no water_name; Yerseke (4.0751 E, 51.5062 N) is a harbour on the south shore of the Oosterschelde" }
+  - { station: nl.rws.texel.oudeschild, target: waddenzee, class: coast, reason: "no water_name; Oudeschild (4.8502 E, 53.0388 N) is the Texel harbour on the Wadden Sea side" }
+  - { station: nl.rws.europlatform, target: noordzee, class: offshore, reason: "Europlatform (3.2751 E, 51.9978 N) is an offshore platform, series cm MSL, about 58 km west of Hoek van Holland" }
+  # delta (10)
+  - { station: nl.rws.gouda.hollandscheijssel, target: hollandse-ijssel, class: delta, reason: "water_name Hollandsche IJssel (the old spelling of KG-418) and the gauge at Gouda (4.7197 E, 52.0066 N) is 20 m from the hollandse-ijssel edge" }
+  - { station: nl.rws.hank.bergschemaas, target: bergsche-maas, class: delta, reason: "water_name Bergsche Maas at Hank (4.894 E, 51.7191 N), 20 m from the bergsche-maas edge" }
+  - { station: nl.rws.hellevoetsluis, target: haringvliet, class: delta, reason: "Hellevoetsluis (4.1282 E, 51.8197 N) is on the Haringvliet, 309 m from its channel edge, and the Haringvliet is also a water body (R-4)" }
+  - { station: nl.rws.zuidland.spui, target: spui, class: delta, reason: "water_name Spui at Zuidland (4.2829 E, 51.8056 N), 187 m from the spui edge" }
+  - { station: nl.rws.spijkenisse.oudemaas, target: oude-maas, class: delta, reason: "water_name Oude Maas at Spijkenisse (4.334 E, 51.8617 N), 221 m from the oude-maas edge" }
+  - { station: nl.rws.rotterdam.nieuwemaas.boerengat, target: nieuwe-maas, class: delta, reason: "water_name Nieuwe Maas at the Boerengat (4.5003 E, 51.9184 N), 27 m from the nieuwe-maas edge" }
+  - { station: nl.rws.willemstad.hollandschdiep, target: hollandsch-diep, class: delta, reason: "water_name Hollandsch Diep at Willemstad (4.4069 E, 51.6964 N), 1607 m from the channel line in a water about 2 km wide, so max_m 2000 is needed" }
+  - { station: nl.rws.dordrecht.oudemaas.benedenmerwede, target: oude-maas, class: delta, reason: "the code reads place.water.detail, so the Oude Maas at the mouth of the Beneden Merwede (4.671 E, 51.82 N), 150 m against the Beneden Merwede at 178 m" }
+  - { station: nl.rws.waalwijk, target: bergsche-maas, class: delta, reason: "Waalwijk (5.0749 E, 51.7124 N) is on the Bergsche Maas according to the TABLE comment, 567 m from the line, so max_m 1000 is needed" }
+  - { station: nl.rws.vlaardingen, target: nieuwe-maas, class: delta, reason: "Vlaardingen (4.349 E, 51.8996 N) is the town on the north bank of the Nieuwe Maas, 238 m from the nieuwe-maas edge" }
+  # canal (8)
+  - { station: nl.rws.veghel.sluis4.boven, target: zuid-willemsvaart, class: canal, reason: "lock 4 at Veghel (5.5323 E, 51.6083 N) of the Zuid-Willemsvaart, 1 m from the zuid-willemsvaart edge" }
+  - { station: nl.rws.haghorst.sluis4.boven, target: wilhelminakanaal, class: canal, reason: "lock 4 at Haghorst (5.2077 E, 51.4982 N) of the Wilhelminakanaal, 13 m from its edge, while the lock-4 gauges at Veghel belong to the Zuid-Willemsvaart" }
+  - { station: nl.rws.hengelo.sluis.beneden, target: twentekanaal, class: canal, reason: "the Hengelo lock (6.802 E, 52.2464 N), 1 m from the twentekanaal edge" }
+  - { station: nl.rws.weesp.amsterdamrijnkanaal, target: amsterdam-rijnkanaal, class: canal, reason: "the code names the Amsterdam-Rijnkanaal at Weesp (5.0188 E, 52.3168 N), 1 m from its edge" }
+  - { station: nl.rws.nijmegen.maaswaalkanaal.inlaatweurt, target: maas-waalkanaal, class: canal, reason: "the code names the Maas-Waalkanaal, intake Weurt (5.8115 E, 51.8411 N), 46 m from its edge" }
+  - { station: nl.rws.sasvangent, target: kanaal-gent-terneuzen, class: canal, reason: "Sas van Gent (3.8075 E, 51.2303 N) is on the Kanaal Gent-Terneuzen, 29 m from its edge" }
+  - { station: nl.rws.panheel.sluis.boven, target: kanaal-wessem-nederweert, class: canal, reason: "the Panheel lock (5.856 E, 51.1761 N) at the head of the Kanaal Wessem-Nederweert, 2 m from its edge" }
+  - { station: nl.rws.dorkwerd.reitdiep, target: reitdiep, class: canal, reason: "the code names the Reitdiep at Dorkwerd (6.5092 E, 53.2565 N), 11 m from its edge" }

@@ -4104,6 +4104,41 @@ describe('verify-prod: the rivers (P6b)', () => {
     expect(checkRiversReaches(m, undefined, ids).ok).toBe(false);
   });
 
+  it('a schema 2 reaches file: the water-body stations and reference gauges are listed too', () => {
+    const body = (stations: string[], reference: string | null) => ({
+      id: 'ijsselmeer',
+      kind: 'lake' as const,
+      name_nl: 'IJsselmeer',
+      name_en: 'IJsselmeer',
+      stations,
+      reference_station_id: reference,
+      outflows: [],
+    });
+    const v2 = (b: ReturnType<typeof body>) =>
+      reachesDoc({
+        schema_version: 2,
+        waterbodies: [b],
+        mouths: [{ id: 'rhine-mouth', river_id: 'rhine', waterbody_id: 'ijsselmeer' }],
+      });
+    const ids = new Set(['nl.rws.lobith', 'nl.rws.lake-a', 'nl.rws.lake-b']);
+    expect(
+      checkRiversReaches(m, jsonPage(v2(body(['nl.rws.lake-a', 'nl.rws.lake-b'], 'nl.rws.lake-a')), TILE_CACHE), ids),
+    ).toMatchObject({
+      ok: true,
+    });
+    expect(checkRiversReaches(m, jsonPage(v2(body([], null)), TILE_CACHE), ids).ok).toBe(true);
+    expect(
+      checkRiversReaches(m, jsonPage(v2(body(['nl.rws.lake-a', 'nl.rws.zz'], null)), TILE_CACHE), ids).detail,
+    ).toBe('1 of 2 water-body stations are not in /api/v1/stations');
+    expect(checkRiversReaches(m, jsonPage(v2(body(['nl.rws.zz'], 'nl.rws.zz')), TILE_CACHE), ids).detail).toBe(
+      '2 of 2 water-body stations are not in /api/v1/stations',
+    );
+    // schema 2 without its keys is an inconsistency of the contract's own check
+    expect(checkRiversReaches(m, jsonPage(reachesDoc({ schema_version: 2 }), TILE_CACHE), ids).detail).toMatch(
+      /1 inconsistencies \(first: schema 2 needs/,
+    );
+  });
+
   it('the download: gzip data without a transfer coding, immutable, attribution and licence before "features"', () => {
     const range = downloadPart(GEOJSON_HEAD);
     expect(checkRiversDownload(m, downloadHead(), range)).toMatchObject({ check: 'rivers download', ok: true });

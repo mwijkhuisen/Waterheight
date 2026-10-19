@@ -74,12 +74,10 @@ export const River = z.strictObject({
 });
 export type River = z.infer<typeof River>;
 
-/** The water-body ids a mouth may name until P17b's water-body file (registry/waterbodies.yaml) replaces this list. */
-export const PENDING_WATERBODY_IDS = ['eems-dollard', 'ketelmeer', 'noordzee', 'westerschelde', 'zwarte-meer'] as const;
-
 /**
  * Where a river ends in the sea or a lake (P17a): the node of the river's own edges nearest to `at`, at most `max_m`
- * away (as nl_entry), in the water body `waterbody`.
+ * away (as nl_entry), in the water body `waterbody` (an id of registry/waterbodies.yaml, checked by
+ * validateWaterbodies, P17b).
  */
 export const Mouth = z.strictObject({
   id: Slug,
@@ -193,8 +191,6 @@ export function validateRivers(input: unknown): { problems: string[]; rivers?: R
   for (const m of f.mouths ?? []) {
     dup('mouth id', mouths, m.id, 'mouths');
     if (!parent.has(m.river)) problems.push(`mouths ${m.id}: unknown river ${m.river}`);
-    if (!(PENDING_WATERBODY_IDS as readonly string[]).includes(m.waterbody))
-      problems.push(`mouths ${m.id}: unknown waterbody ${m.waterbody}`);
   }
   const pairs = new Set<string>();
   for (const t of f.travel_times ?? []) {

@@ -11,6 +11,8 @@ import {
   validateRivers,
   validateStations,
   validateTwins,
+  validateWaterbodies,
+  type WaterbodiesFile,
 } from '@rws/contracts';
 import { durationMs, SchemaDrift, type SeriesDecl } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
@@ -129,7 +131,11 @@ export function readRegistry(
  * registry/rivers.yaml and the generated registry/rivernet.yaml (P6b), for `migrate` only: readRegistry feeds capture
  * and load, which a stale generated file must never stop. rivernet is null when the file does not exist.
  */
-export function readRiverRegistry(dir: URL = REGISTRY_DIR): { rivers: RiversFile; rivernet: RivernetFile | null } {
+export function readRiverRegistry(dir: URL = REGISTRY_DIR): {
+  rivers: RiversFile;
+  rivernet: RivernetFile | null;
+  waterbodies: WaterbodiesFile | null;
+} {
   const yaml = (name: string) => parse(readFileSync(new URL(name, dir), 'utf8'));
   const rivers = validateRivers(yaml('rivers.yaml'));
   const problems = rivers.problems.map((p) => `rivers.yaml: ${p}`);
@@ -139,10 +145,18 @@ export function readRiverRegistry(dir: URL = REGISTRY_DIR): { rivers: RiversFile
     problems.push(...r.problems.map((p) => `rivernet.yaml: ${p}`));
     rivernet = r.rivernet ?? null;
   }
+  const w = validateWaterbodies(yaml('waterbodies.yaml'), rivers.rivers ?? null);
+  problems.push(...w.problems.map((p) => `waterbodies.yaml: ${p}`));
+  const waterbodies = w.waterbodies ?? null;
+  // A generated rivernet row names only bodies of the file; a stale one fails here, not on the foreign key.
+  const bodies = new Set(waterbodies?.waterbodies.map((b) => b.id));
+  for (const s of rivernet?.stations ?? [])
+    if (waterbodies !== null && s.waterbody !== null && !bodies.has(s.waterbody))
+      problems.push(`rivernet.yaml: ${s.id}: unknown waterbody ${s.waterbody}`);
   if (problems.length > 0 || rivers.rivers === undefined) {
     throw new RegistryError(`registry is not valid:\n${problems.slice(0, 20).join('\n')}`);
   }
-  return { rivers: rivers.rivers, rivernet };
+  return { rivers: rivers.rivers, rivernet, waterbodies };
 }
 
 const ROLE_PRECEDENCE = { primary: 0, twin: 1, mirror: 2 } as const;
@@ -236,7 +250,7 @@ function nl4Bounds(input: RegistryInput, idOf: ReadonlyMap<string, number>): Bou
 export async function syncRegistry(
   db: Kysely<DB>,
   input: RegistryInput,
-  rivers?: { rivers: RiversFile; rivernet: RivernetFile | null },
+  rivers?: { rivers: RiversFile; rivernet: RivernetFile | null; waterbodies?: WaterbodiesFile | null },
 ): Promise<SyncResult> {
   const net = rivers?.rivernet ?? null;
   const netStation = new Map((net?.stations ?? []).map((s) => [s.id, s]));
@@ -302,6 +316,26 @@ export async function syncRegistry(
         await sql`UPDATE river SET parent_river_id = ${r.parent_river_id} WHERE id = ${r.id}`.execute(tx);
       }
     }
+    // Water bodies: before the stations, which point at them. Their reference gauge (D27) is a public registry
+    // station or null; the column is not stored (circular), the check is.
+    const wbs = rivers?.waterbodies?.waterbodies ?? null;
+    if (wbs !== null) {
+      for (const w of wbs) {
+        const ref = w.reference_station;
+        if (
+          ref !== null &&
+          !input.stations.some((r) => r.id === ref && r.audience === 'public' && r.role === 'primary')
+        )
+          throw new RegistryError(`waterbody ${w.id}: reference_station is not a public primary station`);
+        const names = JSON.stringify({ nl: w.name_nl, en: w.name_en, sources: w.names });
+        await sql`
+          INSERT INTO waterbody (id, kind, name_nl, name_en, names, wikidata, managed_level)
+          VALUES (${w.id}, ${w.kind}, ${w.name_nl}, ${w.name_en}, ${names}::jsonb, ${w.wikidata}, ${w.managed_level})
+          ON CONFLICT (id) DO UPDATE SET kind = EXCLUDED.kind, name_nl = EXCLUDED.name_nl, name_en = EXCLUDED.name_en,
+                                         names = EXCLUDED.names, wikidata = EXCLUDED.wikidata,
+                                         managed_level = EXCLUDED.managed_level`.execute(tx);
+      }
+    }
     const stubRivers = new Set(input.stations.flatMap((r) => (r.river === null ? [] : [r.river])));
     for (const s of netStation.values()) if (s.river !== null) stubRivers.add(s.river);
     for (const river of stubRivers) {
@@ -334,7 +368,7 @@ export async function syncRegistry(
       );
       await sql`
         INSERT INTO station (id, name, water_name, country, lon, lat, operator_provider_id, river_id, km_official,
-                             km_system, flags, tier, reach_id, km_to_nl_entry, nl_entry_node)
+                             km_system, flags, tier, reach_id, km_to_nl_entry, nl_entry_node, waterbody_id)
         VALUES (${id}, ${one(
           rows.map((r) => r.name),
           'name',
@@ -366,7 +400,7 @@ export async function syncRegistry(
                     id,
                   ),
                 )}::jsonb, ${Math.min(...rows.map((r) => r.tier))},
-                NULL, ${rn?.km_to_nl_entry ?? null}, ${rn?.nl_entry_node ?? null})
+                NULL, ${rn?.km_to_nl_entry ?? null}, ${rn?.nl_entry_node ?? null}, ${rn?.waterbody ?? null})
         ON CONFLICT (id) DO UPDATE SET
           name = EXCLUDED.name, water_name = EXCLUDED.water_name, country = EXCLUDED.country, lon = EXCLUDED.lon,
           lat = EXCLUDED.lat, operator_provider_id = EXCLUDED.operator_provider_id, river_id = EXCLUDED.river_id,
@@ -376,12 +410,22 @@ export async function syncRegistry(
           km_to_nl_entry = CASE WHEN ${net === null}::boolean THEN station.km_to_nl_entry
                                 ELSE EXCLUDED.km_to_nl_entry END,
           nl_entry_node = CASE WHEN ${net === null}::boolean THEN station.nl_entry_node
-                               ELSE EXCLUDED.nl_entry_node END`.execute(tx);
+                               ELSE EXCLUDED.nl_entry_node END,
+          waterbody_id = CASE WHEN ${net === null}::boolean THEN station.waterbody_id
+                              ELSE EXCLUDED.waterbody_id END`.execute(tx);
       await sql`
         INSERT INTO station_alias (station_id, source_id, provider_code, role, precedence)
         VALUES (${id}, ${source}, ${first.provider_code}, ${role}, ${ROLE_PRECEDENCE[role]})
         ON CONFLICT (source_id, provider_code) DO UPDATE SET
           station_id = EXCLUDED.station_id, role = EXCLUDED.role, precedence = EXCLUDED.precedence`.execute(tx);
+    }
+
+    // Bodies that left the file: drop every station reference, then the rows.
+    if (wbs !== null) {
+      const have = wbs.map((w) => w.id);
+      const gone = sql`SELECT id FROM waterbody WHERE NOT (id = ANY(${have}::text[]))`;
+      await sql`UPDATE station SET waterbody_id = NULL WHERE waterbody_id IN (${gone})`.execute(tx);
+      await sql`DELETE FROM waterbody WHERE id IN (${gone})`.execute(tx);
     }
 
     let reaches = 0;

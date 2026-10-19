@@ -188,7 +188,7 @@ done
 [[ $(head -c 7 "$work/$tiles_name") == PMTiles && $(od -An -tu1 -j7 -N1 "$work/$tiles_name" | tr -d ' ') == 3 ]] ||
   die "$tag: $tiles_name is not a PMTiles v3 archive"
 gzip -t "$work/$dl_name" || die "$tag: $dl_name is not valid gzip"
-jq -e --arg v "$ver" '.schema_version == 1 and .version == $v' "$work/$reaches_name" >/dev/null 2>&1 ||
+jq -e --arg v "$ver" '(.schema_version == 1 or .schema_version == 2) and .version == $v' "$work/$reaches_name" >/dev/null 2>&1 ||
   die "$tag: $reaches_name has another schema_version or version"
 
 if ((DRY_RUN)); then

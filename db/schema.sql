@@ -1340,6 +1340,7 @@ CREATE TABLE public.station (
     nl_entry_node text,
     flags jsonb DEFAULT '{}'::jsonb NOT NULL,
     tier smallint NOT NULL,
+    waterbody_id text,
     CONSTRAINT station_check CHECK (((lon IS NULL) = (lat IS NULL))),
     CONSTRAINT station_country_check CHECK ((country = ANY (ARRAY['NL'::text, 'DE'::text, 'BE'::text, 'FR'::text, 'LU'::text, 'CH'::text]))),
     CONSTRAINT station_id_check CHECK (((id ~ '^[a-z]{2}\.[a-z0-9-]+\.[A-Za-z0-9._-]+$'::text) AND (length(id) <= 80))),
@@ -2175,6 +2176,23 @@ ALTER TABLE public.warning_area ALTER COLUMN id ADD GENERATED ALWAYS AS IDENTITY
 
 
 --
+-- Name: waterbody; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.waterbody (
+    id text NOT NULL,
+    kind text NOT NULL,
+    name_nl text NOT NULL,
+    name_en text NOT NULL,
+    names jsonb DEFAULT '{}'::jsonb NOT NULL,
+    wikidata text NOT NULL,
+    managed_level boolean NOT NULL,
+    CONSTRAINT waterbody_id_check CHECK ((id ~ '^[a-z][a-z0-9-]*$'::text)),
+    CONSTRAINT waterbody_kind_check CHECK ((kind = ANY (ARRAY['lake'::text, 'closed_estuary'::text, 'estuary'::text, 'sea'::text])))
+);
+
+
+--
 -- Name: publish_dirty id; Type: DEFAULT; Schema: public; Owner: -
 --
 
@@ -2475,6 +2493,14 @@ ALTER TABLE ONLY public.warning_area
 
 ALTER TABLE ONLY public.warning_area
     ADD CONSTRAINT warning_area_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: waterbody waterbody_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.waterbody
+    ADD CONSTRAINT waterbody_pkey PRIMARY KEY (id);
 
 
 --
@@ -2829,6 +2855,14 @@ ALTER TABLE ONLY public.station
 
 
 --
+-- Name: station station_waterbody_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.station
+    ADD CONSTRAINT station_waterbody_id_fkey FOREIGN KEY (waterbody_id) REFERENCES public.waterbody(id);
+
+
+--
 -- Name: tide_label tide_label_series_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2915,4 +2949,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261115000001'),
     ('20261115000002'),
     ('20261115000003'),
-    ('20261116000001');
+    ('20261116000001'),
+    ('20261117000001');

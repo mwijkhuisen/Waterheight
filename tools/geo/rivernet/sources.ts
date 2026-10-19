@@ -2,12 +2,14 @@
 // validated. Every URL is https on one of four hosts. CLI:
 //
 //   node tools/geo/rivernet/sources.ts --ids                  # the region ids, one per line
-//   node tools/geo/rivernet/sources.ts --selection <dir>      # <dir>/relations.txt and <dir>/qids.txt for osmium
+//   node tools/geo/rivernet/sources.ts --selection <dir>      # <dir>/relations.txt and <dir>/qids.txt for osmium,
+//                                                             # and (P17b) <dir>/waterbodies.txt and <dir>/probe-names.txt
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parse } from 'yaml';
 import { z } from 'zod';
 import { validateRivers } from '../../../packages/contracts/src/rivers.ts';
+import { validateWaterbodies, type WaterbodiesFile } from '../../../packages/contracts/src/waterbodies.ts';
 
 export const ROOT = join(import.meta.dirname, '..', '..', '..');
 export const ALLOWED_HOSTS = [
@@ -99,6 +101,27 @@ export function selection(
   };
 }
 
+/**
+ * P17b: the osmium id file of the water-body polygons (`r<id>` or `w<id>` per line, relations first, each by number);
+ * a point-only body has none. Never part of relations.txt or qids.txt: the bodies are extracted on their own.
+ */
+export function waterbodyIds(file: WaterbodiesFile): string {
+  return file.waterbodies
+    .flatMap((w) => (w.osm === null ? [] : [w.osm]))
+    .sort((a, b) => (a.type === b.type ? a.id - b.id : a.type === 'relation' ? -1 : 1))
+    .map((o) => `${o.type[0]}${o.id}\n`)
+    .join('');
+}
+
+/** P17b: the names of the one-off OSM name probe (extract.sh with RWS_GEO_PROBE=1): every name_nl and published spelling. */
+export function probeNames(file: WaterbodiesFile): string {
+  const names = new Set(file.waterbodies.flatMap((w) => [w.name_nl, ...Object.values(w.names).flat()]));
+  return [...names]
+    .sort()
+    .map((n) => `${n}\n`)
+    .join('');
+}
+
 if (import.meta.main) {
   const [flag, dir, ...rest] = process.argv.slice(2);
   try {
@@ -112,9 +135,14 @@ if (import.meta.main) {
       const { problems, rivers } = validateRivers(parse(readFileSync(join(ROOT, 'registry/rivers.yaml'), 'utf8')));
       if (rivers === undefined) throw new Error(`registry/rivers.yaml is invalid (${problems.length} problems)`);
       const sel = selection(rivers, readSources());
+      const wb = validateWaterbodies(parse(readFileSync(join(ROOT, 'registry/waterbodies.yaml'), 'utf8')), rivers);
+      if (wb.waterbodies === undefined)
+        throw new Error(`registry/waterbodies.yaml is invalid (${wb.problems.length} problems)`);
       mkdirSync(dir, { recursive: true });
       writeFileSync(join(dir, 'relations.txt'), sel.relations);
       writeFileSync(join(dir, 'qids.txt'), sel.qids === '' ? '' : `${sel.qids}\n`);
+      writeFileSync(join(dir, 'waterbodies.txt'), waterbodyIds(wb.waterbodies));
+      writeFileSync(join(dir, 'probe-names.txt'), probeNames(wb.waterbodies));
     } else {
       console.error('usage: node tools/geo/rivernet/sources.ts --ids | --selection <dir>');
       process.exitCode = 64;
