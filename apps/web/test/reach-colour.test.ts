@@ -114,6 +114,7 @@ describe('no data', () => {
     const known = new Set(graph.stations.map((s) => s.id));
     for (const r of graph.reaches) {
       if (r.downstream.length === 0 || !r.downstream.every((d) => rivers.get(d) !== r.river_id)) continue;
+      if (r.flags?.tidal) continue; // a tidal reach is painted 'tidal' whatever flows into it (P17a: the delta channels)
       if (r.down_station_id !== null && known.has(r.down_station_id)) continue;
       expect(reachColour(reach(r.id), [ev(2), ev(3)], 'state'), r.id).toEqual({ k: 'nodata' });
     }

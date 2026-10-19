@@ -114,9 +114,14 @@ const entryNode = (id: string) => (net.entries.find((e) => e.id === id) as { nod
 // ---- reading the trap ways of the fixture (as test/rivernet-fixture.test.ts does) ----
 const allWays = await readWays(Readable.from([readFileSync(files.ways)]));
 const allRelations = parseOplRelations(readFileSync(files.relations, 'utf8'));
-const edgeWays = new Set(build.edges.map((e) => e.way));
+// place() drops every canal edge (P17a), so the edges of the network are the ones a trap must stay out of.
+const edgeWays = new Set([...net.edges.values()].map((e) => e.way));
 const trapWays = (name: string): WayFeature[] => {
-  const trap = readSources().canal_traps.find((t) => t.name === name);
+  // The Julianakanaal and the Zuid-Willemsvaart are `kind: canal` rows of rivers.yaml since P17a; the others stay traps.
+  const trap =
+    readSources().canal_traps.find((t) => t.name === name) ??
+    rivers.rivers.find((r) => r.kind === 'canal' && r.name_nl === name);
+  expect(trap, name).toBeDefined();
   const rs = allRelations.filter(
     (r) => r.id === trap?.osm_relation_id || (trap?.wikidata != null && r.tags.wikidata === trap.wikidata),
   );

@@ -97,7 +97,7 @@ describe('check-i18n: messages', () => {
 
   describe('the label catalogue', () => {
     /** A tree with one public and one owner source, one label each and one river, all present. */
-    const withRegistry = (opts: { nlText?: string; dropEn?: boolean; dropOwner?: boolean } = {}) => {
+    const withRegistry = (opts: { nlText?: string; dropEn?: boolean; dropOwner?: boolean; canal?: boolean } = {}) => {
       const key = 'lbl_de_6_station_m1';
       const nl: Record<string, string> = { [key]: 'Geen', river_rhine: 'Rijn' };
       const en: Record<string, string> = { [key]: 'None', river_rhine: 'Rhine' };
@@ -117,7 +117,10 @@ describe('check-i18n: messages', () => {
         join(root, 'registry/labels/BE-3.yaml'),
         'source: BE-3\nlabels:\n  - { scale: reference, code: P05, nl: Een, en: One }\n',
       );
-      writeFileSync(join(root, 'registry/rivers.yaml'), 'rivers:\n  - { id: rhine, name_nl: Rijn, name_en: Rhine }\n');
+      writeFileSync(
+        join(root, 'registry/rivers.yaml'),
+        `rivers:\n  - { id: rhine, name_nl: Rijn, name_en: Rhine }\n${opts.canal ? '  - { id: twentekanaal, name_nl: Twentekanaal, name_en: Twente Canal, kind: canal }\n' : ''}`,
+      );
       writeFileSync(
         join(root, 'apps/web/src/features/owner/labels.gen.ts'),
         opts.dropOwner ? 'export {};\n' : 'const a = { lbl_be_3_reference_p05: "x" };\n',
@@ -127,6 +130,9 @@ describe('check-i18n: messages', () => {
 
     it('passes when every label and river is in the catalogue', () => {
       expect(checkI18n(withRegistry())).toEqual([]);
+    });
+    it('needs no label for a canal row, as gen-web-labels writes none (P17a)', () => {
+      expect(checkI18n(withRegistry({ canal: true }))).toEqual([]);
     });
     it('fails on a registry label without an nl text', () => {
       expect(checkI18n(withRegistry({ nlText: 'x: 1' }))).toEqual([

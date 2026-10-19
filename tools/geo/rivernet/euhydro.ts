@@ -5,7 +5,8 @@ import { captureEnv, captureUserAgent } from '../../../apps/server/src/capture/e
 import { boundedJson } from '../../../packages/core/src/json.ts';
 import { ATTRIBUTION, ATTRIBUTION_URL, LICENCE } from './build.ts';
 
-// EU-Hydro QA (P6a, CI only): the digitised direction of every OSM reach is checked against EU-Hydro v1.3 segments
+// EU-Hydro QA (P6a, CI only): the digitised direction of every directed OSM reach (P17a: not the direction-`none`
+// edges of the tidal zone and canals, listed as unscored) is checked against EU-Hydro v1.3 segments
 // read through the EEA ArcGIS REST service. Only segment ids and verdicts are kept; no EU-Hydro geometry is written
 // and no provider text (`nameText`) is requested. Errors carry fixed codes only (invariant 3).
 
@@ -217,7 +218,14 @@ export async function fetchSegments(
 
 // ---------------------------------------------------------------- direction comparison
 
-export type Edge = { id: string; way: number; rivers: string[]; coords: [number, number][] };
+export type Edge = {
+  id: string;
+  way: number;
+  rivers: string[];
+  coords: [number, number][];
+  direction?: 'downstream' | 'none' | undefined;
+  direction_reason?: 'tidal_zone' | 'canal' | undefined;
+};
 export type Disagreement = { edge: string; way: number; rivers: string[]; segments: string[]; next_down: string[] };
 export type Comparison = {
   agree: number;
@@ -389,7 +397,8 @@ export const SOURCE_TEXT =
 export const MODIFICATIONS_TEXT =
   'Queried through the EEA ArcGIS REST service, generalised server-side (maxAllowableOffset 0.0002°); only segment identifiers and direction verdicts are kept; no EU-Hydro geometry is published';
 export const ENDORSEMENT_TEXT = 'No endorsement by the European Union is implied';
-export const AGREEMENT_BASIS = 'edges matched within 200 m (agree + disagree); unmatched edges are listed separately';
+export const AGREEMENT_BASIS =
+  'directed edges outside the tidal zone; canals without a direction are not scored; edges matched within 200 m (agree + disagree); unmatched edges are listed separately';
 
 /** JSON with sorted keys and 2-space indent. */
 export function canonicalJson(v: unknown): string {
@@ -410,7 +419,13 @@ const reachesSchema = z.object({
   features: z.array(
     z.object({
       geometry: z.object({ coordinates: z.array(point).min(2) }),
-      properties: z.object({ id: z.string(), way: z.number(), rivers: z.array(z.string()) }),
+      properties: z.object({
+        id: z.string(),
+        way: z.number(),
+        rivers: z.array(z.string()),
+        direction: z.enum(['downstream', 'none']).optional(),
+        direction_reason: z.enum(['tidal_zone', 'canal']).optional(),
+      }),
     }),
   ),
 });
@@ -425,9 +440,7 @@ export const publishedBuild = (report: unknown) => {
 
 export const readEdges = (file: string): Edge[] =>
   reachesSchema.parse(JSON.parse(readFileSync(file, 'utf8'))).features.map((f) => ({
-    id: f.properties.id,
-    way: f.properties.way,
-    rivers: f.properties.rivers,
+    ...f.properties,
     coords: f.geometry.coordinates,
   }));
 
@@ -516,8 +529,16 @@ export async function main(
     console.error('euhydro: reaches.geojson or build-report.json is unreadable');
     return 1;
   }
+  // One envelope of every edge (the request budget does not change); only directed edges are scored (P17a).
   const fetched = await fetchSegments(edgesBbox(edges), cfg, deps);
-  const cmp = compareDirections(edges, fetched.segments);
+  const cmp = compareDirections(
+    edges.filter((e) => e.direction !== 'none'),
+    fetched.segments,
+  );
+  const unscored = edges
+    .filter((e) => e.direction === 'none')
+    .map((e) => ({ edge: e.id, way: e.way, rivers: e.rivers, reason: e.direction_reason }))
+    .sort((a, b) => (a.edge < b.edge ? -1 : a.edge > b.edge ? 1 : 0));
   const report = {
     attribution: ATTRIBUTION,
     attribution_url: ATTRIBUTION_URL,
@@ -534,6 +555,8 @@ export async function main(
       ...(fetched.error ? { error: fetched.error } : {}),
       layers: fetched.layers_done,
       ...cmp,
+      unscored,
+      unscored_count: unscored.length,
     },
   };
   writeFileSync(join(dir as string, 'qa-report.json'), canonicalJson(report));

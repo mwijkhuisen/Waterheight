@@ -65,6 +65,22 @@ describe('gen-web-labels', () => {
     expect(index).not.toContain('lbl_be_3_reference_p05_x');
   });
 
+  it('gives a canal row no label before P17b; a row without kind is a river (P17a)', () => {
+    const root = tree(OK);
+    writeFileSync(
+      join(root, 'registry/rivers.yaml'),
+      'rivers:\n  - { id: sauer-sure, name_nl: Sûre, name_en: Sauer }\n  - { id: twentekanaal, name_nl: Twentekanaal, name_en: Twente Canal, kind: canal }\n  - { id: noord, name_nl: Noord, name_en: Noord, kind: delta_channel }\n',
+    );
+    const out = generate(root);
+    const nl = JSON.parse(out.get('apps/web/messages/nl.json') ?? '') as Record<string, string>;
+    expect(Object.keys(nl).filter((k) => k.startsWith('river_'))).toEqual([
+      'river_chip',
+      'river_noord',
+      'river_sauer_sure',
+    ]);
+    expect(out.get('apps/web/src/lib/labels/labels-index.gen.ts')).not.toContain('twentekanaal');
+  });
+
   it('is deterministic and --check detects drift', () => {
     const root = tree(OK);
     expect([...generate(root)]).toEqual([...generate(root)]);

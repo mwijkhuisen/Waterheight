@@ -43,19 +43,13 @@ nrw_stations:
   max_bytes: 2359296
 # Canal traps (P6b's snapping tests, catalogue §5.3 step 5): canals that run beside the rivers. They are in the
 # extract and the fixture so that P6b can prove no station snaps to them; the graph builder never makes them edges.
+# P17a: the canals with ID evidence (Julianakanaal, Zuid-Willemsvaart and the others) are `kind: canal` rows of
+# registry/rivers.yaml and so edges (direction none, not public before P17b); only the canals below stay traps.
 canal_traps:
-  - name: Julianakanaal
-    osm_relation_id: 5362867
-    wikidata: Q1712089
-    evidence: "Wikidata Q1712089 (P402 5362867), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts)"
   - name: Albertkanaal
     osm_relation_id: null
     wikidata: Q835090
     evidence: "Wikidata Q835090, SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); its P402 1424029 is the canal's multipolygon area, not a waterway relation (OSM API relation multi-fetch 2026-10-02), so ways and relations are selected by the wikidata tag"
-  - name: Zuid-Willemsvaart
-    osm_relation_id: 2243765
-    wikidata: Q228617
-    evidence: "Wikidata Q228617 (P402 2243765), SPARQL 2026-10-02 (tools/geo/rivernet/lookup-wikidata.ts); the canal at Smeermaas"
   - name: Grand Canal d'Alsace
     osm_relation_id: 537130
     wikidata: Q382574

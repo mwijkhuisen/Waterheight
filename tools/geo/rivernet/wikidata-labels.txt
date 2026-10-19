@@ -453,3 +453,79 @@ de:Aach
 de:Goldach
 de:Seez
 de:Rein da Sumvitg
+# P17a: lower-delta channels, Zwarte Water, Het Scheur and the RWS-gauged canals (issue #65)
+nl:Boven-Merwede
+nl:Bovenmerwede
+nl:Beneden-Merwede
+nl:Benedenmerwede
+nl:Nieuwe Merwede
+nl:Noord
+nl:Oude Maas
+nl:Nieuwe Maas
+nl:Nieuwe Waterweg
+nl:Hollandsche IJssel
+nl:Hollandse IJssel
+nl:Dordtsche Kil
+nl:Dordtse Kil
+nl:Spui
+nl:Amer
+nl:Bergsche Maas
+nl:Bergse Maas
+nl:Hollandsch Diep
+nl:Hollands Diep
+nl:Haringvliet
+nl:Het Scheur
+nl:Scheur
+nl:Zwarte Water
+nl:Zwartewater
+en:Upper Merwede
+en:Lower Merwede
+en:New Merwede
+en:Oude Maas
+en:Nieuwe Maas
+en:New Waterway
+en:Hollandse IJssel
+en:Dordtse Kil
+en:Bergse Maas
+en:Hollands Diep
+en:Zwarte Water
+nl:Noordzeekanaal
+en:North Sea Canal
+nl:Amsterdam-Rijnkanaal
+en:Amsterdam-Rhine Canal
+nl:Lekkanaal
+nl:Maas-Waalkanaal
+en:Maas-Waal Canal
+nl:Lateraalkanaal
+nl:Lateraalkanaal West
+nl:Kanaal Wessem-Nederweert
+nl:Wilhelminakanaal
+nl:Beatrixkanaal
+nl:Eindhovensch Kanaal
+nl:Eindhovens Kanaal
+nl:Noordervaart
+nl:Twentekanaal
+en:Twente Canal
+nl:Zijkanaal Almelo
+nl:Ommerkanaal
+nl:Hoogeveense Vaart
+nl:Meppelerdiep
+nl:Zwolle-IJsselkanaal
+nl:Reevediep
+nl:Eemskanaal
+nl:Oude Eemskanaal
+en:Eems Canal
+nl:Slochterdiep
+nl:Verbindingskanaal
+nl:Reitdiep
+nl:Van Starkenborghkanaal
+en:Van Starkenborgh Canal
+nl:Prinses Margrietkanaal
+en:Princess Margriet Canal
+nl:Johan Frisokanaal
+nl:Schelde-Rijnkanaal
+en:Scheldt-Rhine Canal
+nl:Kanaal Gent-Terneuzen
+en:Ghent-Terneuzen Canal
+nl:Mauriksche Wetering
+nl:Bathse Spuikanaal

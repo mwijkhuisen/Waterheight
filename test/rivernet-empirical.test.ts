@@ -110,6 +110,14 @@ describe('place() with an empirical file (synthetic graph)', () => {
     ]);
   });
 
+  it('attaches nothing to a reach of the tidal zone (P17a), and makes no derived pair of it', () => {
+    const zoned = riversFile([river({ id: 'alpha', kind: 'delta_channel', tidal_zone: true })]);
+    const edges = A.map((e) => ({ ...e, direction: 'none' as const, direction_reason: 'tidal_zone' as const }));
+    const p = place(edges, zoned, stations, overrides(), file(pair()));
+    expect(reach(p, 'alpha.2')).toMatchObject({ up_station: 'de.t.1', down_station: 'de.t.2', travel_time_h: null });
+    expect(p.travel).toEqual([]);
+  });
+
   it('counts the classes of the pair in the source text', () => {
     const p = place(
       A,
