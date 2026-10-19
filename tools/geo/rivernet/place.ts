@@ -17,14 +17,16 @@ import {
 import type { WaterbodiesFile } from '../../../packages/contracts/src/waterbodies.ts';
 import { BuildError, type Edge, ROOT } from './build.ts';
 import { buildNetwork, byString, fromSource, type LonLat, type Network, toTargets } from './network.ts';
+import { contains, type PreparedArea, prepareArea, shoreDistance } from './polygon.ts';
 import { type BuiltReach, cutReaches } from './reaches.ts';
-import { nearestOnRiver, type Placement, snapStations } from './snap.ts';
+import { type EdgeIndex, nearestOnRiver, type Placement, snapStations } from './snap.ts';
 import type { StationInput } from './stations.ts';
 import { readWaterbodies, type WaterbodyInput } from './waterbodies.ts';
 
 // P6b placement (ADR-0012): every registry station snapped, given chainage and
 // a reach; the reaches cut at public stations only. Pure: graph edges, rivers,
-// stations and overrides in, the same result for the same input.
+// stations and overrides in, the same result for the same input. P17b: a station of a canal lies on the canal's
+// edge (`canal`, never a Placement: no reach or chainage), and every station may have a water body by identity.
 //
 // Chainage of a placed station:
 //   km_official  the operator's own km: a reviewed override (RWS rkm), else
@@ -104,6 +106,61 @@ export const EMPIRICAL_URL = 'https://github.com/mwijkhuisen/Waterheight/blob/ma
 export const empiricalSource = (p: TravelEmpirical['pairs'][number]): string =>
   `empirical: Δ${p.quantity} cross-correlation, ${Object.keys(p.classes).length}/3 flow classes (terciles at ${p.from_station}), ${p.years[0]}–${p.years[1]}`;
 
+/** Metres from a polygon's shore within which an identified station still belongs to it (an override may widen it). */
+export const WATERBODY_SHORE_M = 500;
+
+type BodyFields = Pick<PlacedStation, 'waterbody' | 'waterbody_rule' | 'waterbody_distance_m'>;
+const NO_BODY: BodyFields = { waterbody: null, waterbody_rule: null, waterbody_distance_m: null };
+const round1 = (m: number) => Math.round(m * 10) / 10;
+
+/**
+ * P17b: a station's water body, independent of its edge placement. Identity first (the station's `waterbody`
+ * override, else the one body whose `names[source]` holds its exact water name; geometry alone never assigns one),
+ * then the geometry decides: a polygon body inside or within the shore limit, a point-only body only inside its
+ * reviewed bbox (else a curation error).
+ */
+function waterbodyOf(
+  s: StationInput,
+  o: SnapOverridesFile['stations'][number] | undefined,
+  input: WaterbodyInput,
+  prepared: Map<string, PreparedArea>,
+): BodyFields {
+  const w = s.water_name;
+  const id =
+    o?.waterbody ?? input.file.waterbodies.find((b) => w !== null && (b.names[s.source] ?? []).includes(w))?.id;
+  if (id === undefined) return NO_BODY;
+  if (s.lon === null || s.lat === null) {
+    if (o?.waterbody !== undefined) throw new BuildError('waterbody_without_coordinates', [s.id]);
+    return NO_BODY;
+  }
+  const at: LonLat = [s.lon, s.lat];
+  const body = input.file.waterbodies.find((b) => b.id === id);
+  if (body === undefined) throw new BuildError('waterbody_unknown', [s.id]);
+  if (body.osm === null) {
+    const [west, south, east, north] = body.bbox as [number, number, number, number];
+    if (at[0] < west || at[0] > east || at[1] < south || at[1] > north)
+      throw new BuildError('waterbody_outside_bbox', [s.id]);
+    return { waterbody: id, waterbody_rule: 'waterbody_named', waterbody_distance_m: null };
+  }
+  let area = prepared.get(id);
+  if (area === undefined) {
+    const raw = input.areas.get(id);
+    if (raw === undefined) throw new BuildError('waterbody_area_missing', [id]);
+    area = prepareArea(raw);
+    prepared.set(id, area);
+  }
+  if (contains(area, at)) return { waterbody: id, waterbody_rule: 'waterbody_contains', waterbody_distance_m: 0 };
+  const max = o?.waterbody_max_m ?? WATERBODY_SHORE_M;
+  const d = shoreDistance(area, at, max);
+  if (d <= max) return { waterbody: id, waterbody_rule: 'waterbody_shore', waterbody_distance_m: round1(d) };
+  // Too far: the exact distance is reported (the bounded search only says "beyond the limit").
+  return {
+    waterbody: null,
+    waterbody_rule: 'waterbody_too_far',
+    waterbody_distance_m: round1(shoreDistance(area, at)),
+  };
+}
+
 export function place(
   edges: readonly Edge[],
   rivers: RiversFile,
@@ -113,17 +170,32 @@ export function place(
   waterbodies: WaterbodyInput | null = null,
 ): Placed {
   const canalEdges = edges.filter((e) => e.direction_reason === 'canal');
-  // P17a: canals stay out of every product built from here (reaches file, tiles, bins, download) until P17b. Their own edges are dropped, and a canal id is stripped
-  // from an edge it shares with a river (a canal deeper in the parent tree would otherwise be that edge's primary),
-  // so no canal has an edge in the network and a canal junction cuts no river's reach.
   const canals = new Set(rivers.rivers.filter((r) => r.kind === 'canal').map((r) => r.id));
+  // P17b (D-3): the canal index, from the edges as built (a canal's own edges and those it shares with a river),
+  // before the strip below: a station whose river is a canal snaps to it (canal_edge) and never becomes a Placement.
+  const onCanal = edges.filter((e) => e.rivers.some((r) => canals.has(r)));
+  const canalIndex: EdgeIndex = {
+    edges: new Map(onCanal.map((e) => [e.id, e])),
+    riverEdges: new Map(
+      [...canals].map((c) => [
+        c,
+        onCanal
+          .filter((e) => e.rivers.includes(c))
+          .map((e) => e.id)
+          .sort(byString),
+      ]),
+    ),
+  };
+  // P17a: canals stay out of the network, so out of every reach, chainage and travel time. Their own edges are
+  // dropped, and a canal id is stripped from an edge it shares with a river (a canal deeper in the parent tree would
+  // otherwise be that edge's primary), so no canal has an edge in the network and a canal junction cuts no river's reach.
   const net = buildNetwork(
     edges
       .filter((e) => e.direction_reason !== 'canal')
       .map((e) => (e.rivers.some((r) => canals.has(r)) ? { ...e, rivers: e.rivers.filter((r) => !canals.has(r)) } : e)),
     rivers,
   );
-  const snaps = snapStations(net, stations, overrides);
+  const snaps = snapStations(net, stations, overrides, canalIndex);
   const kmAt = (river: string, p: Placement) =>
     (net.kmGraph.get(river)?.get((net.edges.get(p.edge) as Edge).from) ?? 0) + p.offset_m;
 
@@ -151,6 +223,8 @@ export function place(
     overrides.stations.filter((o) => o.km_official !== undefined).map((o) => [o.station, o.km_official]),
   );
   const byId = new Map(stations.map((s) => [s.id, s]));
+  const overrideOf = new Map(overrides.stations.map((o) => [o.station, o]));
+  const prepared = new Map<string, PreparedArea>();
   const placed: PlacedStation[] = snaps.map((snap) => {
     const s = byId.get(snap.id) as StationInput;
     const ok = overrideKm.get(s.id);
@@ -171,11 +245,9 @@ export function place(
       km_graph: snap.placement !== null && snap.river !== null ? km2(kmAt(snap.river, snap.placement)) : null,
       km_to_nl_entry: at?.km ?? null,
       nl_entry_node: at?.id ?? null,
-      canal: null,
-      canal_distance_m: null,
-      waterbody: null,
-      waterbody_rule: null,
-      waterbody_distance_m: null,
+      canal: snap.canal,
+      canal_distance_m: snap.canal_distance_m,
+      ...(waterbodies === null ? NO_BODY : waterbodyOf(s, overrideOf.get(s.id), waterbodies, prepared)),
     };
   });
 

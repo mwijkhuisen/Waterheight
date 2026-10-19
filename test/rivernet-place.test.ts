@@ -215,7 +215,7 @@ describe('the tidal zone and canals in place() (P17a)', () => {
     expect(p.reaches.map((r) => r.id)).toEqual(['alpha.1']);
   });
 
-  it('keeps no reach, station or rivers[] entry of a canal, even on an edge it shares with a shallower river', () => {
+  it('keeps no reach or rivers[] entry of a canal, even on an edge it shares with a shallower river', () => {
     // kanaal is a child of alpha, so it would be the primary of the shared edge a2 (A3).
     const rv = riversFile([river({ id: 'alpha' }), river({ id: 'kanaal', kind: 'canal', parent_river_id: 'alpha' })]);
     const edges = [
@@ -226,7 +226,17 @@ describe('the tidal zone and canals in place() (P17a)', () => {
     expect(p.reaches.map((r) => r.id)).toEqual(['alpha.1']);
     expect([...p.net.edges.values()].flatMap((e) => e.rivers).filter((r) => r !== 'alpha')).toEqual([]);
     expect(p.net.riverEdges.has('kanaal')).toBe(false);
-    expect(p.stations[0]).toMatchObject({ river: null, reach: null, rule: 'no_edge_within_500m' });
+    // P17b (D-3): the canal index is built before the strip, so the station lies on the shared edge as the canal's,
+    // never as a Placement (no river, reach or chainage).
+    expect(p.stations[0]).toMatchObject({
+      river: null,
+      placement: null,
+      reach: null,
+      km_graph: null,
+      rule: 'canal_edge',
+      canal: 'kanaal',
+      canal_distance_m: 0,
+    });
   });
 });
 

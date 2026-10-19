@@ -10,6 +10,9 @@ import type { StationInput } from './stations.ts';
 // looser name match (namesakes: the Belgian Orne, the many Aa), and the nearest edge of that river must lie within 500 m (an override
 // may allow up to 2 km). A station without coordinates is placed only by its
 // official km between two anchors of the same river and km system.
+// P17b (D-3): a river that is a `kind: canal` row of rivers.yaml snaps to that canal's own edges (the canal index,
+// built from the graph before place() strips the canals): rule canal_edge, `canal` set, never a river or a Placement,
+// so no reach, chainage or travel time.
 
 export const SNAP_MAX_M = 500;
 const NODE_SNAP_M = 0.5; // closer than this to an edge end: the station sits on the node
@@ -28,7 +31,14 @@ export interface Snap {
   river: string | null;
   placement: Placement | null;
   override: boolean;
+  /** P17b: the canal whose edge the station lies on (rule canal_edge), with its distance to that edge (0.1 m). */
+  canal: string | null;
+  canal_distance_m: number | null;
 }
+
+/** What nearestOnRiver reads of a network: per river (or per canal, the canal index) its edge ids, and the edges. */
+export type EdgeIndex = Pick<Network, 'riverEdges' | 'edges'>;
+const NO_CANALS: EdgeIndex = { riverEdges: new Map(), edges: new Map() };
 
 /** The river a station's published water body names, or null. Ambiguity is a curation error. */
 export function riverOf(net: Network, overrides: SnapOverridesFile, s: StationInput): string | null {
@@ -46,7 +56,7 @@ export function riverOf(net: Network, overrides: SnapOverridesFile, s: StationIn
 }
 
 /** Nearest point of a river's edges to a station, within maxM; ties by edge id. */
-export function nearestOnRiver(net: Network, river: string, at: LonLat, maxM: number): Placement | null {
+export function nearestOnRiver(net: EdgeIndex, river: string, at: LonLat, maxM: number): Placement | null {
   const [lon0, lat0] = at;
   const kx = 111_320 * Math.cos((lat0 * Math.PI) / 180);
   const ky = 110_574;
@@ -104,39 +114,70 @@ function normalise(e: Edge, p: Placement): Placement {
   return { edge: p.edge, offset_m: Math.round(offset * 10) / 10, distance_m: Math.round(p.distance_m * 10) / 10 };
 }
 
-/** Snaps every station: first those with coordinates, then those placed by official km between them. */
-export function snapStations(net: Network, stations: readonly StationInput[], overrides: SnapOverridesFile): Snap[] {
+const unplaced = (s: StationInput, rule: SnapRule, override: boolean): Snap => ({
+  id: s.id,
+  rule,
+  river: null,
+  placement: null,
+  override,
+  canal: null,
+  canal_distance_m: null,
+});
+
+/**
+ * Snaps every station: first those with coordinates, then those placed by official km between them. `canals` is the
+ * canal index (place() builds it from the graph before it strips the canals); without it no station reaches a canal.
+ */
+export function snapStations(
+  net: Network,
+  stations: readonly StationInput[],
+  overrides: SnapOverridesFile,
+  canals: EdgeIndex = NO_CANALS,
+): Snap[] {
   const byId = new Map(overrides.stations.map((o) => [o.station, o]));
   for (const id of byId.keys())
     if (!stations.some((s) => s.id === id)) throw new BuildError('override_unknown_station', [id]);
+  const isCanal = new Set(net.rivers.rivers.filter((r) => r.kind === 'canal').map((r) => r.id));
+  // A river id snaps to its own edges; a canal id to the canal index, and the result is never a Placement.
+  const snapTo = (
+    s: StationInput,
+    river: string,
+    at: LonLat,
+    maxM: number,
+    rule: SnapRule,
+    override: boolean,
+  ): Snap | null => {
+    const canal = isCanal.has(river);
+    const p = nearestOnRiver(canal ? canals : net, river, at, maxM);
+    if (p === null) return null;
+    return canal
+      ? { ...unplaced(s, 'canal_edge', override), canal: river, canal_distance_m: p.distance_m }
+      : { ...unplaced(s, rule, override), river, placement: p };
+  };
   const snaps = new Map<string, Snap>();
   const later: StationInput[] = [];
   for (const s of stations) {
     const o = byId.get(s.id);
-    if (o?.canal !== undefined)
-      snaps.set(s.id, { id: s.id, rule: 'canal', river: null, placement: null, override: true });
-    else if (o?.unsnapped === true)
-      snaps.set(s.id, { id: s.id, rule: 'unsnapped', river: null, placement: null, override: true });
-    else if (o?.by_km === true) later.push(s);
-    else if (o?.river !== undefined) {
+    if (o?.canal !== undefined) snaps.set(s.id, unplaced(s, 'canal', true));
+    else if (o?.unsnapped === true) snaps.set(s.id, unplaced(s, 'unsnapped', true));
+    else if (o?.by_km === true) {
+      const river = riverOf(net, overrides, s);
+      if (river !== null && isCanal.has(river)) throw new BuildError('by_km_on_canal', [s.id]);
+      later.push(s);
+    } else if (o?.river !== undefined) {
       if (s.lon === null || s.lat === null) throw new BuildError('override_without_coordinates', [s.id]);
-      const p = nearestOnRiver(net, o.river, [s.lon, s.lat], o.max_m ?? SNAP_MAX_M);
-      if (p === null) throw new BuildError('override_unplaced', [s.id]);
-      snaps.set(s.id, { id: s.id, rule: 'override', river: o.river, placement: p, override: true });
+      const snap = snapTo(s, o.river, [s.lon, s.lat], o.max_m ?? SNAP_MAX_M, 'override', true);
+      if (snap === null) throw new BuildError('override_unplaced', [s.id]);
+      snaps.set(s.id, snap);
     } else if (s.lon === null || s.lat === null) later.push(s);
     else {
       const river = riverOf(net, overrides, s);
-      if (river === null)
-        snaps.set(s.id, { id: s.id, rule: 'water_not_in_rivers', river: null, placement: null, override: false });
-      else {
-        const p = nearestOnRiver(net, river, [s.lon, s.lat], SNAP_MAX_M);
-        snaps.set(
-          s.id,
-          p === null
-            ? { id: s.id, rule: 'no_edge_within_500m', river: null, placement: null, override: false }
-            : { id: s.id, rule: 'name', river, placement: p, override: false },
-        );
-      }
+      snaps.set(
+        s.id,
+        river === null
+          ? unplaced(s, 'water_not_in_rivers', false)
+          : (snapTo(s, river, [s.lon, s.lat], SNAP_MAX_M, 'name', false) ?? unplaced(s, 'no_edge_within_500m', false)),
+      );
     }
   }
   for (const s of later) {
@@ -161,7 +202,7 @@ function placeByKm(
   stations: readonly StationInput[],
   snaps: ReadonlyMap<string, Snap>,
 ): Snap {
-  const none: Snap = { id: s.id, rule: 'no_coordinates', river: null, placement: null, override: false };
+  const none = unplaced(s, 'no_coordinates', false);
   const river = riverOf(net, overrides, s);
   if (river === null || s.km === null) return none;
   const km = s.km;
