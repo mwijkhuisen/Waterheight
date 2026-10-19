@@ -2,7 +2,8 @@
  "obs": [],
  "gaugeZeros": [],
  "dropped": {
-  "unregistered_method": 251
+  "processed": 10,
+  "unregistered_method": 241
  },
  "unknown": 0,
  "provider_values": 251,
