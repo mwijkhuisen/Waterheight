@@ -52,15 +52,12 @@ waterbodies:
       - https://www.wikidata.org/wiki/Q939766
       - https://www.openstreetmap.org/relation/49368
   - id: ketelmeer
-    # bbox: Ketelmeer stations ketelhaven (5.7627, 52.5825), swifterbant (5.6455, 52.6055), ramspolkering (5.8408,
-    # 52.6105) +- 0.05.
+    # osm: the multipolygon tagged natural=water and wikidata=Q1739879, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     kind: lake
     name_nl: "Ketelmeer"
     name_en: "Ketelmeer"
     wikidata: Q1739879
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [5.762222, 52.596667]
-    bbox: [5.58, 52.53, 5.9, 52.68]
+    osm: {type: relation, id: 1316262}
     names:
       NL-1: ["Ketelmeer"]
     managed_level: true
@@ -69,51 +66,29 @@ waterbodies:
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q1739879
+      - https://www.openstreetmap.org/relation/1316262
   - id: zwarte-meer
-    # bbox: contains kadoelen.zwanediep (5.9816, 52.6582, NL-1 water_name Zwanediep, a curated override decides) +-
-    # 0.05.
+    # osm: the multipolygon tagged natural=water and wikidata=Q231747, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     kind: lake
     name_nl: "Zwarte Meer"
     name_en: "Zwarte Meer"
     wikidata: Q231747
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [5.96417, 52.6325]
-    bbox: [5.88, 52.58, 6.05, 52.7]
+    osm: {type: relation, id: 1316264}
     names: {}
     managed_level: true
     outflows:
-      - {to: ramsdiep, via: "open connection (Wikidata P201)"}
+      - {to: ketelmeer, via: "Ramsdiep (Wikidata P201)"}
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q231747
-  - id: ramsdiep
-    # Extra body: the lake-type station ramspolbrug.ramsdiep (5.8419, 52.6127) publishes water_name Ramsdiep. bbox:
-    # that station +- 0.05.
-    kind: lake
-    name_nl: "Ramsdiep"
-    name_en: "Ramsdiep"
-    wikidata: Q1844617
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [5.865556, 52.616944]
-    bbox: [5.8, 52.57, 5.93, 52.66]
-    names:
-      NL-1: ["Ramsdiep"]
-    managed_level: true
-    outflows:
-      - {to: ketelmeer, via: "open connection (Wikidata P201)"}
-    reference_station: null
-    evidence:
-      - https://www.wikidata.org/wiki/Q1844617
+      - https://www.openstreetmap.org/relation/1316264
   - id: vossemeer
-    # Wikidata states two points (5.83185, 52.56727 and 5.83461, 52.56347), the first is used. bbox:
-    # dronten.reevesluis.vossemeer (5.8575, 52.5198) and the point +- 0.05.
+    # osm: the multipolygon tagged natural=water and wikidata=Q969046, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     kind: lake
     name_nl: "Vossemeer"
     name_en: "Vossemeer"
     wikidata: Q969046
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [5.83185, 52.56727]
-    bbox: [5.75, 52.49, 5.92, 52.6]
+    osm: {type: relation, id: 1316263}
     names:
       NL-1: ["Vossemeer"]
     managed_level: true
@@ -121,15 +96,14 @@ waterbodies:
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q969046
+      - https://www.openstreetmap.org/relation/1316263
   - id: drontermeer
-    # bbox: dronten.reevesluis.drontermeer (5.8575, 52.5181) and the point +- 0.05.
+    # osm: the multipolygon tagged natural=water and wikidata=Q202929, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     kind: lake
     name_nl: "Drontermeer"
     name_en: "Drontermeer"
     wikidata: Q202929
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [5.861111, 52.516667]
-    bbox: [5.76, 52.46, 5.95, 52.58]
+    osm: {type: relation, id: 1316265}
     names:
       NL-1: ["Drontermeer"]
     managed_level: true
@@ -137,46 +111,42 @@ waterbodies:
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q202929
+      - https://www.openstreetmap.org/relation/1316265
   - id: veluwemeer
-    # bbox: the point and elburg.elburgerbrug (5.8171, 52.4575) +- 0.05; no NL-1 water_name, a curated override
-    # decides.
+    # osm: the multipolygon tagged natural=water and wikidata=Q543460, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     kind: lake
     name_nl: "Veluwemeer"
     name_en: "Veluwemeer"
     wikidata: Q543460
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [5.7, 52.4]
-    bbox: [5.55, 52.33, 5.95, 52.5]
+    osm: {type: relation, id: 1203741}
     names: {}
     managed_level: true
     outflows: []
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q543460
+      - https://www.openstreetmap.org/relation/1203741
   - id: wolderwijd
-    # bbox: the point +- 0.12; no NL-1 station of the lake type is known to lie in it.
+    # osm: the multipolygon tagged natural=water and wikidata=Q2964846, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     kind: lake
     name_nl: "Wolderwijd"
     name_en: "Wolderwijd"
     wikidata: Q2964846
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [5.571111, 52.341944]
-    bbox: [5.45, 52.3, 5.7, 52.42]
+    osm: {type: relation, id: 1204374}
     names: {}
     managed_level: true
     outflows: []
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q2964846
+      - https://www.openstreetmap.org/relation/1204374
   - id: nuldernauw
-    # bbox: nijkerk.nuldernauw (5.4753, 52.2628) and the point +- 0.05.
+    # osm: the multipolygon tagged natural=water and wikidata=Q943170, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     kind: lake
     name_nl: "Nuldernauw"
     name_en: "Nuldernauw"
     wikidata: Q943170
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [5.528056, 52.271389]
-    bbox: [5.42, 52.22, 5.6, 52.32]
+    osm: {type: relation, id: 1204375}
     names:
       NL-1: ["Nuldernauw"]
     managed_level: true
@@ -184,16 +154,14 @@ waterbodies:
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q943170
+      - https://www.openstreetmap.org/relation/1204375
   - id: nijkerkernauw
-    # Wikidata states two points (5.40496, 52.25033 and 5.437222, 52.254444), the first is used. bbox:
-    # nijkerk.nijkerkernauw (5.4702, 52.2617) +- 0.05.
+    # osm: the multipolygon tagged natural=water and wikidata=Q2647497, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     kind: lake
     name_nl: "Nijkerkernauw"
     name_en: "Nijkerkernauw"
     wikidata: Q2647497
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [5.40496, 52.25033]
-    bbox: [5.34, 52.22, 5.52, 52.3]
+    osm: {type: relation, id: 19389865}
     names:
       NL-1: ["Nijkerkernauw"]
     managed_level: true
@@ -201,63 +169,58 @@ waterbodies:
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q2647497
+      - https://www.openstreetmap.org/relation/19389865
   - id: eemmeer
-    # bbox: eemdijk (5.3224, 52.2612, no NL-1 water_name) and the point +- 0.06.
+    # osm: the multipolygon tagged natural=water and wikidata=Q1295357, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     kind: lake
     name_nl: "Eemmeer"
     name_en: "Eemmeer"
     wikidata: Q1295357
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [5.330833, 52.280556]
-    bbox: [5.25, 52.22, 5.42, 52.33]
+    osm: {type: relation, id: 1204424}
     names: {}
     managed_level: true
     outflows: []
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q1295357
+      - https://www.openstreetmap.org/relation/1204424
   - id: gooimeer
-    # bbox: almere.hollandsebrug (5.1376, 52.3265, no NL-1 water_name) and the point +- 0.06.
+    # osm: the multipolygon tagged natural=water and wikidata=Q629864, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     kind: lake
     name_nl: "Gooimeer"
     name_en: "Gooimeer"
     wikidata: Q629864
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [5.206389, 52.321389]
-    bbox: [5.08, 52.27, 5.3, 52.37]
+    osm: {type: relation, id: 1204456}
     names: {}
     managed_level: true
     outflows: []
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q629864
+      - https://www.openstreetmap.org/relation/1204456
   - id: ijmeer
-    # Extra body: amsterdam.schellingwouderbrug (4.9675, 52.3787) is lake-type with no water_name. bbox: that station
-    # and the point +- 0.1.
+    # osm: the multipolygon tagged natural=water and wikidata=Q1653947, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     kind: lake
     name_nl: "IJmeer"
     name_en: "IJmeer"
     wikidata: Q1653947
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [5.051944, 52.362778]
-    bbox: [4.9, 52.3, 5.15, 52.44]
+    osm: {type: relation, id: 1321001}
     names: {}
     managed_level: true
     outflows: []
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q1653947
+      - https://www.openstreetmap.org/relation/1321001
   - id: volkerak
+    # osm: the multipolygon tagged natural=water and wikidata=Q2437978, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     # Wikidata has Volkerak (Q2437978) and Zoommeer (Q3576055) as separate items and no Volkerak-Zoommeer item was
-    # found, so they stay two bodies. bbox: dinteloord.volkerak (4.3165, 51.6529), willemstad.volkerak (4.3974,
-    # 51.6824) +- 0.1.
+    # found, so they stay two bodies; OSM has two polygons too (r1408100 here, the Zoommeer way w1191602077).
     kind: lake
     name_nl: "Volkerak"
     name_en: "Volkerak"
     wikidata: Q2437978
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [4.3, 51.65]
-    bbox: [4.2, 51.58, 4.5, 51.72]
+    osm: {type: relation, id: 1408100}
     names:
       NL-1: ["Volkerak"]
     managed_level: true
@@ -265,67 +228,63 @@ waterbodies:
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q2437978
+      - https://www.openstreetmap.org/relation/1408100
   - id: zoommeer
-    # bbox: the point and nieuwvossemeer (4.2016, 51.5846, lake-type, no water_name; its body is a curated decision,
-    # Volkerak is the alternative) +- 0.04.
+    # osm: the closed way tagged natural=water and wikidata=Q3576055, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
+    # The probe also lists r1166442, a natural=water multipolygon named Zoommeer with no wikidata tag: not taken [U].
     kind: lake
     name_nl: "Zoommeer"
     name_en: "Zoommeer"
     wikidata: Q3576055
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [4.22459, 51.47518]
-    bbox: [4.15, 51.45, 4.3, 51.62]
+    osm: {type: way, id: 1191602077}
     names: {}
     managed_level: true
     outflows: []
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q3576055
+      - https://www.openstreetmap.org/way/1191602077
   - id: grevelingenmeer
-    # The Wikidata label is Grevelingen (the Grevelingenmeer items found by label are streets). bbox: bommenede
-    # (3.9743, 51.7387) and the point +- 0.1.
+    # osm: the multipolygon tagged natural=water and wikidata=Q1546115, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
+    # The Wikidata label is Grevelingen (the Grevelingenmeer items found by label are streets).
     kind: lake
     name_nl: "Grevelingenmeer"
     name_en: "Lake Grevelingen"
     wikidata: Q1546115
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [4.022222, 51.714167]
-    bbox: [3.85, 51.67, 4.2, 51.78]
+    osm: {type: relation, id: 940363}
     names: {}
     managed_level: true
     outflows: []
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q1546115
+      - https://www.openstreetmap.org/relation/940363
   - id: veerse-meer
-    # Wikidata P402 states two relations (1188130 and 10304684): which is the lake's own area is not settled here, so
-    # the probe decides. bbox: arnemuiden.oranjeplaat (3.7001, 51.5166), kamperland.schotsman (3.6433, 51.5816),
-    # kats.zandkreekdam (3.8657, 51.5420) +- 0.07.
+    # osm: the multipolygon tagged natural=water and wikidata=Q958780, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
+    # Wikidata P402 states two relations (1188130 and 10304684): the probe settles it, r1188130 is the one tagged
+    # natural=water with this QID.
     kind: lake
     name_nl: "Veerse Meer"
     name_en: "Veerse Meer"
     wikidata: Q958780
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [3.716667, 51.533333]
-    bbox: [3.55, 51.48, 3.95, 51.62]
+    osm: {type: relation, id: 1188130}
     names: {}
     managed_level: true
     outflows: []
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q958780
+      - https://www.openstreetmap.org/relation/1188130
   - id: haringvliet
+    # osm: the only natural=water multipolygon named Haringvliet (its Wikidata P402 is the waterway relation r19264175) [U], from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     # Also a delta channel in rivers.yaml (R-4): the same Wikidata item and relation 19264175, which is the waterway
-    # relation and no area, so the body is point-only until the probe finds a water polygon. The NL-1 station
-    # haringvliet.10 (3.8606, 51.8628) carries the name Haringvliet but lies seaward of the sluices (coast type): it
-    # needs a curated waterbody override to noordzee. bbox: the point and the sluices region +- 0.2.
+    # relation and no area. The NL-1 station haringvliet.10 (3.8606, 51.8628) carries the name Haringvliet but lies
+    # seaward of the sluices (coast type): its curated override gives it noordzee.
     kind: closed_estuary
     name_nl: "Haringvliet"
     name_en: "Haringvliet"
     wikidata: Q1585393
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [4.215833, 51.771667]
-    bbox: [3.7, 51.65, 4.45, 51.95]
+    osm: {type: relation, id: 8115766}
     names:
       NL-1: ["Haringvliet"]
     managed_level: true
@@ -334,6 +293,7 @@ waterbodies:
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q1585393
+      - https://www.openstreetmap.org/relation/8115766
   - id: noordzee
     # Wikidata states two points (3.0, 55.0 and 3.6825, 56.459), the first is used. bbox: the offshore platforms (a12
     # 3.8, 55.38; d15 2.94, 54.33; j6 2.95, 53.82; f3 4.73, 54.85) and the coast stations (vlaktevanderaan 3.24, 51.50
@@ -342,7 +302,7 @@ waterbodies:
     name_nl: "Noordzee"
     name_en: "North Sea"
     wikidata: Q1693
-    osm: null  # probe: osm id from the geo.yml name probe
+    osm: null  # point-only: the name probe of the Netherlands and Belgium (geo.yml run 39228736682) found no natural=water or place=sea polygon
     point: [3.0, 55.0]
     bbox: [2.4, 51.3, 7.3, 56.0]
     names:
@@ -359,7 +319,7 @@ waterbodies:
     name_nl: "Waddenzee"
     name_en: "Wadden Sea"
     wikidata: Q26080
-    osm: null  # probe: osm id from the geo.yml name probe
+    osm: null  # point-only: the name probe of the Netherlands and Belgium (geo.yml run 39228736682) found no natural=water or place=sea polygon
     point: [6.883333, 53.533333]
     bbox: [4.6, 52.85, 7.3, 53.65]
     names:
@@ -370,16 +330,14 @@ waterbodies:
     evidence:
       - https://www.wikidata.org/wiki/Q26080
   - id: oosterschelde
-    # bbox: the scheldt-type stations on the Oosterschelde, oosterschelde.14 (3.6769, 51.7201) to sintannaland
+    # osm: the multipolygon tagged natural=water and wikidata=Q1266165, from the geo.yml name probe (https://github.com/mwijkhuisen/Waterheight/actions/runs/39228736682).
     # (4.1096, 51.6036) and yerseke (4.0751, 51.5062), +- margin; tholen.bergsediepsluis.buiten (4.1657, 51.5113) lies
     # inside.
     kind: estuary
     name_nl: "Oosterschelde"
     name_en: "Eastern Scheldt"
     wikidata: Q1266165
-    osm: null  # probe: osm id from the geo.yml name probe
-    point: [3.965556, 51.553889]
-    bbox: [3.55, 51.42, 4.3, 51.78]
+    osm: {type: relation, id: 6846427}
     names:
       NL-1: ["Oosterschelde"]
     managed_level: false
@@ -388,6 +346,7 @@ waterbodies:
     reference_station: null
     evidence:
       - https://www.wikidata.org/wiki/Q1266165
+      - https://www.openstreetmap.org/relation/6846427
   - id: westerschelde
     # No NL-1 water_name says Westerschelde. bbox: vlissingen (3.6, 51.442), hansweert (3.9974, 51.4457) and antwerpen
     # (4.397, 51.228, the Zeeschelde) +- margin.
@@ -395,7 +354,7 @@ waterbodies:
     name_nl: "Westerschelde"
     name_en: "Western Scheldt"
     wikidata: Q1524840
-    osm: null  # probe: osm id from the geo.yml name probe
+    osm: null  # point-only: the name probe (geo.yml run 39228736682) found only r9745220, a place=locality multipolygon, no water polygon
     point: [3.86581, 51.37092]
     bbox: [3.45, 51.18, 4.5, 51.46]
     names: {}
@@ -414,7 +373,7 @@ waterbodies:
     name_nl: "Eems-Dollard"
     name_en: "Ems-Dollart"
     wikidata: Q218377
-    osm: null  # probe: osm id from the geo.yml name probe
+    osm: null  # point-only: the name probe covered the Netherlands and Belgium only (geo.yml run 39228736682) and found no polygon [U]
     point: [7.156111, 53.285278]
     bbox: [6.7, 53.15, 7.4, 53.55]
     names: {}
