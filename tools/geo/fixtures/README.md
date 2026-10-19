@@ -43,11 +43,11 @@ Map data © OpenStreetMap contributors, ODbL 1.0 (https://www.openstreetmap.org/
 
 | | |
 |---|---|
-| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/39158162082 (`pull_request` on `claude/p17a-delta-canals` at `86c607f`, 2026-10-18), job `rivernet fixture` |
-| Made | tippecanoe 2.79.0 in the tool image (`tools/geo/rivernet/tiles.sh build` with the bins input), layers `rivers` and `reach_bins`, z0–12 |
-| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.330476,11.397685,53.443230, 4,150 tiles. Layer `rivers`: one feature per drawn reach (1,794 reaches in the file), each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation`. Layer `reach_bins`: 10,055 bins (1 to 8 per reach; the file's tilestats, equal to the sum of `binCount` (`apps/web/src/features/flow/reaches/bins.ts`, imported and summed over the 1,794 `reaches` of `test/fixtures/reaches-fixture.json`) of the fixture), each with `reach_id`, `bin`, `seg` and `tidal`, in the tiles of zoom 8 and up only (a z5 or z7 tile holds `rivers` alone) |
-| Bytes | 5,045,937 |
-| sha256 | `82e99fda8a5b6489cc29f1d493e2c48a34884ef3256c9bf3cb038dae2623c4cd` |
+| Source run | https://github.com/mwijkhuisen/Waterheight/actions/runs/39248726981 (`pull_request` on `claude/p17b-waterbodies-snapping` at `074b8a7`, 2026-10-19; P17b, #189), job `rivernet fixture`; its `reaches-20261001.json` equals `test/fixtures/reaches-fixture.json` but for `version` (20261001 there, 20261003 in the test's build). Earlier: run 39158162082 (P17a, `86c607f`, 2026-10-18) |
+| Made | tippecanoe 2.79.0 in the tool image (`tools/geo/rivernet/tiles.sh build` with four layers), layers `rivers`, `reach_bins`, `waterbodies` and `canals`, z0–12 |
+| Header | spec 3, `mvt`, gzip, z0–12, bounds 2.150922,46.330476,11.397685,55.000000 (the Noordzee point raises the north bound), 4,485 tiles. Layer `rivers`: one feature per drawn reach (1,829 reaches in the file), each with `reach_id`, `river_id`, `name_nl`, `name_en`, `length_km`, `tidal`, `impounded`, `bifurcation`. Layer `reach_bins`: 10,201 bins (1 to 8 per reach; the file's tilestats, equal to the sum of `binCount` (`apps/web/src/features/flow/reaches/bins.ts`, imported and summed over the 1,829 `reaches` of `test/fixtures/reaches-fixture.json`) of the fixture), each with `reach_id`, `bin`, `seg` and `tidal`, in the tiles of zoom 8 and up only (a z5 or z7 tile holds `rivers` alone). Layer `waterbodies` (P17b): 23 features, the 18 polygons and the 5 points of `registry/waterbodies.yaml`, each with `waterbody_id`, `kind`, `name_nl`, `name_en`. Layer `canals` (P17b): 167 canal edges, each with `river_id`, `name_nl`, `name_en`, `kind` |
+| Bytes | 5,415,724 |
+| sha256 | `211a7c289e6973a4219aab27239750ccc324307e1882727976e4949516f3514b` |
 
 A refresh of the fixture graph replaces it with the next run's artifact and regenerates `test/fixtures/reaches-fixture.json` (`UPDATE_FIXTURE=1`); compare the two reaches files first.
 
