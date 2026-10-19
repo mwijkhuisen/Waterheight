@@ -86,6 +86,10 @@ describe('every public NL-1 station has an outcome (C1)', () => {
       'on the Schelde-Rijnkanaal edge (canal_edge); not on the Vossemeer polygon, no body by identity',
     'nl.rws.antwerpen':
       'Antwerp is on the Zeeschelde above the border: a river placement only, the Westerschelde body ends at the Dutch coast',
+    'nl.rws.dronten.reevesluis.vossemeer':
+      'unsnapped by override (review R1-3): named Vossemeer but inside the Drontermeer, 2.7 km from the Vossemeer polygon',
+    'nl.rws.elburg.elburgerbrug':
+      'unsnapped by override (review R1-4): where the Veluwemeer and the Drontermeer meet; RWS names neither',
   };
 
   it('gives every lake, coast, scheldt and offshore station a body, bar the listed exceptions', SLOW, () => {
@@ -231,6 +235,8 @@ describe('the lakes of the P15 inventory (C2)', () => {
       'nl.rws.lelystad.houtribsluis.noord',
       'nl.rws.lelystad.houtribsluis.zuid',
       'nl.rws.nieuwvossemeer',
+      'nl.rws.dronten.reevesluis.vossemeer',
+      'nl.rws.elburg.elburgerbrug',
     ]);
     const lakeStations = nl1.filter((s) => typeOf(s.id) === 'lake' && !EXCEPT.has(s.id));
     expect(lakeStations.length).toBeGreaterThan(25);
