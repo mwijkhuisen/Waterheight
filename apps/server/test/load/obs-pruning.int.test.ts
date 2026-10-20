@@ -45,9 +45,9 @@ async function load(mode: UpsertMode, at: Date, points: readonly { ts: string; v
 
 /** Runs `fn` while the admin session holds the far partition. */
 async function withFarLocked<T>(fn: () => Promise<T>): Promise<T> {
-  await h.t.admin.query('BEGIN');
-  await h.t.admin.query(`LOCK TABLE ${FAR} IN ACCESS EXCLUSIVE MODE`);
   try {
+    await h.t.admin.query('BEGIN');
+    await h.t.admin.query(`LOCK TABLE ${FAR} IN ACCESS EXCLUSIVE MODE`);
     return await fn();
   } finally {
     await h.t.admin.query('ROLLBACK');
@@ -89,7 +89,7 @@ beforeAll(async () => {
   await h.t.admin.query(
     `SELECT ensure_history_partitions('1960-01-01Z', '1960-12-31Z'),
             ensure_history_partitions('1965-01-01Z', '1965-12-31Z'),
-            ensure_partitions('2026-10-01Z', '2026-10-31Z')`,
+            ensure_partitions('2026-09-01Z', '2026-10-31Z')`,
   );
 }, 60_000);
 
@@ -125,6 +125,36 @@ describe('#190: obs joins prune to the payload at plan time', () => {
 
   it('a live payload opens no partition outside its days', async () => {
     await withFarLocked(() => newerThenOlder('live', '2026-10-05T10:00:00Z'));
+  });
+
+  // Review F1/F2: a payload that starts inside a bucket holding older rows, and crosses a month (two partitions).
+  it('a payload from the middle of an hour into the next month recomputes whole buckets', async () => {
+    const at = (s: string) => new Date(`2026-${s}Z`).toISOString();
+    await withFarLocked(async () => {
+      await load('live', NEWER, [
+        { ts: at('09-30T23:00:00'), value: 1 },
+        { ts: at('09-30T23:10:00'), value: 2 },
+      ]);
+      await load(
+        'live',
+        NEWER,
+        Array.from({ length: 8 }, (_, i) => ({
+          ts: new Date(Date.parse(at('09-30T23:20:00')) + i * 600_000).toISOString(),
+          value: 3 + i,
+        })),
+      );
+    });
+    const { rows } = await h.t.admin.query<{ t: string; bucket: Date; n: number; vavg: number }>(
+      `SELECT 'h' AS t, bucket, n, vavg FROM obs_1h WHERE series_id = $1 AND bucket = '2026-09-30T23:00Z'
+       UNION ALL SELECT 'd', bucket, n, vavg FROM obs_1d WHERE series_id = $1 AND bucket IN ('2026-09-30Z', '2026-10-01Z')
+       ORDER BY 1, 2`,
+      [series.id],
+    );
+    expect(rows.map((r) => [r.t, r.bucket.toISOString(), r.n, r.vavg])).toEqual([
+      ['d', '2026-09-30T00:00:00.000Z', 6, 3.5],
+      ['d', '2026-10-01T00:00:00.000Z', 4, 8.5],
+      ['h', '2026-09-30T23:00:00.000Z', 6, 3.5],
+    ]);
   });
 
   // Without the far lock: ensure_history_partitions reads every partition's bound (pg_get_expr opens each one), which

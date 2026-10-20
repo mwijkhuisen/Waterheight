@@ -288,6 +288,8 @@ export async function upsertObs(
   let lastMs = Number.NEGATIVE_INFINITY;
   for (const t of ts) {
     const ms = Date.parse(t);
+    // A string PostgreSQL reads but Date.parse does not (`23:59:60Z`) would fall outside the bounds below (review S1).
+    if (Number.isNaN(ms)) throw new RangeError('load: bad ts');
     if (ms < firstMs) firstMs = ms;
     if (ms > lastMs) lastMs = ms;
   }
@@ -299,10 +301,11 @@ export async function upsertObs(
   else await sql`SELECT ensure_partitions(${first}::timestamptz, ${last}::timestamptz)`.execute(tx);
   // #190: every join of obs carries the payload's time range as constants. obs is partitioned by ts, and a join whose
   // ts comes only from the payload's arrays cannot prune at plan time: the planner weighs every partition and, with 79
-  // of them since DE-8's history, chose a hash join over a full scan (about 7 s a statement). `until` is 1 ms past the
-  // last instant, because Date.parse drops the sub-millisecond digits PostgreSQL keeps; the rollups' bound is the
-  // whole UTC days of the payload (date_bin's ORIGIN is a whole day, so every hourly and daily bucket lies inside).
-  const until = new Date(lastMs + 1);
+  // of them since DE-8's history, chose a hash join over a full scan (about 7 s a statement). `until` is 2 ms past the
+  // last instant: Date.parse drops the sub-millisecond digits, and PostgreSQL rounds them to the microsecond, which can
+  // reach the next millisecond (review F4). The rollups' bound is the whole UTC days of the payload (date_bin's ORIGIN
+  // is a whole day, so every hourly and daily bucket lies inside).
+  const until = new Date(lastMs + 2);
   const dayFrom = new Date(utcDay(firstMs) * 86_400_000);
   const dayUntil = new Date((utcDay(lastMs) + 1) * 86_400_000);
 
@@ -420,7 +423,9 @@ export async function upsertObs(
   // P14b: a provider's daily aggregate (FR-2 QmnJ, HIXnJ) is in no rollup of ours.
   const notAggregate = sql`NOT EXISTS (SELECT 1 FROM series s WHERE s.id = w.series_id AND s.aggregate IS NOT NULL)`;
   const wTs = changed.map((w) => w.ts);
-  // The rollups of every (series, bucket) this batch touched, recomputed from obs (catalogue §6.4 query 3).
+  // The rollups of every (series, bucket) this batch touched, recomputed from obs (catalogue §6.4 query 3). The
+  // `date_bin(o.ts) = t.bucket` the range implies is a hash key (#190): with a low estimate for obs (fresh partitions)
+  // the planner hashed on series_id alone and range-filtered every (bucket, row) pair of a series, 1.5 s for 15,000 rows.
   await sql`
     INSERT INTO obs_1h AS r (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
     SELECT o.series_id, t.bucket, min(o.value), max(o.value), avg(o.value)::real,
@@ -429,6 +434,7 @@ export async function upsertObs(
           FROM unnest(${wSid}::int[], ${wTs}::timestamptz[]) AS w(series_id, ts)
           WHERE ${notAggregate}) t
     JOIN obs o ON o.series_id = t.series_id AND o.ts >= t.bucket AND o.ts < t.bucket + interval '1 hour'
+              AND date_bin('1 hour', o.ts, ${ORIGIN}) = t.bucket
               AND o.ts >= ${dayFrom}::timestamptz AND o.ts < ${dayUntil}::timestamptz
     GROUP BY o.series_id, t.bucket
     ON CONFLICT (series_id, bucket) DO UPDATE
@@ -446,6 +452,7 @@ export async function upsertObs(
           FROM unnest(${wSid}::int[], ${wTs}::timestamptz[]) AS w(series_id, ts)
           WHERE ${notAggregate}) t
     JOIN obs o ON o.series_id = t.series_id AND o.ts >= t.bucket AND o.ts < t.bucket + interval '1 day'
+              AND date_bin('1 day', o.ts, ${ORIGIN}) = t.bucket
               AND o.ts >= ${dayFrom}::timestamptz AND o.ts < ${dayUntil}::timestamptz
     GROUP BY o.series_id, t.bucket
     ON CONFLICT (series_id, bucket) DO UPDATE
