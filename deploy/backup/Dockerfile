@@ -9,7 +9,7 @@
 # versions (each at least 7 days old). Back to the release binary once one clears
 # Grype. The Go stage from ARG GO_VERSION to ARG GO_FIXES is the same text as in
 # deploy/server/Dockerfile (test/check-bom.test.ts).
-FROM node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS restic
+FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS restic
 ARG GO_VERSION=1.27.2
 ADD --checksum=sha256:ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5 \
   https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz \
@@ -33,7 +33,7 @@ RUN m=github.com/restic/restic@v${RESTIC_VERSION} \
   && go get ${GO_FIXES} \
   && go build -trimpath -tags disable_grpc_modules -ldflags '-s -w' -o /gobin/restic ./cmd/restic
 
-FROM gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:516757106de35205efb70b91ba03f6f1298424a0678c603255cf2852a7000087
 COPY --from=restic /gobin/restic /usr/local/bin/restic
 # restic buffers pack files in TMPDIR; /cache is a volume, the root file system is read-only.
 ENV TMPDIR=/cache
