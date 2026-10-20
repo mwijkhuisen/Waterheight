@@ -284,11 +284,27 @@ export async function upsertObs(
   }
   const none: Written = { n_new: 0, n_changed: 0, newest: null, writes: 0, inserted: 0, revised: 0, skipped: off };
   if (sid.length === 0) return none;
-  const sorted = [...ts].sort();
+  let firstMs = Number.POSITIVE_INFINITY;
+  let lastMs = Number.NEGATIVE_INFINITY;
+  for (const t of ts) {
+    const ms = Date.parse(t);
+    if (ms < firstMs) firstMs = ms;
+    if (ms > lastMs) lastMs = ms;
+  }
+  const first = new Date(firstMs);
+  const last = new Date(lastMs);
   // Live rows keep the 2000-01-01 partition floor; a backfill may go down to 1900 (review C7).
   if (mode === 'backfill')
-    await sql`SELECT ensure_history_partitions(${sorted[0]}::timestamptz, ${sorted.at(-1)}::timestamptz)`.execute(tx);
-  else await sql`SELECT ensure_partitions(${sorted[0]}::timestamptz, ${sorted.at(-1)}::timestamptz)`.execute(tx);
+    await sql`SELECT ensure_history_partitions(${first}::timestamptz, ${last}::timestamptz)`.execute(tx);
+  else await sql`SELECT ensure_partitions(${first}::timestamptz, ${last}::timestamptz)`.execute(tx);
+  // #190: every join of obs carries the payload's time range as constants. obs is partitioned by ts, and a join whose
+  // ts comes only from the payload's arrays cannot prune at plan time: the planner weighs every partition and, with 79
+  // of them since DE-8's history, chose a hash join over a full scan (about 7 s a statement). `until` is 1 ms past the
+  // last instant, because Date.parse drops the sub-millisecond digits PostgreSQL keeps; the rollups' bound is the
+  // whole UTC days of the payload (date_bin's ORIGIN is a whole day, so every hourly and daily bucket lies inside).
+  const until = new Date(lastMs + 1);
+  const dayFrom = new Date(utcDay(firstMs) * 86_400_000);
+  const dayUntil = new Date((utcDay(lastMs) + 1) * 86_400_000);
 
   // N: the stored row's batch is older than this one, or is this very batch and the row differs.
   const newer = sql`(b.id IS NULL
@@ -315,6 +331,7 @@ export async function upsertObs(
       SELECT i.series_id, i.ts, i.value, i.qc
       FROM incoming i
       LEFT JOIN obs o ON o.series_id = i.series_id AND o.ts = i.ts
+                     AND o.ts >= ${first}::timestamptz AND o.ts < ${until}::timestamptz
       LEFT JOIN ingest_batch b ON b.id = o.batch_id
       WHERE o.series_id IS NULL
          OR CASE
@@ -412,6 +429,7 @@ export async function upsertObs(
           FROM unnest(${wSid}::int[], ${wTs}::timestamptz[]) AS w(series_id, ts)
           WHERE ${notAggregate}) t
     JOIN obs o ON o.series_id = t.series_id AND o.ts >= t.bucket AND o.ts < t.bucket + interval '1 hour'
+              AND o.ts >= ${dayFrom}::timestamptz AND o.ts < ${dayUntil}::timestamptz
     GROUP BY o.series_id, t.bucket
     ON CONFLICT (series_id, bucket) DO UPDATE
       SET vmin = EXCLUDED.vmin, vmax = EXCLUDED.vmax, vavg = EXCLUDED.vavg, vlast = EXCLUDED.vlast,
@@ -428,6 +446,7 @@ export async function upsertObs(
           FROM unnest(${wSid}::int[], ${wTs}::timestamptz[]) AS w(series_id, ts)
           WHERE ${notAggregate}) t
     JOIN obs o ON o.series_id = t.series_id AND o.ts >= t.bucket AND o.ts < t.bucket + interval '1 day'
+              AND o.ts >= ${dayFrom}::timestamptz AND o.ts < ${dayUntil}::timestamptz
     GROUP BY o.series_id, t.bucket
     ON CONFLICT (series_id, bucket) DO UPDATE
       SET vmin = EXCLUDED.vmin, vmax = EXCLUDED.vmax, vavg = EXCLUDED.vavg, vlast = EXCLUDED.vlast,
