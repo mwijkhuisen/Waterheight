@@ -197,7 +197,7 @@ The year-1 budget gives the observations **at most 23 GB** (`docs/plan/ARCHITECT
 |---|---|---|---|---|---|---|---|---|
 | NL-1 (28 H, 13 Q; P14a) | 41 | 1990-01-01 to 2026-10-02 | 13,776 | 15,293 | about 4.2 h | 79.2 M | about 7.1 GB (31 % of 23 GB) | about 1.5 GB |
 | NL-1 (**today**, 71 series since P16b) | 71 | 1990-01-01 to 2026-10-02 | – | 26,483 | about 7.4 h | – | **about 12.35 GB** (54 % of 23 GB) | – |
-| DE-8 (`hydro/w`, 9 tier-1 gauges) | 32 units | 1950-01-01 to 2026-08-01 | 3,740 | 32 | 16 min of requests at 30 s, but about 8.6 h with the loads (`hours_with_loads`: every slice waits for its load, about 8 s) | 24.2 M grid points | about 2.18 GB | about 157 MB (ZIPs do not compress) |
+| DE-8 (`hydro/w`, 9 tier-1 gauges) | 32 units | 1950-01-01 to 2026-08-01 | 3,740 | 32 | 16 min of requests at 30 s, but every slice waits for its load: `hours_with_loads` says 8.6 h at 8 s a slice; the first night saw 26 s a slice even on an empty file, with the backlog defect present (§8.1). Plan two to four nights and re-measure | 24.2 M grid points | about 2.18 GB | about 157 MB (ZIPs do not compress) |
 | FR-2 (QmnJ 31, HIXnJ 40) | 71 | 1950-01-01 to 2026-08-01 | 284 (with halvings) | 284 | about 10 min at 2 s | 1,985,941 daily values | about 0.18 GB | about 17 MB |
 | CH-9 (2289 W and Q, 2106 W) | 2 datasets | 2020-06-01 to 2026-08-01 | 152 | 152 | about 3 min at 1 s | 2,594,304 values (1,297,152 records; half on the 10-minute grid) | about 0.09 GB | about 10 MB |
 | BE-3, BE-1/2, CH-8, LU-7, others | – | – | – | – | – | – | – | later P14 PRs add their own row |
@@ -237,6 +237,8 @@ rwsc run --rm --no-deps -T backfill backfill run
 ```
 
 Expected dry-run totals: 32 series (units), 3,740 chunks, 32 requests, 24,166,944 values, 2.18 GB database, 157 MB archive. A 20 MB file (Rur 2020) holds 27 members and inflates to 292 MB; the loader needs about 311 MB resident for it (the container has 768 MB). The first slice of a file takes about 2.4 s to parse, the others read the memo (about 2 ms).
+
+**The backlog age of a slice (the first night, 2026-10-18/19).** Every slice line of a file carries the file's one fetch time. Until the loader fix that followed P14b, the backlog aged a slice waiting for the loader's next tick by that time: minutes to hours. Public health showed that `backlog_age_s`, which the watchdog's `load_backlog` (15 minutes) could page on, and the guard said `backlog` and held the runner 5 minutes instead of 2 s. The night did 412 slices: the empty Rur 1950 file, Rur 1960 and 1970, and 46 slices of Rur 1980, from 26 s a slice on the first file to 154 s on the fourth. Since the fix a backfill line has no age of its own (`waitsFrom` in `load/pipeline.ts`): the backlog ages the live lines only, and reads 0 s, never "nothing to load", while only backfill lines wait. A slice still waits one loader cycle (its 10 s tick plus the tick's work); the next night measures it for the remaining 3,328 slices.
 
 **Verify.** Besides §6: a done job's ledger has one row per slice of its file, all `reconciled`. The hold means a 1950s series has a grid point every 15 minutes while its last row is at most 24 h old, and none after longer silence (KG-385). The archive ends **2026-07-01**, so the last decade's final slices are empty grid points, not failures.
 
