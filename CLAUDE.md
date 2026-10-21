@@ -192,23 +192,23 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | postgresql-18 (apt.postgresql.org) | tool | 18 | installed | 0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76 | PostgreSQL | hook only; sha256 of the repository key file ACCC4CF8.asc |
 | typescript | npm | 6.0.3 | installed | – | Apache-2.0 | TS 7 forbidden |
 | @biomejs/biome | npm | 2.5.15 | installed | – | MIT OR Apache-2.0 | lint + format |
-| vitest | npm | 5.0.3 | installed | – | MIT | |
-| msw | npm | 3.0.2 | installed | – | MIT | `onUnhandledFrame: 'error'`; postinstall denied (`allowBuilds`) |
+| vitest | npm | 5.0.4 | installed | – | MIT | |
+| msw | npm | 3.0.3 | installed | – | MIT | `onUnhandledFrame: 'error'`; postinstall denied (`allowBuilds`) |
 | yaml | npm | 2.9.1 | installed | – | ISC | registry and lockfile parsing; apps/server reads the registry at runtime (P1) |
-| @types/node | npm | 26.6.4 | installed | – | MIT | |
+| @types/node | npm | 26.6.5 | installed | – | MIT | |
 | hono | npm | 4.13.13 | installed | – | MIT | apps/server |
-| @hono/node-server | npm | 2.1.3 | installed | – | MIT | apps/server |
+| @hono/node-server | npm | 2.1.5 | installed | – | MIT | apps/server |
 | pg | npm | 8.23.1 | installed | – | MIT | apps/server: PostgreSQL driver of migrate, load and api (P2a) |
 | @types/pg | npm | 8.23.1 | installed | – | MIT | |
-| zod | npm | 4.6.5 | installed | – | MIT | packages/contracts; apps/server manifest and spec schemas (P1); apps/web (P4b): `?s=` and the API answers, set `jitless` before any schema is built (its `new Function` probe is a CSP violation) |
+| zod | npm | 4.6.7 | installed | – | MIT | packages/contracts; apps/server manifest and spec schemas (P1); apps/web (P4b): `?s=` and the API answers, set `jitless` before any schema is built (its `new Function` probe is a CSP violation) |
 | react | npm | 19.3.0 | installed | – | MIT | apps/web |
 | react-dom | npm | 19.3.0 | installed | – | MIT | apps/web |
 | @types/react | npm | 19.3.0 | installed | – | MIT | |
 | @types/react-dom | npm | 19.3.0 | installed | – | MIT | |
-| vite | npm | 8.3.3 | installed | – | MIT | apps/web |
+| vite | npm | 8.3.4 | installed | – | MIT | apps/web |
 | @vitejs/plugin-react | npm | 6.1.2 | installed | – | MIT | apps/web |
-| @inlang/paraglide-js | npm | 2.26.0 | installed | – | MIT | apps/web |
-| @inlang/plugin-message-format | npm | 4.4.5 | installed | – | MIT | loaded from node_modules so Paraglide never fetches plugin code from a CDN |
+| @inlang/paraglide-js | npm | 2.27.0 | installed | – | MIT | apps/web |
+| @inlang/plugin-message-format | npm | 4.5.3 | installed | – | MIT | loaded from node_modules so Paraglide never fetches plugin code from a CDN |
 | actions/checkout | action | 7.0.1 | installed | 3d3c42e5aac5ba805825da76410c181273ba90b1 | MIT | |
 | actions/setup-node | action | 7.1.0 | installed | 949feb2413d6458794dcd2491c4babbbce0c15c1 | MIT | `package-manager-cache: false` |
 | step-security/harden-runner | action | 2.22.1 | installed | ccd8616d44fd3846e67624a50d5aad6d37bf2d25 | Apache-2.0 | audit mode |
@@ -232,7 +232,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | caddy | image | 2.11.7-alpine | installed | caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f | Apache-2.0 | P1b web image (file capability stripped; runs with none) |
 | zlib (Alpine) | tool | 1.3.2-r1 | installed | 1.3.2-r1 | Zlib | #131: `ZLIB_VERSION` in `deploy/web/Dockerfile` replaces the caddy image's 1.3.2-r0 (CVE-2026-85091; r1 built 2026-10-06), apk signature-checked; Alpine keeps only the newest revision, so the build fails once r1 is replaced: move the pin, or drop it when the caddy image carries the fix |
 | cloudflared | image | 2026.9.3 | installed | cloudflare/cloudflared:2026.9.3@sha256:072c067d25ccbe61d46e18f0d0723255f2bb5304f7317caa95b27031520ff92c | Apache-2.0 | #109: `deploy/compose.tunnel.yaml`, only while `RWS_EDGE=tunnel` (the multi-arch index digest; built 2026-09-24; 2026.10.0 of 2026-10-05 was under 7 days old at pin time). Distroless `base-debian13:nonroot` and one static Go binary (Cloudflare, Inc., releases about monthly; 88 Go modules in its `go.mod`, 43 direct); runs as 65532, needs no writable path, shell-free healthcheck `cloudflared tunnel --metrics 127.0.0.1:20241 ready`; Grype scans this pin (#167, R-095; 2026.10.1 from 2026-10-22, #169) |
-| playwright (image) | image | 1.63.0 | installed | mcr.microsoft.com/playwright:v1.63.0-noble@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27 | Apache-2.0 | CI only: the `e2e` job runs `@playwright/test` in it (Chromium, Firefox, WebKit and their libraries baked in; P3) |
+| playwright (image) | image | 1.64.0 | installed | mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f | Apache-2.0 | CI only: the `e2e` job runs `@playwright/test` in it (Chromium, Firefox, WebKit and their libraries baked in; P3) |
 | distroless static | image | nonroot | installed | gcr.io/distroless/static-debian13:nonroot@sha256:e2e927ec666bae08560abb3c55d0659eceabb657f56b6782ab500a9fc7f555e3 | Apache-2.0 | P1b backup image runtime |
 | buildkit | image | v0.33.0 | installed | moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3 | Apache-2.0 | release.yml builder (setup-buildx driver) |
 | buildkit-syft-scanner | image | 1.12.0 | installed | docker/buildkit-syft-scanner:1.12.0@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9 | Apache-2.0 | release.yml SBOM generator (Syft) |
@@ -246,17 +246,17 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | kysely | npm | 0.29.6 | installed | – | MIT | apps/server: typed, parameterised SQL (`sql` templates; P2a) |
 | kysely-codegen | npm | 0.20.0 | installed | – | MIT | dev only: `pnpm db:types` writes `apps/server/src/db/generated.ts` (base tables; P2a) |
 | @hono/zod-openapi | npm | 1.6.3 | planned | – | MIT | P9; P4a uses Zod's `z.toJSONSchema` instead (owner, 2026-10-01) |
-| maplibre-gl | npm | 6.13.0 | installed | – | BSD-3-Clause | apps/web: the map, a lazy chunk; its worker from `setWorkerUrl` (P3, ADR-0016) |
+| maplibre-gl | npm | 6.14.0 | installed | – | BSD-3-Clause | apps/web: the map, a lazy chunk; its worker from `setWorkerUrl` (P3, ADR-0016) |
 | pmtiles | npm | 4.5.0 | installed | – | BSD-3-Clause | apps/web: the `pmtiles://` protocol through `addProtocol` (P3) |
 | @protomaps/basemaps | npm | 5.7.2 | installed | – | BSD-3-Clause | dev only: `tools/geo/basemap/build-style.ts` generates the NL and EN styles (flavour `white`; P3) |
 | @maplibre/maplibre-gl-style-spec | npm | 26.4.4 | installed | – | ISC | dev only: validates the generated styles; the exact version maplibre-gl resolves (P3) |
 | @tanstack/react-router | npm | 1.170.39 | planned | – | MIT | P10 at the earliest: P4b has two static pages and keeps `t` and `s` in `lib/url` without a router (owner, 2026-10-01) |
-| @tanstack/react-query | npm | 5.104.1 | installed | – | MIT | apps/web: fetches keyed by the quantised t, cancelled when superseded (P4b); 1 transitive (`@tanstack/query-core`) |
+| @tanstack/react-query | npm | 5.104.2 | installed | – | MIT | apps/web: fetches keyed by the quantised t, cancelled when superseded (P4b); 1 transitive (`@tanstack/query-core`) |
 | echarts | npm | 6.1.0 | installed | – | Apache-2.0 | apps/web: the station chart, a lazy chunk, tooltips `richText` only (P4b); 2 transitive (`zrender`, `tslib`) |
-| temporal-polyfill | npm | 1.0.5 | installed | – | MIT | apps/web `lib/time`: loaded only where `Temporal` is missing (WebKit; P3) |
+| temporal-polyfill | npm | 1.0.6 | installed | – | MIT | apps/web `lib/time`: loaded only where `Temporal` is missing (WebKit; P3) |
 | fast-check | npm | 4.10.2 | installed | – | MIT | dev only: property and fuzz tests (P2a) |
-| @vitest/coverage-v8 | npm | 5.0.3 | installed | – | MIT | dev only: `pnpm test:coverage` (≥ 90% lines of every adapter's parse and normalise; P2a) |
-| @playwright/test | npm | 1.63.0 | installed | – | Apache-2.0 | dev only: `pnpm -F web e2e` (Chromium, Firefox, WebKit; P3, planned for P4) |
+| @vitest/coverage-v8 | npm | 5.0.4 | installed | – | MIT | dev only: `pnpm test:coverage` (≥ 90% lines of every adapter's parse and normalise; P2a) |
+| @playwright/test | npm | 1.64.0 | installed | – | Apache-2.0 | dev only: `pnpm -F web e2e` (Chromium, Firefox, WebKit; P3, planned for P4) |
 | @axe-core/playwright | npm | 4.13.0 | installed | – | MPL-2.0 | dev only: axe on the spike pages (P3) and on three views of the real pages (P4b); the full accessibility pass is P10 |
 | lighthouse | npm | 13.5.0 | installed | – | Apache-2.0 | dev only: the Lighthouse spec of the CI `e2e` job (P10a; mobile, simulated 4G, local Chromium, reports to disk, no upload); 90 transitive packages (91 new lockfile entries with itself), no build script |
 | docker/build-push-action | action | 7.4.0 | installed | c3c9e263c25d99ce0380d002d59b67737d91b0dc | Apache-2.0 | P1b |
