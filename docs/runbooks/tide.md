@@ -6,7 +6,7 @@
 - a spec that fails with `invalid_too_large` or an `http_*` code;
 - Rijkswaterstaat asks us to slow down or stop (§5).
 
-Scope: capture (§1 to §5) and, since P16b, loading (§6). Since P16a the six specs below fetch and archive. Until the P16b release was deployed none had a loader entry, so nothing was parsed, stored or shown, and the archived payloads were never pruned (a line of a spec with no loader entry writes no `ingest_batch` row, and the pruner deletes only payloads whose batch parsed `ok` with `n_skipped` 0). With P16b they load (§6); the replay that loads the lines archived since the P16a deploy is `docs/runbooks/replay.md` §13.
+Scope: capture (§1 to §5), since P16b loading (§6) and, since P18a, the surge and the high and low waters as served (§7). Since P16a the six specs below fetch and archive. Until the P16b release was deployed none had a loader entry, so nothing was parsed, stored or shown, and the archived payloads were never pruned (a line of a spec with no loader entry writes no `ingest_batch` row, and the pruner deletes only payloads whose batch parsed `ok` with `n_skipped` 0). With P16b they load (§6); the replay that loads the lines archived since the P16a deploy is `docs/runbooks/replay.md` §13.
 
 All specs are source NL-1, host `ddapi20-waterwebservices.rijkswaterstaat.nl`, `OphalenWaarnemingen` POST, one location per request, targets only from the registry seeds `registry/seed/nl-1.csv` and `registry/seed/nl-1-tide.csv`.
 
@@ -141,3 +141,47 @@ scripts/verify-prod.sh <domain>
 **Replay.** After the deploy, `docs/runbooks/replay.md` §13 loads the archived astro and high and low water lines and the forecast runs of the newly registered locations. Lines of `nl-1-hwlw-astro` archived before #174 have no type series, so their extremes take the alternation label; the type window starts at the first #174 run.
 
 Notes carried over from P16a: the Meuse TAW series at maastricht.sintpieter, maastricht.borgharen.maas.beneden and stevensweert (and the roadmap-1 twin eijsden.grens) are not new rows; `schaarvandenoord` H's live method is `RWSM-F232`, not `other:F007`; the hwlw-astro answer states `WaardeBepalingsMethode` `other:F012` although neither the seed row nor the request names a method (the series key needs it).
+
+## 7. Surge and the high and low waters (P18a)
+
+**Definition.** The surge of a tidal series is its measured value minus the astronomical tide **at the measured value's own instant** (never at the snapshot instant T, never across a carried-forward gap), in one datum, rounded to 0.1 cm. It is derived, labelled `derived: "surge"`, and never stored: the loader writes only `tide` rows. The measured and the astronomical rows share one `series_id` (the loader resolves `<code>/WATHTE/<datum>/` exactly), so NAP and MSL never meet; a datum change is a new provider key and so a new series.
+
+**Where it is `null` (the key stays, both numbers `null`; the schema refines `surge === null` iff `astro === null`):**
+
+- no astronomical row at exactly the measured instant: a gap in `nl-1-astro`, or a measured value older than the astro rows kept (`before_window`), or the first monthly run not yet loaded;
+- 2026-10-02 to 2026-10-17: no astronomical tide was captured (KG-371, accepted by the owner on 2026-10-21; no capture change);
+- the astro horizon has passed (below);
+- a station whose registry row has `tidal: null` carries **no `tide` key at all** (the rule is `flags.tidal = true` in both the function and the API views; D-2). Five astro series sit at such stations (KG-431).
+
+A high or low water without a label (`hilo`) is never returned. Measured high and low waters are empty in production while `GETETM2` answers 204 (KG-366, KG-432); only the astronomical ones are listed today.
+
+**Where it is computed (D-1).** SQL reads, TypeScript subtracts. The function pair `TIDE_AT[family]` (migration `20261118000001_views_tide_at.sql`, `SECURITY DEFINER`, fixed `search_path`, `TimeZone = 'UTC'`) returns the tide rows a snapshot at T can use: astro rows inside the series' staleness window, per hilo the newest astronomical extreme at or before T and the next one after T (within 15 h), and the newest measured extreme at or before T (never a later one: it would leak the future into a settled snapshot). `tideAt` in `packages/core/src/tide.ts` subtracts, and the API and the publisher share it through `readStates`/`snapshotValues`. Q1 (`obsAt`) is untouched.
+
+**What is served (D-3, D-4).**
+
+- `/snapshot` items and the static `latest`, `recent/` and `settled/` files: an optional `tide` object `{astro, surge, derived: "surge", extremes[<=6]}`, each extreme `{ts, value, hilo, kind: measured|astro}`. Static files carry it as an optional column, omitted when every entry is null. Display-only series have tide in the snapshot (display channel, like their value) and never in `/series` (api channel).
+- `/series/{id}`, raw resolution only: `tide: {astro[], surge[], derived, extremes[]}` over [from, to). Surge exists only at measured instants that have an astro value at that very instant. 1h and 1d series carry no tide. The per-day listing is `extremes` in UTC; the client groups by local day, so a local midnight neither drops nor doubles one.
+- The station `recent.json` carries no tide (KG-433).
+
+**Health and verify-prod (D-7, O-1).** `/api/v1/health/sources` has `surge: {tidal, astro, surge}` per source (numbers only) beside `astro_horizon`: tier-1 tidal primary H series; of them those with an astro row within a day of now; of them those whose newest value has an astro row at exactly its instant. NL-1 is the only source with one (27, 22, and the number carrying a surge); DE-1's 9 tidal gauges are tier 2, so its `surge` is `null`. `verify-prod`'s `surge` passes when at least 90 % of the tier-1 tidal gauges **that have an RWS astronomical series** (22 of 27) have a surge number in the "now" snapshot; the detail prints both counts. The five without one (borssele, breskens.handelshaven, brouwershavensche.gat.08, bruinisse.krammersluis.oosterschelde.2, cadzand.1) are not in the denominator (KG-430).
+
+```bash
+scripts/verify-prod.sh <domain> --dry-run | grep -E 'surge|astro horizon'
+scripts/verify-prod.sh <domain> --edge cloudflare
+curl -s https://<domain>/api/v1/health/sources | jq '.sources[] | select(.id=="NL-1") | {surge: .surge, astro_horizon: .astro_horizon}'
+```
+
+**The horizon.** The surge ends where the astronomical tide ends. RWS publishes to 2027-12-31 (KG-367): after that instant every tidal series has `astro: null` and `surge: null` unless a monthly `nl-1-astro` run has loaded later months. The `astro_horizon` alert (under 60 days) and `verify-prod`'s `astro horizon` are the warning; §6 has the causes. A failing `surge` check with a healthy horizon points to `nl-1-astro` (stale run, `invalid_too_large`, §4) or to the loader.
+
+**Replay and versions (D-6).** A tide write touches `obs` dirtiness for [ts - 15 h, ts + 15 h] of the written rows (one touch per series; skipped when the range starts after now), because the extremes of a settled day depend on neighbours up to 15 h away. The tide specs (`nl-1-astro`, `nl-1-hwlw-astro`, `nl-1-hwlw`) defer their day bumps like the catch-up specs, so a replay of 79 payloads bumps each affected day once, not 79 times. `migrate` stores two keys (`frames_schema:public`, `snapshot_schema:tide`) and logs "schema bump N day(s)"; the tide key bumps the settled-able days from `day(min(tide.ts) - 15 h)` once: on the first `migrate` whose stored `snapshot_schema:tide` is missing or older than `TIDE_SCHEMA`, and never again until `TIDE_SCHEMA` grows. That run marks those days with reason `schema`: expect one burst of re-rendered settled days (publisher.md §2). Recent files written before the deploy carry no tide for up to 7 days (KG-434).
+
+**Rollout (D-8).** One release; a tab holding the old strict web bundle shows its error state until reloaded (pages are `no-cache`). KG-435.
+
+**Storm checklist** (an official storm-surge warning, or Waterinfo's "Stormvloed" display class at the coast, which is not a warning):
+
+1. `scripts/verify-prod.sh <domain> --edge cloudflare`: `surge`, `fresh NL-1 coast`, `astro horizon` and `interval NL-1` must pass. Read `/api/v1/health/sources` NL-1 `surge`: `surge` close to `astro` close to `tidal`.
+2. Pick three or four gauges (Den Helder, IJmuiden, Hoek van Holland, Vlissingen). Open `/api/v1/snapshot` and each `/api/v1/series/<id>?...` and check `tide.surge` against the measured value and the astro value at that instant by hand; compare the measured level with Rijkswaterstaat's own published water level (Waterinfo) by hand. Never copy warning text: the site links official warnings and shows only derived numbers, labelled as such.
+3. The high and low waters in `extremes` must alternate and sit near the times Waterinfo shows (UTC in the API).
+4. A gauge with `surge: null` during the storm: the astro row is missing at its instant (look at `nl-1-astro` in `/status/capture.json`), not a storm effect.
+5. **No roadmap-2 deploy while an official flood or storm-surge warning is active**; a restart of `capture` or `publish` waits until it is lifted.
+6. **Action D9 (owner):** after the storm, export the payloads of the affected window from the production archive (`nl-1-obs-sea`, `nl-1-astro`, `nl-1-hwlw-astro`) and import them as a real golden (`scripts/import-fixtures.ts`, `docs/plan/PHASES.md` §18). Until then the only storm fixture is the synthetic Den Helder one (`nl-1-storm-denhelder-*.synthetic.raw`, +250 cm for six hours; KG-437).
