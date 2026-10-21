@@ -1,6 +1,6 @@
 import { DisplayWindow } from '../apps/server/src/api/window.ts';
 import { createApp } from '../apps/server/src/app.ts';
-import { OBS_AT, VIEWS } from '../apps/server/src/db/audience.ts';
+import { OBS_AT, TIDE_AT, VIEWS } from '../apps/server/src/db/audience.ts';
 import { openApiDb } from '../apps/server/src/main.ts';
 import { createTestDb } from '../apps/server/test/db/testdb.ts';
 
@@ -20,6 +20,8 @@ const SERIES = Number(process.argv[2] ?? 3000);
 const DAYS = Number(process.argv[3] ?? 60);
 const LIMIT_MS = 50;
 const RUNS = 30;
+const TIDE_MS = 20;
+const TIDAL = Math.min(100, SERIES); // P18a: stations flagged tidal, staleness 1 h (the registry's)
 
 const t = await createTestDb();
 
@@ -99,17 +101,19 @@ try {
     INSERT INTO source (id, provider_id, name, audience, lic_display, lic_api, lic_bulk_export, lic_history_export, capture_enabled)
       VALUES ('NL-1', 'bench', 'bench', 'public', true, true, true, true, true);`);
   await t.admin.query(
-    `INSERT INTO station (id, name, country, tier) SELECT 'nl.bench.' || g, 'bench ' || g, 'NL', 2 FROM generate_series(1, $1) g`,
-    [SERIES],
+    `INSERT INTO station (id, name, country, tier, flags)
+     SELECT 'nl.bench.' || g, 'bench ' || g, 'NL', 2, CASE WHEN g <= $2 THEN '{"tidal": true}'::jsonb ELSE '{}'::jsonb END
+     FROM generate_series(1, $1) g`,
+    [SERIES, TIDAL],
   );
-  // A third of the series have the 25 h limit of a slow gauge; the rest the default 45 min.
+  // A third of the series have the 25 h limit of a slow gauge; the rest the default 45 min; the tidal ones 1 h.
   await t.admin.query(
     `INSERT INTO series (station_id, source_id, quantity, value_kind, provider_key, native_unit, to_canonical, datum,
                          native_step, expected_step, staleness_limit, role)
      SELECT 'nl.bench.' || g, 'NL-1', 'H', 'level', 'k' || g, 'cm', 1, 'NAP', '15 min', '15 min',
-            CASE WHEN g % 3 = 0 THEN interval '25 hours' ELSE interval '45 min' END, 'primary'
+            CASE WHEN g <= $2 THEN interval '1 hour' WHEN g % 3 = 0 THEN interval '25 hours' ELSE interval '45 min' END, 'primary'
      FROM generate_series(1, $1) g`,
-    [SERIES],
+    [SERIES, TIDAL],
   );
   await t.admin.query(`SELECT ensure_partitions(now() - make_interval(days => $1), now())`, [DAYS + 1]);
   // Time-major, as the loader inserts: every series at each step.
@@ -120,6 +124,25 @@ try {
                           date_bin('15 min', now(), timestamptz '2000-01-01 00:00:00+00'), interval '15 min') ts
      CROSS JOIN series s`,
     [DAYS],
+  );
+  // P18a: the astronomical curve every 10 min, and the astronomical and measured high and low waters 4 a day
+  // (alternating, 6 h apart, the measured ones 7 min late), over the same days, for the tidal series.
+  await t.admin.query(
+    `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id)
+     SELECT s.id, 'astro', ts, (random() * 200 - 100)::real, NULL, 1
+     FROM generate_series(date_bin('10 min', now(), timestamptz '2000-01-01 00:00:00+00') - make_interval(days => $1),
+                          date_bin('10 min', now(), timestamptz '2000-01-01 00:00:00+00'), interval '10 min') ts
+     CROSS JOIN (SELECT id FROM series ORDER BY id LIMIT $2) s`,
+    [DAYS, TIDAL],
+  );
+  await t.admin.query(
+    `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id)
+     SELECT s.id, k.kind, x.ts + k.late, (random() * 200 - 100)::real, CASE WHEN x.n % 2 = 0 THEN 'high' ELSE 'low' END, 1
+     FROM (SELECT g AS n, date_bin('6 hours', now(), timestamptz '2000-01-01 00:00:00+00') - g * interval '6 hours' AS ts
+           FROM generate_series(0, $1 * 4) g) x
+     CROSS JOIN (VALUES ('extreme_astro', interval '0'), ('extreme', interval '7 min')) k (kind, late)
+     CROSS JOIN (SELECT id FROM series ORDER BY id LIMIT $2) s`,
+    [DAYS, TIDAL],
   );
   await seedClassification(SERIES, DAYS);
   await t.admin.query('ANALYZE');
@@ -153,6 +176,41 @@ try {
   console.log(plan);
   if (!/Index Scan Backward using obs_(?:\d{4}_\d{2}|y\d{4})_pkey/.test(plan)) {
     console.error('bench-q1: FAIL: not a backward index scan on (series_id, ts)');
+    failed = true;
+  }
+  // P18a: the tide rows at T (the snapshot's extra call): the same measurement as Q1, and the plan of a copy of
+  // the function body, whose tide reads must all be index scans.
+  const TIDE = `SELECT series_id, kind, hilo, ts, value FROM ${TIDE_AT.public}($1::timestamptz)`;
+  const tideBody = (
+    await t.admin.query<{ prosrc: string }>('SELECT prosrc FROM pg_proc WHERE proname = $1', [TIDE_AT.public])
+  ).rows[0]?.prosrc.replace(/\bp_t\b/g, '$1::timestamptz');
+  if (tideBody === undefined) throw new Error(`bench-q1: function ${TIDE_AT.public} not found`);
+  const tidePlan = (
+    await t.admin.query({ text: `EXPLAIN (ANALYZE, BUFFERS) ${tideBody}`, values: [at(3)], rowMode: 'array' })
+  ).rows
+    .map((r: unknown[]) => String(r[0]))
+    .join('\n');
+  console.log(tidePlan);
+  if (/Seq Scan on tide\s/.test(tidePlan)) {
+    console.error('bench-q1: FAIL: the tide function scans the tide table');
+    failed = true;
+  }
+  const tideTimes: number[] = [];
+  let tideRows = 0;
+  for (let i = 0; i < RUNS + 3; i++) {
+    const t0 = process.hrtime.bigint();
+    const result = await api.query(TIDE, [at(i)]);
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    tideRows = result.rowCount ?? 0;
+    if (i >= 3) tideTimes.push(ms);
+  }
+  tideTimes.sort((a, b) => a - b);
+  const tideMedian = tideTimes[Math.floor(tideTimes.length / 2)] as number;
+  console.log(
+    `${TIDE_AT.public} "tide rows at T": ${tideRows} rows over ${TIDAL} tidal series; median ${tideMedian.toFixed(1)} ms, p95 ${(tideTimes[Math.ceil(tideTimes.length * 0.95) - 1] as number).toFixed(1)} ms, max ${(tideTimes.at(-1) as number).toFixed(1)} ms over ${RUNS} runs (limit ${TIDE_MS} ms)`,
+  );
+  if (tideMedian >= TIDE_MS) {
+    console.error(`bench-q1: FAIL: tide median ${tideMedian.toFixed(1)} ms is not under ${TIDE_MS} ms`);
     failed = true;
   }
   // P14f: the day read of a cold /snapshot (readDoy): one UTC day key through the reference view, as rws_api. The
@@ -302,6 +360,30 @@ try {
       failed = true;
     }
     report(`/series ${SPAN_DAYS} d raw (LRU miss)`, SERIES_MS, await ask(serieses), seriesProblem);
+
+    // P18a: one raw /series call over 14 days of a tidal series (its tide block included), and the size of one
+    // /snapshot answer with and without tide rows (same t, a fresh app: the LRU is per app), for the file growth.
+    const tidalCall = (await ask([seriesPath(ids[0] as number, lo - 2 * BUCKET_MS)])).answers[0] as {
+      ms: number;
+      body: string;
+    };
+    console.log(
+      `API /series ${SPAN_DAYS} d raw, tidal series: ${tidalCall.ms.toFixed(1)} ms, ${tidalCall.body.length} bytes (limit ${SERIES_MS} ms)`,
+    );
+    if (tidalCall.ms >= SERIES_MS) {
+      console.error(`bench-q1: FAIL: tidal /series ${tidalCall.ms.toFixed(1)} ms is not under ${SERIES_MS} ms`);
+      failed = true;
+    }
+    const sizeAt = async () => {
+      const fresh = createApp({ db: db.db, window: displayWindow });
+      return (await (await fresh.request(snapshotPath(instants[5] as number))).text()).length;
+    };
+    const withTide = await sizeAt();
+    await t.admin.query('DELETE FROM tide');
+    const without = await sizeAt();
+    console.log(
+      `/snapshot body: ${withTide} bytes with tide, ${without} bytes without (${TIDAL} tidal series, +${withTide - without} bytes)`,
+    );
   } finally {
     await db.close();
   }
