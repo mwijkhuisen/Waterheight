@@ -227,7 +227,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | containerd.io | tool | 2.3.5 | installed | 2.3.5-1~debian.13~trixie | Apache-2.0 | P1b host (2.3.6 was under 7 days old at pin time) |
 | Docker Compose | tool | 5.5.1 | installed | 5.5.1-1~debian.13~trixie | Apache-2.0 | P1b host (`docker-compose-plugin`) |
 | cosign | binary | 3.1.3 | installed | 4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71 | Apache-2.0 | P1b host (`cosign-linux-amd64` sha256); verifies every release on the VPS |
-| node (build image) | image | 26.10.0-trixie-slim | installed | node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 | MIT | P1b build stage |
+| node (build image) | image | 26.11.1-trixie-slim | installed | node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 | MIT | P1b build stage |
 | distroless nodejs26 | image | nonroot | installed | gcr.io/distroless/nodejs26-debian13:nonroot@sha256:a3bb283a564754266646d6029c5b6aa4f760b9415dae1398db8d7f8142ee1375 | Apache-2.0 | P1b runtime |
 | caddy | image | 2.11.7-alpine | installed | caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f | Apache-2.0 | P1b web image (file capability stripped; runs with none) |
 | zlib (Alpine) | tool | 1.3.2-r1 | installed | 1.3.2-r1 | Zlib | #131: `ZLIB_VERSION` in `deploy/web/Dockerfile` replaces the caddy image's 1.3.2-r0 (CVE-2026-85091; r1 built 2026-10-06), apk signature-checked; Alpine keeps only the newest revision, so the build fails once r1 is replaced: move the pin, or drop it when the caddy image carries the fix |
