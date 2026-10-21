@@ -13,7 +13,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { DayVersions } from '../../src/api/versions.ts';
 import { DisplayWindow } from '../../src/api/window.ts';
 import { createApp } from '../../src/app.ts';
-import { FORECAST_AT, OBS_AT, OWNER_ONLY_VIEWS, PUBLIC_ONLY_VIEWS, VIEWS } from '../../src/db/audience.ts';
+import { FORECAST_AT, OBS_AT, OWNER_ONLY_VIEWS, PUBLIC_ONLY_VIEWS, TIDE_AT, VIEWS } from '../../src/db/audience.ts';
 import type { Db } from '../../src/db/pool.ts';
 import { API_POOL, openApiDb } from '../../src/main.ts';
 import { NEVER_OWNER, OWNER_CANARY_REAL, seedAudienceFixture } from '../db/seed.ts';
@@ -322,12 +322,13 @@ describe('the roles read their own family and nothing of the other', () => {
   const flat = (v: object): string[] =>
     Object.values(v).flatMap((x) => (typeof x === 'string' ? [x] : flat(x as object)));
 
-  it('rws_api is refused (42501) on every owner view, on each owner-only view and on both owner functions', async () => {
+  it('rws_api is refused (42501) on every owner view, on each owner-only view and on every owner function', async () => {
     const views = [...flat(VIEWS.owner), ...flat(OWNER_ONLY_VIEWS)];
     expect(views.length).toBeGreaterThan(25);
     for (const view of views) expect(await sqlState(api, `SELECT 1 FROM ${view} LIMIT 1`), view).toBe('42501');
     expect(await sqlState(api, `SELECT * FROM ${OBS_AT.owner}(now()) LIMIT 1`)).toBe('42501');
     expect(await sqlState(api, `SELECT * FROM ${FORECAST_AT.owner}(now(), now()) LIMIT 1`)).toBe('42501');
+    expect(await sqlState(api, `SELECT * FROM ${TIDE_AT.owner}(now()) LIMIT 1`)).toBe('42501');
     // And it reads its own: the control that the query itself is sound.
     expect(await sqlState(api, `SELECT 1 FROM ${VIEWS.public.series} LIMIT 1`)).toBe('ok');
   });
@@ -337,6 +338,7 @@ describe('the roles read their own family and nothing of the other', () => {
       expect(await sqlState(ownerClient, `SELECT 1 FROM ${view} LIMIT 1`), view).toBe('42501');
     expect(await sqlState(ownerClient, `SELECT * FROM ${OBS_AT.public}(now()) LIMIT 1`)).toBe('42501');
     expect(await sqlState(ownerClient, `SELECT * FROM ${FORECAST_AT.public}(now(), now()) LIMIT 1`)).toBe('42501');
+    expect(await sqlState(ownerClient, `SELECT * FROM ${TIDE_AT.public}(now()) LIMIT 1`)).toBe('42501');
     expect(await sqlState(ownerClient, `SELECT 1 FROM ${VIEWS.owner.series} LIMIT 1`)).toBe('ok');
     // Neither reads a base table.
     for (const client of [api, ownerClient])

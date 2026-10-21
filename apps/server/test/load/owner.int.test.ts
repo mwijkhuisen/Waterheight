@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bareLine, writePayload } from '../../../../scripts/fixture-archive.ts';
-import { FAMILY_ROLES, familyViews, OBS_AT, PUBLIC_ONLY_VIEWS, VIEWS } from '../../src/db/audience.ts';
+import { FAMILY_ROLES, familyViews, OBS_AT, PUBLIC_ONLY_VIEWS, TIDE_AT, VIEWS } from '../../src/db/audience.ts';
 import { computeHealth } from '../../src/load/health.ts';
 import { PUBLIC_SCAN_BYTES } from '../../src/load/pipeline.ts';
 import { replay } from '../../src/load/replay.ts';
@@ -131,17 +131,20 @@ async function seen(r: Reader): Promise<Map<string, Set<number>>> {
   return out;
 }
 
-/** Every row of every public view and of the at-T function, as text: what a public reader could ever see. */
+/** Every row of every public view and of the at-T functions, as text: what a public reader could ever see. */
 async function sweep(client: pg.Client): Promise<string> {
   let text = '';
   for (const view of familyViews('public')) {
     const { rows: r } = await client.query<{ j: string }>(`SELECT row_to_json(v)::text AS j FROM ${view} v`);
     text += `${view}\n${r.map((x) => x.j).join('\n')}\n`;
   }
-  const { rows: at } = await client.query<{ j: string }>(
-    `SELECT row_to_json(v)::text AS j FROM ${OBS_AT.public}('${AT}'::timestamptz) v`,
-  );
-  return text + at.map((x) => x.j).join('\n');
+  for (const fn of [OBS_AT.public, TIDE_AT.public]) {
+    const { rows: at } = await client.query<{ j: string }>(
+      `SELECT row_to_json(v)::text AS j FROM ${fn}('${AT}'::timestamptz) v`,
+    );
+    text += `${at.map((x) => x.j).join('\n')}\n`;
+  }
+  return text;
 }
 
 beforeAll(async () => {

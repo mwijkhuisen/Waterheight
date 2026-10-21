@@ -10,6 +10,7 @@ import {
   OWNER_ONLY_VIEWS,
   PUBLIC_ONLY_VIEWS,
   SOURCE_HEALTH_COLUMNS,
+  TIDE_AT,
   TWIN_CHECK_COLUMNS,
   VIEWS,
 } from '../apps/server/src/db/audience.ts';
@@ -301,9 +302,16 @@ function assertColumns(body: string, columns: readonly string[], what: string): 
 /** P9a: the view pairs of PUBLISH_MIGRATION. */
 const PUBLISH_LATER = ['dirty', 'dayVersion', 'source'] as const;
 
-const laterNames: readonly string[] = [...(Object.keys(LATER) as (keyof typeof LATER)[]), ...PUBLISH_LATER].flatMap(
-  (l) => [VIEWS.public[l], VIEWS.owner[l]],
-);
+/** P18a: the api view pairs added after the first views migration (TIDE_AT_MIGRATION). */
+const API_LATER = ['tide'] as const;
+
+const laterNames: readonly string[] = [
+  ...[...(Object.keys(LATER) as (keyof typeof LATER)[]), ...PUBLISH_LATER].flatMap((l) => [
+    VIEWS.public[l],
+    VIEWS.owner[l],
+  ]),
+  ...API_LATER.flatMap((l) => [VIEWS.public.api[l], VIEWS.owner.api[l]]),
+];
 
 export function viewsMigration(): string {
   const up: string[] = [SERIES_EFF.trim()];
@@ -317,6 +325,7 @@ export function viewsMigration(): string {
       names.push(name);
     }
     for (const [logical, name] of Object.entries(api) as [keyof typeof api, string][]) {
+      if ((API_LATER as readonly string[]).includes(logical)) continue;
       up.push(view(name, firstBody(logical)({ audience, api: true })));
       names.push(name);
     }
@@ -627,12 +636,115 @@ ${restore.join('\n\n')}
 `;
 }
 
+export const TIDE_AT_MIGRATION = new URL('../db/migrations/20261118000001_views_tide_at.sql', import.meta.url);
+
+/** The window of a previous or next high or low water around T (P18a D-4); packages/core EXTREME_WINDOW_MS. */
+const EXTREME_WINDOW = "interval '15 hours'";
+
+/**
+ * P18a D-2: a series carries tide only at a station flagged tidal. ONE fragment, the driver of the TIDE_AT functions
+ * and the filter of the api tide views, so `/snapshot` and `/series` agree on which series carry tide.
+ */
+const tidalStation = (e: string) =>
+  `EXISTS (SELECT 1 FROM public.station st WHERE st.id = ${e}.station_id AND st.flags ->> 'tidal' = 'true')`;
+
+/**
+ * P18a as a function (see TIDE_AT in audience.ts), built like `obsAt`: the active visible primary series at tidal
+ * stations are chosen first (a materialised driver, so no tide row is probed for any other series), then per series
+ * the astronomical values in its staleness window before T (a measured value Q1 can take lies there, and the surge
+ * needs the astro value at exactly its instant), per high/low the newest astronomical and measured high or low water
+ * in the window before T, and the oldest astronomical one in the window after T (never a measured one after T, which
+ * a settled snapshot must not know). Every row passes the history rule; each probe is a range or one step on the
+ * primary key (series_id, kind, ts).
+ */
+const tideAt = (name: string, p: Params) => `CREATE FUNCTION ${name}(p_t timestamptz)
+RETURNS TABLE (series_id int, kind text, hilo text, ts timestamptz, value real)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = pg_catalog, pg_temp
+SET TimeZone = 'UTC'
+ROWS 1500
+AS $$
+  WITH tidal AS MATERIALIZED (
+    SELECT e.series_id, e.lic_history_export, e.history_window, s.staleness_limit
+    FROM public.series_eff e
+    JOIN public.series s ON s.id = e.series_id
+    WHERE s.active AND ${seriesVisible('e', p)}
+      AND ${tidalStation('e')}
+  )
+  SELECT e.series_id, d.kind, d.hilo, d.ts, d.value
+  FROM tidal e
+  JOIN public.tide d ON d.series_id = e.series_id
+  WHERE d.kind = 'astro' AND d.ts <= p_t AND d.ts > p_t - e.staleness_limit
+    AND ${historyAllowed('e', 'd.ts')}
+  UNION ALL
+  SELECT e.series_id, d.kind, d.hilo, d.ts, d.value
+  FROM tidal e
+  CROSS JOIN (VALUES ('extreme_astro', 'high'), ('extreme_astro', 'low'), ('extreme', 'high'), ('extreme', 'low'))
+    k (kind, hilo)
+  CROSS JOIN LATERAL (
+    SELECT d.kind, d.hilo, d.ts, d.value
+    FROM public.tide d
+    WHERE d.series_id = e.series_id AND d.kind = k.kind AND d.hilo = k.hilo
+      AND d.ts <= p_t AND d.ts > p_t - ${EXTREME_WINDOW}
+      AND ${historyAllowed('e', 'd.ts')}
+    ORDER BY d.ts DESC
+    LIMIT 1) d
+  UNION ALL
+  SELECT e.series_id, d.kind, d.hilo, d.ts, d.value
+  FROM tidal e
+  CROSS JOIN (VALUES ('high'), ('low')) k (hilo)
+  CROSS JOIN LATERAL (
+    SELECT d.kind, d.hilo, d.ts, d.value
+    FROM public.tide d
+    WHERE d.series_id = e.series_id AND d.kind = 'extreme_astro' AND d.hilo = k.hilo
+      AND d.ts > p_t AND d.ts <= p_t + ${EXTREME_WINDOW}
+      AND ${historyAllowed('e', 'd.ts')}
+    ORDER BY d.ts
+    LIMIT 1) d
+$$;
+REVOKE ALL ON FUNCTION ${name}(timestamptz) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION ${name}(timestamptz) TO ${FAMILY_ROLES[p.audience].join(', ')};`;
+
+/**
+ * P18a: the api tide view pair (the api channel of the tide rows, tidal stations only, for `/series`) and the two
+ * TIDE_AT functions. Down drops all four.
+ */
+export function tideAtMigration(): string {
+  const up: string[] = [];
+  const grants: string[] = [];
+  for (const audience of ['public', 'owner'] as const) {
+    const name = VIEWS[audience].api.tide;
+    up.push(view(name, `${BODY.tide({ audience, api: true })}\n  AND ${tidalStation('e')}`));
+    grants.push(`GRANT SELECT ON ${name} TO ${FAMILY_ROLES[audience].join(', ')};`);
+  }
+  for (const audience of ['public', 'owner'] as const) up.push(tideAt(TIDE_AT[audience], { audience, api: false }));
+  return `-- GENERATED by scripts/gen-views.ts from apps/server/src/db/audience.ts. Do not edit:
+-- change the generator and run it again (CI fails on a difference).
+--
+-- P18a: the api tide view pair (tidal stations only), security_barrier and granted to its family only, and the
+-- "tide rows at T" function of each family, SECURITY DEFINER like the observation functions, EXECUTE for the family
+-- only.
+
+-- migrate:up
+${up.join('\n\n')}
+
+${grants.join('\n')}
+
+-- migrate:down
+DROP FUNCTION ${TIDE_AT.owner}(timestamptz);
+DROP FUNCTION ${TIDE_AT.public}(timestamptz);
+DROP VIEW ${VIEWS.owner.api.tide};
+DROP VIEW ${VIEWS.public.api.tide};
+`;
+}
+
 if (import.meta.main) {
   const files: [URL, string][] = [
     [VIEWS_MIGRATION, viewsMigration()],
     [FORECAST_MIGRATION, forecastMigration()],
     [PUBLISH_MIGRATION, publishMigration()],
     [HISTORY_MIGRATION, historyMigration()],
+    [TIDE_AT_MIGRATION, tideAtMigration()],
     ...(Object.entries(LATER) as [keyof typeof LATER, URL][]).map(([l, url]): [URL, string] => [
       url,
       laterMigration(l),
