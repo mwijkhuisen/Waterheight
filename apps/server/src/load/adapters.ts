@@ -408,11 +408,14 @@ const nl1Forecasts: SpecLoader = {
 /**
  * P16b: the astronomical tide (nl-1-astro, P400D ahead, about 17 MB: the spec's max_bytes is 25 MiB) and the high and
  * low waters (nl-1-hwlw measured, nl-1-hwlw-astro astronomical): `tide` rows of the registered measured H series of
- * the location and datum, never `obs`. The lists name their own series, so a `recovered` line loads too.
+ * the location and datum, never `obs`. The lists name their own series, so a `recovered` line loads too. P18a: tide
+ * reaches the published files, so a write dirties its ±15 h and its day bumps are deferred (`deferBumps`), like the
+ * catch-up's: a replay of 79 payloads bumps each settled day once.
  */
 const nl1Tide = (kind: TideKind, caps: WaarnemingenCaps, maxBytes: number): SpecLoader => ({
   maxBytes,
   needsVariant: false,
+  deferBumps: true,
   run: (b, c) => normaliseNl1Tide(parseWaarnemingen(b, caps), c, kind),
 });
 
@@ -424,6 +427,7 @@ const nl1Tide = (kind: TideKind, caps: WaarnemingenCaps, maxBytes: number): Spec
 const nl1HwlwAstro: SpecLoader = {
   maxBytes: 2 * MIB,
   needsVariant: false,
+  deferBumps: true,
   run: (b, c) => {
     const lists = parseWaarnemingen(b, TIDE_CAPS);
     return lists[0]?.aquo.Typering.Code === 'GETETTPE'

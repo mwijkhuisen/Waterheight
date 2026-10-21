@@ -19,6 +19,13 @@ const ctx = (name: string) => ({
 type Doc = { WaarnemingenLijst: unknown[] };
 const doc = (name: string) => JSON.parse(rawFixture('NL-1', name).body.toString('utf8')) as Doc;
 
+describe('the tide specs', () => {
+  it('defer their day bumps like the catch-up (P18a: a replay of 79 payloads bumps each settled day once)', () => {
+    for (const id of ['nl-1-astro', 'nl-1-hwlw-astro', 'nl-1-hwlw'])
+      expect(LOAD_ADAPTERS['NL-1']?.specs[id], id).toMatchObject({ deferBumps: true });
+  });
+});
+
 describe('nl-1-hwlw-astro dispatch', () => {
   it('a type payload gives tideLabels and no tide, obs or heights', async () => {
     const out = await spec.run(rawFixture('NL-1', TYPE).body, ctx(TYPE));

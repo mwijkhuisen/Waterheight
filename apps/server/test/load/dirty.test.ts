@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bumpedDays, dirtyEntriesOf, narrow, type Visible, visibilityChange } from '../../src/load/dirty.ts';
+import { bumpedDays, dirtyEntriesOf, narrow, unionDays, type Visible, visibilityChange } from '../../src/load/dirty.ts';
 
 // P9a: the loader's day bumps (a superset of settled) and migrate's precise registry bump (§9 C10).
 
@@ -13,6 +13,17 @@ describe('bumpedDays', () => {
     ]);
     expect(bumpedDays(Date.parse('2026-10-02T12:00:00Z'), now, now)).toEqual(['2026-10-02']);
     expect(bumpedDays(Date.parse('2026-10-03T00:00:00Z'), now, now)).toEqual([]);
+  });
+});
+
+describe('unionDays', () => {
+  it('is the sorted union, each day once', () => {
+    expect(unionDays(['2026-10-02', '2026-10-01'], [], ['2026-10-01', '2026-09-30'])).toEqual([
+      '2026-09-30',
+      '2026-10-01',
+      '2026-10-02',
+    ]);
+    expect(unionDays()).toEqual([]);
   });
 });
 
