@@ -107,6 +107,7 @@ import {
   checkStaticStatus,
   checkStaticWarnings,
   checkStations,
+  checkSurge,
   checkTier1,
   checkTileFile,
   checkTiles404,
@@ -723,6 +724,7 @@ describe('freshness, soak and capacity', () => {
       'fresh NL-1 coast',
       'fresh NL-1 lakes',
       'astro horizon',
+      'surge',
       'catch-up NL-1',
       'owner sources',
       'owner health',
@@ -782,6 +784,7 @@ const de1 = (over: Partial<SourceRow> = {}): SourceRow => ({
   label_offset: null,
   forecast: null,
   astro_horizon: null,
+  surge: null,
   partitions: [{ partition: '2026-10', md5: 'a'.repeat(32), rows: 9000 }],
   partitions_at: ago(60_000),
   ...over,
@@ -3100,16 +3103,88 @@ describe('NL-1 roadmap-2 checks (P16b)', () => {
         st('nl.rws.tw', 'tw', { tidal: true }, 1, 'twin'),
       ],
       [
-        { code: 'a', tier: 'sea' },
-        { code: 'l', tier: 'sea' },
-        { code: 'old', tier: 'key' },
+        { code: 'a', quantity: 'H', tier: 'sea', hoedanigheid: 'NAP' },
+        { code: 'l', quantity: 'H', tier: 'sea', hoedanigheid: 'NAP' },
+        { code: 'old', quantity: 'H', tier: 'key', hoedanigheid: '' },
+      ],
+      [
+        { code: 'a', series: 'astro', hoedanigheid: 'NAP' },
+        { code: 'a', series: 'hwlw', hoedanigheid: 'NAP' },
+        { code: 'old', series: 'astro', hoedanigheid: 'MSL' },
       ],
     );
-    expect(sets).toEqual({ coast: ['nl.rws.a', 'nl.rws.old'], lakes: ['nl.rws.l'], added: ['nl.rws.a', 'nl.rws.l'] });
+    // `old` has an astro series, but of another datum than its H row (blank: NAP): it is not in coastAstro.
+    expect(sets).toEqual({
+      coast: ['nl.rws.a', 'nl.rws.old'],
+      coastAstro: ['nl.rws.a'],
+      lakes: ['nl.rws.l'],
+      added: ['nl.rws.a', 'nl.rws.l'],
+    });
     const real = nl1TideSets();
     expect(real.coast.length).toBeGreaterThan(0);
     expect(real.lakes.length).toBeGreaterThan(0);
     expect(real.added.length).toBeGreaterThan(0);
+    // O-1: 22 of the 27 tier-1 tidal gauges have an RWS astronomical series of their datum.
+    expect(real.coast).toHaveLength(27);
+    expect(real.coastAstro).toHaveLength(22);
+  });
+
+  it('surge (O-1): 90% of the coast stations with astro have a surge number in the now snapshot; counts only', () => {
+    const coast = [
+      'nl.rws.a',
+      'nl.rws.b',
+      'nl.rws.c',
+      'nl.rws.d',
+      'nl.rws.e',
+      'nl.rws.f',
+      'nl.rws.g',
+      'nl.rws.h',
+      'nl.rws.i',
+      'nl.rws.j',
+      'nl.rws.noastro',
+    ];
+    const astro = coast.slice(0, 10);
+    const st = stationsOf(coast);
+    // Station i has series 100 + i; `surge[i]` is the number (or null) of that series' tide.
+    const snap = (surge: Record<number, number | null>, bare: number[] = []) => {
+      const doc = snapshotDoc(NOW_MS, Object.fromEntries(Object.keys(surge).map((k) => [100 + Number(k), 60])));
+      return SnapshotAnswer.parse({
+        ...doc,
+        values: doc.values.map((v) => {
+          const i = v.series - 100;
+          const x = surge[i];
+          return bare.includes(i) || x === undefined
+            ? v
+            : { ...v, tide: { astro: x === null ? null : 100, surge: x, derived: 'surge', extremes: [] } };
+        }),
+      });
+    };
+    const all = Object.fromEntries(astro.map((_, i) => [i, 25.5 as number | null]));
+    const f = (d: Record<number, number | null>, bare: number[] = [], ids = astro) =>
+      checkSurge(coast, ids, st, snap(d, bare), NOW_ISO);
+    expect(f(all)).toEqual({
+      check: 'surge',
+      ok: true,
+      detail: 'with astro 10/11, surge 10/10 (a number in the "now" snapshot), 1 without an astro series',
+    });
+    expect(f({ ...all, 9: null }).ok).toBe(true);
+    expect(f({ ...all, 9: null, 8: null })).toMatchObject({ ok: false, detail: /surge 8\/10/ });
+    // A value without a tide object, and a station the API does not list, have no surge.
+    expect(f(all, [8, 9]).ok).toBe(false);
+    expect(f(all, [], [...astro, 'nl.rws.u1', 'nl.rws.u2'])).toMatchObject({ ok: false, detail: /surge 10\/12/ });
+    // A station without astro is not counted: a surge on its series changes nothing.
+    expect(f({ ...all, 10: 3 }, []).detail).toContain('surge 10/10');
+    expect(f({ ...all, 9: null, 10: 3 }).ok).toBe(true);
+    expect(f(all, [], []).ok).toBe(false);
+    expect(f(all).detail).toMatch(/^[A-Za-z0-9 ./,:;()"-]+$/);
+  });
+
+  it('surge: a missing document is a FAIL with the reason', () => {
+    const ids = ['nl.rws.a'];
+    const doc = snapshotDoc(NOW_MS, { 100: 60 });
+    expect(checkSurge(ids, ids, undefined, doc, NOW_ISO).detail).toContain('no valid stations document');
+    expect(checkSurge(ids, ids, stationsOf(ids), undefined, NOW_ISO).detail).toContain('no valid snapshot document');
+    expect(checkSurge(ids, ids, stationsOf(ids), doc, undefined).detail).toContain('no valid meta document');
   });
 });
 

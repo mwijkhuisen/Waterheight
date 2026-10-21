@@ -47,6 +47,7 @@ const source = {
   label_offset: null,
   forecast: null,
   astro_horizon: null,
+  surge: null,
   partitions: [{ partition: '2026-09', md5: 'a'.repeat(32), rows: 1234 }],
   partitions_at: ago(60_000),
 };
@@ -188,6 +189,20 @@ describe('astro_horizon of HealthSources (P16b)', () => {
     expect(HealthSources.safeParse(sources({ sources: [without] })).success).toBe(false);
     expect(ok({ astro_horizon: '2027-01-01' })).toBe(false);
     expect(ok({ astro_horizon: 5 })).toBe(false);
+  });
+});
+
+describe('surge of HealthSources (P18a)', () => {
+  const ok = (over: Record<string, unknown>) =>
+    HealthSources.safeParse(sources({ sources: [{ ...source, ...over }] })).success;
+  it('is required: null or three counts, nothing else', () => {
+    expect(ok({ surge: { tidal: 27, astro: 22, surge: 20 } })).toBe(true);
+    expect(ok({ surge: null })).toBe(true);
+    const { surge: _, ...without } = source;
+    expect(HealthSources.safeParse(sources({ sources: [without] })).success).toBe(false);
+    expect(ok({ surge: { tidal: 1, astro: 1 } })).toBe(false);
+    expect(ok({ surge: { tidal: 1, astro: 1, surge: -1 } })).toBe(false);
+    expect(ok({ surge: { tidal: 1, astro: 1, surge: 0, value: 3 } })).toBe(false);
   });
 });
 
