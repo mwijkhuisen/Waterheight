@@ -329,9 +329,16 @@ describe('the tide of a snapshot value (P18a)', () => {
     });
   }
 
-  it('a past or current t reads TIDE_AT[family] in the snapshot and keeps its rows by series', async () => {
+  it('without the tide option no TIDE_AT query is made and no rows are kept', async () => {
     const asked: string[] = [];
     const r = await readStates(db(asked), 'public', T, { ...opts, cache });
+    expect(asked.some((q) => q.includes(TIDE_AT.public))).toBe(false);
+    expect('tide' in r).toBe(false);
+  });
+
+  it('a past or current t with the option reads TIDE_AT[family] in the snapshot and keeps its rows by series', async () => {
+    const asked: string[] = [];
+    const r = await readStates(db(asked), 'public', T, { ...opts, cache, tide: true });
     expect(asked.filter((q) => q.includes(`"${TIDE_AT.public}"(`))).toHaveLength(1);
     expect(r.tide).toEqual(new Map([[7, [{ kind: 'astro', hilo: null, ts: OBS_TS, value: 80 }]]]));
     expect(snapshotValues(r)[0]?.tide).toMatchObject({ astro: 80, surge: 21 });
@@ -340,7 +347,7 @@ describe('the tide of a snapshot value (P18a)', () => {
   it('a forecast t reads no tide and attaches none', async () => {
     const asked: string[] = [];
     const forecast = new Map([[7, { ts: T, value: 150 }]]);
-    const r = await readStates(db(asked), 'public', T, { ...opts, cache, forecast });
+    const r = await readStates(db(asked), 'public', T, { ...opts, cache, forecast, tide: true });
     expect(asked.some((q) => q.includes(TIDE_AT.public))).toBe(false);
     expect('tide' in r).toBe(false);
     expect(snapshotValues(r).every((v) => !('tide' in v))).toBe(true);

@@ -363,6 +363,8 @@ export async function readStates(
     sections: ReadonlyMap<string, string>;
     cache?: StaticCache | undefined;
     forecast?: ReadonlyMap<number, { ts: number; value: number }>;
+    /** P18a: read the tide rows (the snapshot paths only; health and status discard them). */
+    tide?: boolean;
   },
 ): Promise<StateRead> {
   const V = VIEWS[family];
@@ -413,10 +415,12 @@ export async function readStates(
                 ).rows
               : [],
             // P18a: the tide rows a value at t may use (tidal stations only); the subtraction is tideAt's.
-            tide: (
-              await sql<TideAtRow>`
+            tide: opts.tide
+              ? (
+                  await sql<TideAtRow>`
           SELECT series_id, kind, hilo, ts, value FROM ${sql.id(TIDE_AT[family])}(${at}::timestamptz)`.execute(tx)
-            ).rows,
+                ).rows
+              : undefined,
           };
         }),
   ]);

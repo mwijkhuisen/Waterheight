@@ -58,7 +58,13 @@ export const sourcesOf = (c: Columns, facts: ReadonlyMap<number, SeriesFacts>): 
 
 /** The values of the bucket at `t` as the API's /snapshot gives them (the public family keeps the owner-basis check). */
 export async function readValues(c: RenderCtx, t: number, current: boolean): Promise<Snapshot['values']> {
-  const read = await readStates(c.db, c.family, t, { now: c.now, current, sections: c.sections, cache: c.cache });
+  const read = await readStates(c.db, c.family, t, {
+    now: c.now,
+    current,
+    sections: c.sections,
+    cache: c.cache,
+    tide: true,
+  });
   return c.family === 'public' ? publicSnapshot(read).values : snapshotValues(read);
 }
 
