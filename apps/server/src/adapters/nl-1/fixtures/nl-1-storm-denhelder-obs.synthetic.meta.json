@@ -1,0 +1,12 @@
+{
+  "source": "NL-1",
+  "synthetic": true,
+  "recorded_at": "2026-12-12T03:55:00Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "spec": "nl-1-obs-sea",
+  "variant": "denhelder.marsdiep/H/NAP",
+  "note": "hand-built (P18a, criterion 2): not a recording and not a golden. Structure copied from nl-1-obs-sea-hellevoetsluis-h-nap.raw; only Locatie, Tijdstip and Meetwaarde are replaced. Astro curve: M2-like, extremes at T0 + k * 745 min (highs, T0 = 2026-12-11T23:00Z, value round(80 + 7 sin(1.3k + 0.4))) and 372.5 min later (lows, round(-80 + 5 cos(0.9k + 0.2))), half-cosine between consecutive extremes, rounded to cm, every 10 min from 2026-12-11T04:00Z to 2026-12-12T23:50Z. Measured = astro + surge: 0 until 2026-12-11T17:50Z, 12 values ramping round(250 i / 13) (18:00Z to 19:50Z), 36 values at exactly +250 cm (20:00Z to 01:50Z on 12-12, six hours), 12 values ramping down round(250 (1 - j / 13)) (02:00Z to 03:50Z, the last measurement, surge 19). Every Tijdstip carries the fixed +01:00 with milliseconds, as RWS writes it; local midnight 00:00+01:00 is 23:00Z.",
+  "bytes": 42215
+}
