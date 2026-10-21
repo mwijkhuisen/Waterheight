@@ -23,7 +23,7 @@ RUN apt-get update \
 # whatever the base image or a later layer sets; no toolchain download, no cgo.
 ENV PATH=/usr/local/go/bin:$PATH GOTOOLCHAIN=local CGO_ENABLED=0 GOFLAGS= \
   GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GOPRIVATE= GONOPROXY= GONOSUMDB= GOINSECURE=
-ARG GO_FIXES="golang.org/x/net@v0.60.0 golang.org/x/crypto@v0.57.0 golang.org/x/text@v0.42.0 google.golang.org/grpc@v1.83.2 go.opentelemetry.io/otel/sdk@v1.44.0"
+ARG GO_FIXES="golang.org/x/net@v0.60.0 golang.org/x/crypto@v0.57.0 golang.org/x/text@v0.42.0 google.golang.org/grpc@v1.83.2 go.opentelemetry.io/otel/sdk@v1.44.0 github.com/klauspost/compress@v1.18.7"
 ARG RESTIC_VERSION=0.19.1
 # The upstream release flags (helpers/build-release-binaries) without `selfupdate`:
 # the image never replaces its own binary.
