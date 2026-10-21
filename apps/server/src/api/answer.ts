@@ -153,7 +153,13 @@ export function historyCapMs(
     const w = history.get(id);
     if (w !== undefined) cap = Math.min(cap, w - (nowMs - Date.parse(ts)));
   };
-  if (kind === 'snapshot') for (const v of b.values as { series: number; ts: string }[]) at(v.series, v.ts);
+  type Ts = { ts: string }[];
+  if (kind === 'snapshot')
+    for (const v of b.values as { series: number; ts: string; tide?: { extremes: Ts } }[]) {
+      at(v.series, v.ts);
+      // P18a: a high or low water can be older than the value (up to 15 h before t).
+      for (const e of v.tide?.extremes ?? []) at(v.series, e.ts);
+    }
   if (kind === 'frames') {
     // Hour i of a row is the bucket from + i h; the oldest value of a row bounds it.
     const ids = b.series as number[];
@@ -164,8 +170,12 @@ export function historyCapMs(
         cap = Math.min(cap, w - (nowMs - Date.parse(b.from as string) - first * 3_600_000));
     });
   }
-  if (kind === 'series')
+  if (kind === 'series') {
     for (const p of b.points as ({ ts: string } | { bucket: string })[])
       at(b.id as number, 'ts' in p ? p.ts : p.bucket);
+    const tide = b.tide as { astro: Ts; surge: Ts; extremes: Ts } | undefined;
+    for (const p of tide === undefined ? [] : [...tide.astro, ...tide.surge, ...tide.extremes])
+      at(b.id as number, p.ts);
+  }
   return Math.max(0, cap);
 }

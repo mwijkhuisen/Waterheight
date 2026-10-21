@@ -404,6 +404,28 @@ describe('historyCapMs', () => {
     expect(historyCapMs('series', { id: 1, points: [] }, history, NOW)).toBe(Number.POSITIVE_INFINITY);
   });
 
+  it('P18a: the tide instants of a series body and the extremes of a snapshot value count as points do', () => {
+    const tide = (over: Record<string, { ts: string }[]> = {}) => ({
+      astro: [{ ts: '2026-10-05T07:00:00Z' }],
+      surge: [{ ts: '2026-10-05T07:00:00Z' }],
+      extremes: [],
+      ...over,
+    });
+    const series = (t: ReturnType<typeof tide>) => ({ id: 1, points: [{ ts: '2026-10-05T08:00:00Z' }], tide: t });
+    // the oldest instant decides: astro 7:00 (19 h), surge 5:00 (17 h), a high water 3:00 (15 h)
+    expect(historyCapMs('series', series(tide()), history, NOW)).toBe(19 * H);
+    expect(historyCapMs('series', series(tide({ surge: [{ ts: '2026-10-05T05:00:00Z' }] })), history, NOW)).toBe(
+      17 * H,
+    );
+    expect(historyCapMs('series', series(tide({ extremes: [{ ts: '2026-10-05T03:00:00Z' }] })), history, NOW)).toBe(
+      15 * H,
+    );
+    const value = { series: 1, ts: '2026-10-05T11:50:00Z' };
+    expect(historyCapMs('snapshot', { values: [value] }, history, NOW)).toBe(24 * H - 10 * 60_000);
+    const withTide = { ...value, tide: { astro: 1, surge: 0, extremes: [{ ts: '2026-10-05T02:00:00Z' }] } };
+    expect(historyCapMs('snapshot', { values: [withTide] }, history, NOW)).toBe(14 * H);
+  });
+
   it('other kinds are not capped', () => {
     for (const kind of ['meta', 'stations', 'forecast', 'healthSources'] as const)
       expect(historyCapMs(kind, { series: 1 }, history, NOW)).toBe(Number.POSITIVE_INFINITY);

@@ -208,9 +208,51 @@ const BucketPoint = z.strictObject({
   qcOr: z.number().int().min(0).max(1023),
 });
 const span = { id: SeriesId, from: iso, to: iso, truncated: z.boolean() };
+
+/** A high or low water (P18a, D-4): `measured` at the gauge or `astro` from the astronomical tide, never merged. */
+export const TideExtreme = z.strictObject({
+  ts: iso,
+  value: z.number(),
+  hilo: z.enum(['high', 'low']),
+  kind: z.enum(['measured', 'astro']),
+});
+export type TideExtreme = z.infer<typeof TideExtreme>;
+/**
+ * A tidal series' tide at a snapshot (P18a, D-3), in the series' unit and datum: the astronomical tide at the value's
+ * own ts (null when there is no row at exactly that instant), the surge (value − astro, derived, never stored; null
+ * exactly when astro is) and the previous high and low waters within 15 h (the astronomical next ones too).
+ */
+export const SnapshotTide = z
+  .strictObject({
+    astro: z.number().nullable(),
+    surge: z.number().nullable(),
+    derived: z.literal('surge'),
+    extremes: z.array(TideExtreme).max(6),
+  })
+  .refine((x) => (x.surge === null) === (x.astro === null), 'surge is null exactly when astro is');
+export type SnapshotTide = z.infer<typeof SnapshotTide>;
+const TidePoint = z.strictObject({ ts: iso, value: z.number() });
+/**
+ * A raw series' tide over [from, to) (P18a): the astronomical curve, the surge at each measured instant that has an
+ * astronomical value at exactly that instant, and the high and low waters (the client groups them by local day).
+ */
+export const SeriesTide = z.strictObject({
+  astro: z.array(TidePoint).max(MAX_POINTS),
+  surge: z.array(TidePoint).max(MAX_POINTS),
+  derived: z.literal('surge'),
+  extremes: z.array(TideExtreme).max(MAX_POINTS),
+});
+export type SeriesTide = z.infer<typeof SeriesTide>;
+
 /** One series over the half-open span [from, to); `truncated` when it held more than MAX_POINTS points. */
 export const Series = z.discriminatedUnion('res', [
-  z.strictObject({ ...span, res: z.literal('raw'), points: z.array(RawPoint).max(MAX_POINTS) }),
+  z.strictObject({
+    ...span,
+    res: z.literal('raw'),
+    points: z.array(RawPoint).max(MAX_POINTS),
+    /** Tidal stations only (P18a), when the span holds tide rows. */
+    tide: SeriesTide.optional(),
+  }),
   z.strictObject({ ...span, res: z.enum(['1h', '1d']), points: z.array(BucketPoint).max(MAX_POINTS) }),
 ]);
 export type Series = z.infer<typeof Series>;
@@ -391,6 +433,8 @@ export function apiContracts(source: z.ZodString) {
     nap: z.strictObject({ m: z.number(), pm: z.number().nonnegative() }).optional(),
     /** A gauge zero as published that is not converted (IGN69, NGF-1884, Hub'Eau metadata): shown as unverified. */
     zero: z.strictObject({ m: z.number(), datum: z.enum(DATUMS) }).optional(),
+    /** Tidal stations only (P18a): present when the series has tide rows usable at `t`. */
+    tide: SnapshotTide.optional(),
   });
 
   /**

@@ -13,6 +13,7 @@ import {
   Meta,
   SeriesMeta,
   type Snapshot,
+  SnapshotTide,
   STATES,
   StateBasis,
 } from './api.ts';
@@ -84,12 +85,15 @@ export function staticContracts(source: z.ZodString, latest: typeof ForecastLate
     area: column(z.strictObject({ state: z.enum(AREA_STATES), basis: z.number().int().nonnegative() }).nullable()),
     nap: column(z.strictObject({ m: z.number(), pm: z.number().nonnegative() }).nullable()),
     zero: column(z.strictObject({ m: z.number(), datum: z.enum(DATUMS) }).nullable()),
+    /** P18a: the tide of each series (null: none), omitted when every entry would be null. */
+    tide: column(SnapshotTide.nullable()).optional(),
     attribution,
   };
-  type Columns = { [K in keyof typeof snapshotColumns]: z.infer<(typeof snapshotColumns)[K]> };
+  type Columns = z.infer<z.ZodObject<typeof snapshotColumns>>;
   const checkColumns = (f: Columns, ctx: z.RefinementCtx, extra: readonly (readonly unknown[])[] = []) => {
     const n = f.series.length;
-    const cols = [f.ageSeconds, f.value, f.qc, f.state, f.basis, f.section, f.area, f.nap, f.zero, ...extra];
+    const tide = f.tide === undefined ? [] : [f.tide];
+    const cols = [f.ageSeconds, f.value, f.qc, f.state, f.basis, f.section, f.area, f.nap, f.zero, ...tide, ...extra];
     if (cols.some((c) => c.length !== n))
       ctx.addIssue({ code: 'custom', message: 'every column has one entry per series' });
     if (new Set(f.series).size !== n) ctx.addIssue({ code: 'custom', message: 'a series is listed twice' });
@@ -363,6 +367,7 @@ export function toSnapshot(file: Omit<SnapshotFile, 'schemaVersion'>): Snapshot 
       const area = file.area[i] ?? null;
       const nap = file.nap[i] ?? null;
       const zero = file.zero[i] ?? null;
+      const tide = file.tide?.[i] ?? null;
       const age = file.ageSeconds[i] as number;
       return {
         series: file.series[i] as number,
@@ -378,6 +383,7 @@ export function toSnapshot(file: Omit<SnapshotFile, 'schemaVersion'>): Snapshot 
           : { area: { state: area.state, basis: file.bases[area.basis] as z.infer<typeof StateBasis> } }),
         ...(nap === null ? {} : { nap }),
         ...(zero === null ? {} : { zero }),
+        ...(tide === null ? {} : { tide }),
       };
     }),
   };

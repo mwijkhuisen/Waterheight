@@ -14,11 +14,13 @@ import {
   OWNER_ONLY_SOURCES,
   PERMISSION_REQUIRED,
   type RefIn,
+  type TideRow,
+  tideAt,
   utcMonthDay,
 } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import { type AttributionRow, attributionRows, type SourceDate, sourceDates } from '../attribution.ts';
-import { type ChannelAudience, OBS_AT, VIEWS } from '../db/audience.ts';
+import { type ChannelAudience, OBS_AT, TIDE_AT, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { coded, iso, snapshot } from './util.ts';
 
@@ -47,6 +49,7 @@ type StationRow = {
   flags: unknown;
 };
 type ObsRow = { series_id: number; ts: Date; value: number; qc: number };
+type TideAtRow = Omit<TideRow, 'ts'> & { series_id: number; ts: Date };
 type RefRow = {
   series_id: number;
   source_id: string;
@@ -256,6 +259,8 @@ export type StateRead = {
   publicSeries: Set<number>;
   /** P14f: the series with a day-of-year set (a P10_DOY and a P90_DOY row) valid at t, for the coverage counts. */
   doySeries: Set<number>;
+  /** P18a: the tide rows usable at t (TIDE_AT), by series; absent for a forecast t. */
+  tide?: Map<number, TideRow[]>;
 };
 
 const flagOf = (flags: unknown, key: string) =>
@@ -379,6 +384,7 @@ export async function readStates(
           ),
           classes: [],
           health: [],
+          tide: undefined,
         }
       : snapshot(db, async (tx) => {
           const warnings = (
@@ -406,6 +412,11 @@ export async function readStates(
               SELECT source_id, last_fetch_ok FROM ${sql.table(V.sourceHealth)}`.execute(tx)
                 ).rows
               : [],
+            // P18a: the tide rows a value at t may use (tidal stations only); the subtraction is tideAt's.
+            tide: (
+              await sql<TideAtRow>`
+          SELECT series_id, kind, hilo, ts, value FROM ${sql.id(TIDE_AT[family])}(${at}::timestamptz)`.execute(tx)
+            ).rows,
           };
         }),
   ]);
@@ -494,7 +505,14 @@ export async function readStates(
   const kinds = new Map<number, Set<string>>();
   for (const r of doy) kinds.set(r.series_id, (kinds.get(r.series_id) ?? new Set()).add(r.kind));
   const doySeries = new Set([...kinds].filter(([, k]) => k.size === DOY_KINDS.length).map(([id]) => id));
-  return { t, series: states, stations, publicSeries, doySeries };
+  if (rows.tide === undefined) return { t, series: states, stations, publicSeries, doySeries };
+  const tide = new Map<number, TideRow[]>();
+  for (const { series_id, ts, ...r } of rows.tide) {
+    const list = tide.get(series_id) ?? [];
+    list.push({ ...r, ts: ts.getTime() });
+    tide.set(series_id, list);
+  }
+  return { t, series: states, stations, publicSeries, doySeries, tide };
 }
 
 /** The snapshot's values: the series with a value at t, with their state, basis and detail-view height. */
@@ -502,6 +520,8 @@ export function snapshotValues(read: StateRead): Snapshot['values'] {
   return read.series.flatMap((s) => {
     if (s.obs === null) return [];
     const c = s.classified;
+    const rows = read.tide?.get(s.series);
+    const tide = rows === undefined ? undefined : tideAt({ ts: s.obs.ts.getTime(), value: s.obs.value }, rows);
     return [
       {
         series: s.series,
@@ -515,6 +535,7 @@ export function snapshotValues(read: StateRead): Snapshot['values'] {
         ...(c.area === null ? {} : { area: c.area }),
         ...(s.height !== null && 'nap' in s.height ? { nap: s.height.nap } : {}),
         ...(s.height !== null && 'zero' in s.height ? { zero: s.height.zero } : {}),
+        ...(tide === undefined ? {} : { tide }),
       },
     ];
   });
