@@ -355,9 +355,10 @@ export function classify(s: SeriesIn, family: Family): Classified {
   }
   // Operational classes, then operational reference sets, then the statistical sets, then display classes (the
   // order they were pushed in: inside a group the reference sets by source in alphabetical order, our DOY sets
-  // last, and the NL-4 class at the end). D12: a tidal reach is classed from operational sources only.
+  // last, and the NL-4 class at the end). D12 (amended in P18b): a tidal reach is classed from operational sources
+  // and the NL-4 display classes; statistics (provider and DOY) describe a river regime, not a tide, and stay off.
   const ordered = ORDER.flatMap((g) => cands.filter((c) => c.group === g)).filter(
-    (c) => !s.tidal || c.group === 'operational',
+    (c) => !s.tidal || c.group !== 'statistical',
   );
   // A lower-priority candidate that disagrees is outranked, but it shows which way the value leans: the interval
   // collapses to its nearest edge. Below AGE orange (low..elevated) with HQ10 passed (high) is elevated, not the

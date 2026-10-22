@@ -229,7 +229,23 @@ describe('/snapshot: the item of the Den Helder series', { timeout: 120_000 }, (
         { ts: '2026-12-12T11:25:00.000Z', value: 87, hilo: 'high', kind: 'astro' },
       ],
     });
-    expect(snap.attribution.map((a) => a.source)).toEqual(['NL-1']);
+    // P18b (T1): the value now carries its NL-4 class as basis, so NL-4 is attributed beside NL-1.
+    expect(snap.attribution.map((a) => a.source)).toEqual(['NL-1', 'NL-4']);
+  });
+
+  it('a tidal coastal value carries both its NL-4 class and its derived surge (P18b, D26)', async () => {
+    // Inside the plateau: astro + 250, above Den Helder's Stormvloed (> 260 cm) band start and below Extreem (> 345 cm).
+    const t = Date.parse('2026-12-12T00:00:00Z');
+    const v = item(SnapshotAnswer.parse(await json(snapshotPath(t))));
+    const value = (astroAt.get(t) as number) + 250;
+    expect(v?.value).toBe(value);
+    expect(value).toBeGreaterThan(260);
+    expect(value).toBeLessThan(345);
+    expect(v).toMatchObject({
+      state: 'high',
+      basis: { source: 'NL-4', kind: 'provider_class', label: 'Stormvloed (> 260cm)' },
+      tide: { astro: astroAt.get(t), surge: 250, derived: 'surge' },
+    });
   });
 
   it('carried forward ten minutes past the last measurement: the surge uses the astro at the measured ts, not at t', async () => {

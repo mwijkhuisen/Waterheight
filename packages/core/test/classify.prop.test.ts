@@ -136,6 +136,7 @@ function decided(s: Setup, series: SeriesIn): boolean {
   for (const r of series.refs) {
     const role = referenceRole(r.source, r.kind);
     if (!visible(r.source) || role === undefined || role.op === null) continue;
+    // D12 amended (P18b): statistics stay off a tidal series; no generated set here is an NL-4 display class
     if (s.tidal && role.group !== 'operational') continue;
     if (role.form === 'doy') {
       // a DOY row decides only beside its pair; then every value (a stage behind a weir: only at or above P90)

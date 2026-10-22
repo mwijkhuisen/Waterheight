@@ -508,8 +508,14 @@
   "source": "NL-1",
   "t": "2026-09-29T15:20:00.000Z",
   "value": 139,
-  "state": "no_ref",
-  "basis": null,
+  "state": "normal",
+  "basis": {
+   "source": "NL-4",
+   "kind": "provider_class",
+   "measure": "level",
+   "ref": "Normaal",
+   "label": "Normaal (-223 tot 260 cm)"
+  },
   "section": false,
   "area": null,
   "flags": {
@@ -994,8 +1000,14 @@
   "source": "NL-1",
   "t": "2026-09-29T15:20:00.000Z",
   "value": 139,
-  "state": "no_ref",
-  "basis": null,
+  "state": "normal",
+  "basis": {
+   "source": "NL-4",
+   "kind": "provider_class",
+   "measure": "level",
+   "ref": "Normaal",
+   "label": "Normaal (-223 tot 260 cm)"
+  },
   "section": false,
   "area": null,
   "flags": {

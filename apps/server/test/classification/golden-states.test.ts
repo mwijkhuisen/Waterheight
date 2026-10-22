@@ -89,7 +89,7 @@ const SPECS: Spec[] = [
     build: () => nl1Case('nl.rws.eijsden.grens'),
   },
   {
-    why: 'Delfzijl: a tidal NL-1 station: NL-4 classes are provider classes, D12 leaves them out: no_ref',
+    why: 'Delfzijl: a tidal NL-1 station: the NL-4 display class decides (D12 amended in P18b): normal, flag tidal',
     build: () => nl1WfsCase('nl.rws.delfzijl'),
   },
   // CH-1 with the CH-2 thresholds.
@@ -164,7 +164,7 @@ const SPECS: Spec[] = [
     doy: 'elevated',
   },
   {
-    why: 'Delfzijl + DOY over P90: a tidal station is classed from operational sources only: still no_ref',
+    why: 'Delfzijl + DOY over P90: statistical sets stay off a tidal series (D12 amended), so the NL-4 class stands, equal to the plain entry',
     build: () => nl1WfsCase('nl.rws.delfzijl'),
     doy: 'elevated',
   },
@@ -279,7 +279,12 @@ describe('golden states of real public stations', () => {
     // provider statistics and classes first; tidal and impounded unchanged
     expect(at('de.wsv.24900108#H#doy')).toEqual({ ...at('de.wsv.24900108#H'), doy: 'elevated' });
     expect(at('de.wsv.25700100#H#doy')).toEqual({ ...at('de.wsv.25700100#H'), doy: 'normal' });
-    expect(at('nl.rws.delfzijl#H#doy')).toMatchObject({ state: 'no_ref' });
+    // tidal (D12 amended, P18b): the NL-4 class decides, the DOY set stays off, so the variant equals the plain entry
+    expect(at('nl.rws.delfzijl#H#doy')).toMatchObject({
+      state: 'normal',
+      basis: { source: 'NL-4', kind: 'provider_class' },
+    });
+    expect(at('nl.rws.delfzijl#H#doy')).toEqual({ ...at('nl.rws.delfzijl#H'), doy: 'elevated' });
     expect(at('lu.age.wasserbillig#H#doy')).toMatchObject({ state: 'no_ref' });
   });
 });

@@ -224,12 +224,18 @@ describe('priority', () => {
 });
 
 describe('tidal and impounded series', () => {
-  it('tidal: statistics and NL-4 are ignored, an operational class is kept', () => {
+  it('tidal: statistics are ignored, the NL-4 display class and an operational class are kept (D12 amended, P18b)', () => {
     const nl4 = [
       ref('NL-4', 'NL4_FROM', 0, { label: 'Hoogwater (>0cm)' }),
       ref('NL-4', 'NL4_TO', 500, { label: 'Hoogwater (>0cm)' }),
     ];
-    expect(classify(series({ value: 9, tidal: true, refs: [...KAUB, ...nl4] }), 'public').state).toBe('no_ref');
+    // statistics stay off a tidal series (KAUB alone: no_ref); the NL-4 class decides, with its provider basis
+    expect(classify(series({ value: 9, tidal: true, refs: KAUB }), 'public').state).toBe('no_ref');
+    expect(classify(series({ value: 9, tidal: true, refs: [...KAUB, ...nl4] }), 'public')).toMatchObject({
+      state: 'high',
+      basis: { source: 'NL-4', kind: 'provider_class', label: 'Hoogwater (>0cm)' },
+      flags: { tidal: true },
+    });
     expect(classify(series({ value: 9, refs: nl4 }), 'public').state).toBe('high');
     const r = classify(series({ value: 9, tidal: true, refs: KAUB, classes: [cls('DE-6', 'RP:2')] }), 'public');
     expect(r).toMatchObject({ state: 'high', flags: { tidal: true } });

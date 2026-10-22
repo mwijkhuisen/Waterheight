@@ -243,7 +243,7 @@ describe('around the DOY set: operational above, the NL-4 display class below', 
 });
 
 describe('tidal, impounded and audience', () => {
-  it('a tidal series takes no DOY set (operational only, D12)', () => {
+  it('a tidal series takes no DOY set (statistical sets stay off tidal series, D12 amended in P18b)', () => {
     expect(at(250, doy(100, 200), { tidal: true }).state).toBe('no_ref');
     expect(at(50, doy(100, 200), { tidal: true }).state).toBe('no_ref');
   });
