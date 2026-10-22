@@ -2,26 +2,31 @@ import type { ApiStation } from '@rws/contracts';
 import type { MapLayerMouseEvent, Map as MapLibreMap, MapMouseEvent } from 'maplibre-gl';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReachGraph } from '../../lib/data/api.ts';
+import type { WebWaterbody } from '../../lib/data/chain.ts';
 import type { Change } from '../../lib/data/change.ts';
 import type { PlayedValue } from '../../lib/data/frames.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import type { WarningsAt } from '../../lib/data/warnings.ts';
 import type { StationState } from '../../lib/stationStates.ts';
 import { testHook } from '../../lib/testHook.ts';
-import type { Mode } from '../../lib/url/url.ts';
+import type { Group, Mode } from '../../lib/url/url.ts';
 import { RIVER_ID } from '../../lib/url/url.ts';
+import { type LakeLevel, layerGroup, WATER_LAKES } from '../../lib/water.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import type { FlowHandle } from '../flow/flowLayer.ts';
 import type { Shift } from '../flow/reaches/colour.ts';
 import type { ReachHandle } from '../flow/reaches/reachLayer.ts';
 import { forecastLine } from '../station/forecast.ts';
+import { stateWord } from '../station/state.ts';
+import { formatNumber } from '../station/value.ts';
 import styles from './map.module.css';
 import { badgeLine, changeLine, modeLines } from './popup.ts';
 import { hasReachBins, highlightRiver, RIVERS, RIVERS_HIGHLIGHT, showRivers } from './rivers.ts';
 import { SOURCE, setStationMode, showStations } from './stationLayer.ts';
 import { useMapLibre } from './useMapLibre.ts';
 import { showWarnings, WARNINGS_FILL } from './warnings.ts';
+import type { WaterHandle } from './waterLayer.ts';
 
 // The map view (A§10 features/map): the self-hosted basemap with the stations
 // as a feature-state circle layer. A click selects; the selected station's name
@@ -63,6 +68,29 @@ interface Props {
   shift?: Shift | undefined;
   /** P11b: the values are played-back hourly frames (the popup says so). */
   played: boolean;
+  /** P19a (O-3): the hidden layer groups (`?hide=`): their lines, areas and station points are not drawn. */
+  hide: readonly Group[];
+  /** P19a: each station's group (water.ts `groupsOf`); a station not in it is `rivers`. */
+  groups: ReadonlyMap<string, Group>;
+  /** P19a: the reaches file's water bodies: the lake popup's names (never the tile's) and reference gauges. */
+  waterbodies: readonly WebWaterbody[];
+  /** P19a: each lake's level and view at t (water.ts `lakeLevels`): the lake fills and the lake popup. */
+  lakes: ReadonlyMap<string, LakeLevel>;
+}
+
+/** The 5 px square around a click: the slack of a thin river line, and the hit box of a station for a lake click. */
+const nearBox = ({ x, y }: { x: number; y: number }): [[number, number], [number, number]] => [
+  [x - 5, y - 5],
+  [x + 5, y + 5],
+];
+
+/** Shows or hides every toggled layer of the map by `?hide=` (O-3); the flow layers through their own handle. */
+function applyHide(map: MapLibreMap, hidden: readonly string[], flow: FlowHandle | null): void {
+  for (const id of map.getLayersOrder()) {
+    const group = layerGroup(id);
+    if (group !== undefined) map.setLayoutProperty(id, 'visibility', hidden.includes(group) ? 'none' : 'visible');
+  }
+  flow?.setHidden(hidden.includes('rivers'));
 }
 
 export function StationsMap({
@@ -85,6 +113,10 @@ export function StationsMap({
   allStations,
   shift,
   played,
+  hide,
+  groups,
+  waterbodies,
+  lakes,
 }: Props) {
   const ref = useRef<HTMLDivElement>(null);
   const state = useMapLibre(ref, locale, OPTIONS);
@@ -103,7 +135,20 @@ export function StationsMap({
   const flowLayer = useRef<FlowHandle | null>(null);
   const reachLayer = useRef<ReachHandle | null>(null);
   const [reachesOn, setReachesOn] = useState(false);
+  // P19a: the lake whose popup is open (the clicked point and the validated id), if any.
+  const [lake, setLake] = useState<{ id: string; at: [number, number] } | undefined>();
+  const waterLayer = useRef<WaterHandle | null>(null);
+  const [waterOn, setWaterOn] = useState(false);
   const graph = useReachGraph().data;
+  // P19a (O-3): `readSearch` gives a new array every render, so everything keys on the canonical string.
+  const hideKey = hide.join(',');
+  const hideNow = useRef(hideKey);
+  hideNow.current = hideKey;
+  // The stations of a hidden group leave the source (the KG-233 pattern); the search and the table keep them.
+  const shown = useMemo(() => {
+    const off = hideKey === '' ? [] : hideKey.split(',');
+    return off.length === 0 ? stations : stations.filter((st) => !off.includes(groups.get(st.id) ?? 'rivers'));
+  }, [stations, groups, hideKey]);
 
   useEffect(() => {
     if (state.status === 'error') onFailure(state.code);
@@ -114,15 +159,13 @@ export function StationsMap({
     const ready = state.map;
     const click = (e: MapLayerMouseEvent) => {
       const id = e.features?.[0]?.id;
+      // A station replaces an open lake popup (the lake's id is set again by the next lake click).
+      setLake(undefined);
       if (id !== undefined) select.current(String(id));
     };
     // A click on a river line (a few pixels of slack: the line is thin) selects the river, unless a station is there.
     const riverClick = (e: MapMouseEvent) => {
-      const { x, y } = e.point;
-      const box: [[number, number], [number, number]] = [
-        [x - 5, y - 5],
-        [x + 5, y + 5],
-      ];
+      const box = nearBox(e.point);
       if (ready.getLayer(RIVERS) === undefined || ready.queryRenderedFeatures(box, { layers: [SOURCE] }).length > 0)
         return;
       const id = ready.queryRenderedFeatures(box, { layers: [RIVERS] })[0]?.properties?.river_id;
@@ -135,7 +178,7 @@ export function StationsMap({
       ready.getCanvas().style.cursor = '';
     };
     const add = () => {
-      showStations(ready, stations, modeNow.current, m.legend_impounded({}, { locale }));
+      showStations(ready, shown, modeNow.current, m.legend_impounded({}, { locale }), m.map_msl_short({}, { locale }));
       ready.on('click', riverClick);
       ready.on('click', SOURCE, click);
       ready.on('mouseenter', SOURCE, pointer);
@@ -154,18 +197,18 @@ export function StationsMap({
       if (testHook) testHook.map = null;
       setMap(null);
     };
-  }, [state, stations, locale]);
+  }, [state, shown, locale]);
 
   useEffect(() => {
     if (map === null) return;
     // Feature state merges: every key of the record is always written, so nothing of an earlier t stays. Only the
     // stations in the source: a hidden one (KG-233) has no feature to write to.
-    for (const st of stations) {
+    for (const st of shown) {
       const s = states.get(st.id);
       if (s !== undefined)
         map.setFeatureState({ source: SOURCE, id: st.id }, { ...s, selected: st.id === selected?.id });
     }
-  }, [map, stations, states, selected]);
+  }, [map, shown, states, selected]);
 
   // The paint follows the mode; the warnings and rivers are layers of their own (data changes rarely: setData).
   useEffect(() => {
@@ -187,10 +230,13 @@ export function StationsMap({
     // Two chunks loaded apart, so one that fails never keeps the other off the map (each anchors its own layers).
     // A chunk that fails to load leaves its layers off; the map and the other chunk carry on.
     const none = () => undefined;
+    // Each lazy add applies `?hide=` to what it added (P19a).
+    const hidden = () => (hideNow.current === '' ? [] : hideNow.current.split(','));
     import('../flow/reaches/reachLayer.ts')
       .then(({ addReaches }) => {
         if (gone || map.getLayer(RIVERS) === undefined) return;
         reachLayer.current = addReaches(map, RIVERS_HIGHLIGHT, hasReachBins(location.origin, riverTiles));
+        applyHide(map, hidden(), flowLayer.current);
         setReachesOn(true);
       })
       .catch(none);
@@ -198,6 +244,16 @@ export function StationsMap({
       .then(({ addFlow }) => {
         if (gone || map.getLayer(RIVERS) === undefined) return;
         flowLayer.current = addFlow(map, WARNINGS_FILL, flowNow.current);
+        applyHide(map, hidden(), flowLayer.current);
+      })
+      .catch(none);
+    // P19a (T3): the lakes and canals under the river lines; names and levels come from the reaches file.
+    import('./waterLayer.ts')
+      .then(({ addWater }) => {
+        if (gone || map.getLayer(RIVERS) === undefined) return;
+        waterLayer.current = addWater(map, RIVERS);
+        applyHide(map, hidden(), flowLayer.current);
+        setWaterOn(true);
       })
       .catch(none);
     return () => {
@@ -206,9 +262,29 @@ export function StationsMap({
       reachLayer.current = null;
       flowLayer.current?.dispose();
       flowLayer.current = null;
+      // The P11b lesson: an unmount may run after map.remove().
+      try {
+        waterLayer.current?.dispose();
+      } catch {
+        // the map is already gone, and its layers with it
+      }
+      waterLayer.current = null;
       setReachesOn(false);
+      setWaterOn(false);
     };
   }, [map, riverTiles]);
+  // `?hide=` (O-3) on every toggled layer, again whenever a lazy layer set arrives.
+  useEffect(() => {
+    if (map !== null) applyHide(map, hideKey === '' ? [] : hideKey.split(','), flowLayer.current);
+  }, [map, hideKey]);
+  useEffect(() => {
+    if (waterOn) waterLayer.current?.update(lakes);
+  }, [waterOn, lakes]);
+  // The hatch of a lake whose reference gauge is tidal: a pattern cannot read feature-state, so an id filter.
+  const tidalLakes = [...lakes].flatMap(([id, l]) => (l.view.tidal ? [id] : [])).join(',');
+  useEffect(() => {
+    if (waterOn) waterLayer.current?.setTidal(tidalLakes === '' ? [] : tidalLakes.split(','));
+  }, [waterOn, tidalLakes]);
   useEffect(() => {
     if (reachesOn && graph !== undefined)
       reachLayer.current?.update({ graph, mode, stations: allStations, values, changes, shift });
@@ -263,7 +339,9 @@ export function StationsMap({
   const host = useRef<HTMLElement | null>(null);
 
   // A station hidden from the map (KG-233) still opens its panel by link, but gets no popup over an empty spot.
-  const drawn = selected !== undefined && stations.includes(selected);
+  // An open lake popup takes the station popup's place (never two at once); `?s=` stays, and the station popup comes
+  // back when the lake popup closes.
+  const drawn = selected !== undefined && shown.includes(selected) && lake === undefined;
   useEffect(() => {
     if (map === null || selected === undefined || !drawn || selected.lon === null || selected.lat === null) return;
     const at: [number, number] = [selected.lon, selected.lat];
@@ -294,6 +372,84 @@ export function StationsMap({
       remove?.();
     };
   }, [map, selected, drawn]);
+
+  // P19a (T3): the lake popup. A click on a lake opens it, unless a station or a river line is within 5 px of the click:
+  // those win, in that order (the station's own handler selects it, riverClick sets `?river=`), so a click never does
+  // two things. The id is the promoted `waterbody_id`, checked against the reaches file's list; the name, the gauge
+  // and the levels come from that file and `lakes`, never from the tile's properties. It does not touch `?s=`.
+  const bodiesNow = useRef(waterbodies);
+  bodiesNow.current = waterbodies;
+  useEffect(() => {
+    if (map === null) return;
+    const click = (e: MapLayerMouseEvent) => {
+      const box = nearBox(e.point);
+      if (map.queryRenderedFeatures(box, { layers: [SOURCE] }).length > 0) return;
+      if (map.getLayer(RIVERS) !== undefined && map.queryRenderedFeatures(box, { layers: [RIVERS] }).length > 0) return;
+      const id = String(e.features?.[0]?.id ?? '');
+      if (bodiesNow.current.some((b) => b.id === id)) setLake({ id, at: [e.lngLat.lng, e.lngLat.lat] });
+    };
+    map.on('click', WATER_LAKES, click);
+    return () => {
+      map.off('click', WATER_LAKES, click);
+    };
+  }, [map]);
+  // A hidden lakes group has no lake to point at.
+  useEffect(() => {
+    if (hideKey.split(',').includes('lakes')) setLake(undefined);
+  }, [hideKey]);
+  const lakeBody = lake === undefined ? undefined : waterbodies.find((b) => b.id === lake.id);
+  const lakeName = lakeBody === undefined ? undefined : locale === 'nl' ? lakeBody.name_nl : lakeBody.name_en;
+  const lakeLines = useMemo(() => {
+    const view = lake === undefined ? undefined : lakes.get(lake.id);
+    const ref = allStations.find((st) => st.id === lakeBody?.reference_station_id);
+    return lakeBody === undefined
+      ? []
+      : [
+          // The gauge's name is provider text: a text node in the popup, as the station name is.
+          ref === undefined ? m.lake_no_reference({}, { locale }) : m.lake_reference({ gauge: ref.name }, { locale }),
+          view === undefined || view.level === null || view.view.state === null
+            ? m.lake_no_class({}, { locale })
+            : stateWord(view.view.state, locale),
+          ...(view?.view.spread == null
+            ? []
+            : [m.lake_spread({ cm: formatNumber(view.view.spread.cm, locale) }, { locale })]),
+          m.lake_wind_setup({}, { locale }),
+        ];
+  }, [lake, lakeBody, lakes, allStations, locale]);
+  const lakeLinesNow = useRef(lakeLines);
+  lakeLinesNow.current = lakeLines;
+  const lakeHost = useRef<HTMLElement | null>(null);
+  const lakeAt = lake?.at;
+  useEffect(() => {
+    if (map === null || lakeAt === undefined || lakeName === undefined) return;
+    let removed = false;
+    let remove: (() => void) | undefined;
+    void import('./createMap.ts').then(({ Popup }) => {
+      if (removed) return;
+      const text = document.createElement('span');
+      text.textContent = lakeName; // the reaches file's name: a text node, never HTML
+      const popup = new Popup({ closeOnClick: false, focusAfterOpen: false, offset: 12 })
+        .setLngLat(lakeAt)
+        .setDOMContent(text)
+        .addTo(map);
+      lakeHost.current = text.parentElement;
+      showLines(lakeHost.current, lakeLinesNow.current);
+      // As the station popup: only its own close button closes it for good (a removed map also fires 'close').
+      popup
+        .getElement()
+        ?.querySelector('.maplibregl-popup-close-button')
+        ?.addEventListener('click', () => setLake(undefined));
+      remove = () => popup.remove();
+    });
+    return () => {
+      removed = true;
+      lakeHost.current = null;
+      remove?.();
+    };
+  }, [map, lakeAt, lakeName]);
+  useEffect(() => {
+    showLines(lakeHost.current, lakeLines);
+  }, [lakeLines]);
 
   // A new snapshot changes the lines only: the popup and its close button (and the keyboard focus on it) stay.
   useEffect(() => {

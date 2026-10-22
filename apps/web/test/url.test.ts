@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { PAGE_ROUTES, pathOf, routeOf } from '../src/lib/routes.ts';
 import {
   HOV_PATHS,
+  LAYER_GROUPS,
   MODES,
   otherLanguageHref,
   RIVER_ID,
@@ -258,6 +259,82 @@ describe('mode and river (P10a)', () => {
         const out = readSearch(`?mode=${encodeURIComponent(mode)}&river=${encodeURIComponent(river)}`);
         if (out.mode !== undefined) expect(MODES).toContain(out.mode);
         if (out.river !== undefined) expect(out.river).toMatch(RIVER_ID);
+      }),
+    );
+  });
+});
+
+describe('hide (P19a)', () => {
+  it('reads one, two or three known groups, in the canonical order whatever the written order', () => {
+    expect(readSearch('?hide=lakes').hide).toEqual(['lakes']);
+    expect(readSearch('?hide=coast,rivers').hide).toEqual(['rivers', 'coast']);
+    expect(readSearch('?hide=coast,lakes,rivers').hide).toEqual(['rivers', 'lakes', 'coast']);
+    expect(readSearch(`?t=2026-10-25T01:30Z&hide=lakes&s=${ID}`)).toMatchObject({ t: T, s: ID, hide: ['lakes'] });
+  });
+
+  it('drops the whole key for an unknown token, a repeat, a long value, an empty one or other separators and case', () => {
+    for (const bad of [
+      'sea',
+      'lakes,sea',
+      'lakes,lakes',
+      'rivers,lakes,rivers',
+      'a'.repeat(21),
+      'rivers,lakes,coast,rivers',
+      '',
+      'Lakes',
+      'LAKES',
+      'lakes;coast',
+      'lakes,',
+      ',lakes',
+      'lakes,,coast',
+      'lakes coast',
+      'lakes%2Ccoast%2C',
+      '__proto__',
+    ])
+      expect(readSearch(`?hide=${bad}`).hide, bad).toBeUndefined();
+    expect(readSearch('?t=2026-10-25T01:30Z').hide).toBeUndefined();
+    // The rest of the URL survives a bad hide.
+    expect(readSearch('?hide=sea&mode=q')).toMatchObject({ mode: 'q', hide: undefined });
+  });
+
+  it('writes the canonical order, last, and omits it when empty', () => {
+    expect(searchOf({ t: T, s: undefined, hide: ['coast', 'rivers'] })).toBe('?t=2026-10-25T01:30Z&hide=rivers,coast');
+    expect(searchOf({ t: T, s: undefined, hov: 'rhine-waal', hide: ['lakes'] })).toBe(
+      '?t=2026-10-25T01:30Z&hov=rhine-waal&hide=lakes',
+    );
+    expect(searchOf({ t: T, s: undefined, hide: [] })).toBe('?t=2026-10-25T01:30Z');
+    expect(searchOf({ t: T, s: undefined, hide: undefined })).toBe('?t=2026-10-25T01:30Z');
+    expect(searchOf({ t: undefined, s: undefined, hide: ['lakes'] })).toBe('?hide=lakes');
+  });
+
+  it('keeps it in the other language', () => {
+    expect(otherLanguageHref('nl', { t: T, s: ID, hide: ['coast', 'lakes'] })).toBe(
+      `/en/?t=2026-10-25T01:30Z&s=${ID}&hide=lakes,coast`,
+    );
+    expect(otherLanguageHref('en', { t: undefined, s: undefined, hide: ['rivers'] })).toBe('/?hide=rivers');
+  });
+
+  it('round-trips with the other keys, and a read value is always valid and canonical', () => {
+    const hide = fc.subarray([...LAYER_GROUPS]).map((g) => g as (typeof LAYER_GROUPS)[number][]);
+    fc.assert(
+      fc.property(
+        hide,
+        fc.option(fc.constantFrom(...MODES), { nil: undefined }),
+        fc.option(fc.constantFrom('slow', 'normal', 'fast'), { nil: undefined }),
+        (h, mode, play) => {
+          const x: UrlState = { t: T, s: ID, mode, play, hide: h };
+          const back = readSearch(searchOf(x));
+          expect(back).toMatchObject({ t: T, s: ID, mode, play });
+          expect(back.hide ?? []).toEqual(LAYER_GROUPS.filter((g) => h.includes(g)));
+        },
+      ),
+    );
+    fc.assert(
+      fc.property(fc.string({ unit: 'binary' }), (raw) => {
+        const out = readSearch(`?hide=${encodeURIComponent(raw)}`).hide;
+        if (out === undefined) return;
+        expect(out).toEqual(LAYER_GROUPS.filter((g) => out.includes(g)));
+        expect(out.length).toBeGreaterThan(0);
       }),
     );
   });

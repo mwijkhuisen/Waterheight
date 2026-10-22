@@ -37,7 +37,12 @@ const width = (scale: number): ExpressionSpecification => [
 export function showRivers(map: MapLibreMap, origin: string, file: string | undefined, beforeId: string): void {
   const url = file === undefined ? undefined : riverUrl(origin, file);
   if (url === undefined || map.getSource(RIVERS) !== undefined) return;
-  map.addSource(RIVERS, { type: 'vector', url, promoteId: { rivers: 'reach_id', reach_bins: 'seg' } });
+  map.addSource(RIVERS, {
+    type: 'vector',
+    url,
+    // P19a: the lake fills take their state by `waterbody_id` (features/map/waterLayer.ts).
+    promoteId: { rivers: 'reach_id', reach_bins: 'seg', waterbodies: 'waterbody_id' },
+  });
   const before = map.getLayer(beforeId) === undefined ? undefined : beforeId;
   map.addLayer(
     {

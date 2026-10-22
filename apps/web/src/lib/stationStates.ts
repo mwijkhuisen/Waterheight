@@ -3,6 +3,8 @@ import { SUSPECT_BITS } from '@rws/core/qc';
 import { type DhBin, dhBin, levelOf, type QSize, qSize } from '../features/legend/palette.ts';
 import type { Change } from './data/change.ts';
 import type { WebForecast } from './data/static.ts';
+import type { Group } from './url/url.ts';
+import { surgeAt } from './water.ts';
 
 // The feature-state contract of the station markers (P10a T3): one plain record per station, computed once per t
 // and mode, written with `setFeatureState` only (the source is never rebuilt). The table, popup and panel read the
@@ -82,19 +84,28 @@ export interface StationState {
   owner: boolean;
   /** No value at t, and every series' newest value is older than 25 hours (KG-233): not drawn, listed or found. */
   hidden: boolean;
+  /**
+   * P19a (T2): the station is in a sea or estuary (the coast group): in the state mode it is coloured by its surge
+   * only, and hollow without one, whatever its level.
+   */
+  coast: boolean;
+  /** The coast group only: the surge (cm) of its primary H series at t; null elsewhere, without one and in play (O-1). */
+  surge: number | null;
 }
 
 export interface StatesInput {
   stations: readonly ApiStation[];
   values: ReadonlyMap<number, Value>;
   /** After now: the forecasts at t by series (undefined for a t up to now). */
-  forecasts: ReadonlyMap<number, Pick<WebForecast, 'estimate' | 'state'>> | undefined;
+  forecasts: ReadonlyMap<number, Pick<WebForecast, 'estimate' | 'state' | 'tide'>> | undefined;
   /** The 24-hour change by series (useChanges); undefined when not known. */
   changes: ReadonlyMap<number, Change> | undefined;
   /** The owner-audience source ids (useOwnerSources; empty on the public site). */
   ownerSources: ReadonlySet<string>;
   /** The lapsed series (see `lapses`); none when omitted. */
   lapsed?: ReadonlyMap<number, Lapse> | undefined;
+  /** P19a: each station's group (water.ts `groupsOf`); absent, or a station not in it, is `rivers`. */
+  groups?: ReadonlyMap<string, Group> | undefined;
 }
 
 export function stationStates({
@@ -104,10 +115,13 @@ export function stationStates({
   changes,
   ownerSources,
   lapsed,
+  groups,
 }: StatesInput): Map<string, StationState> {
   const out = new Map<string, StationState>();
   for (const st of stations) {
     const owner = st.series.some((s) => ownerSources.has(s.source));
+    const coast = groups?.get(st.id) === 'coast';
+    const surge = coast ? surgeAt(st, values, forecasts) : null;
     const qSeries = st.series.find((s) => s.quantity === 'Q');
     if (forecasts !== undefined) {
       const found = st.series.flatMap((s) => forecasts.get(s.id) ?? []);
@@ -123,6 +137,8 @@ export function stationStates({
         qSize: null,
         owner,
         hidden: false,
+        coast,
+        surge,
       });
       continue;
     }
@@ -159,6 +175,8 @@ export function stationStates({
       qSize: qSeries === undefined ? null : q === undefined ? 0 : qSize(q.value),
       owner,
       hidden: !has && st.series.length > 0 && st.series.every((s) => lapsed?.get(s.id)?.hidden === true),
+      coast,
+      surge,
     });
   }
   return out;

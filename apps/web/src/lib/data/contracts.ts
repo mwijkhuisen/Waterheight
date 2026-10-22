@@ -83,7 +83,7 @@ const share = z.number().min(0).max(1).nullable();
 const Country = z.enum(['NL', 'DE', 'BE', 'FR', 'LU', 'CH']);
 
 /** A list whose bad entries are dropped one by one, so one bad row never blanks a page. At most `max` entries. */
-const lenient = <T extends z.ZodType>(item: T, max: number) =>
+export const lenient = <T extends z.ZodType>(item: T, max: number) =>
   z
     .array(z.unknown())
     .max(max)

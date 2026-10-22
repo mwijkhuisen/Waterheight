@@ -281,6 +281,8 @@ describe('stationStates', () => {
       qSize: 3,
       owner: true,
       hidden: false,
+      coast: false,
+      surge: null,
     });
   });
 

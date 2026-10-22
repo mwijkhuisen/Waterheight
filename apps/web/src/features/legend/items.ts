@@ -9,6 +9,8 @@ import {
   type QSize,
   STATE_COLOUR,
   STATE_RADIUS,
+  SURGE_COLOURS,
+  SURGE_STOPS_CM,
 } from './palette.ts';
 
 // The legend's item lists (P10a T2), pure: the component maps each key to its message.
@@ -56,3 +58,18 @@ export const LHP_ALERT_CODES = ['1', '2', '4', '5', '6'] as const;
 
 /** P11b: the keys of the reach lines (shown with `LegendProps.reaches`); the component maps each to its message. */
 export const reachItems = (): readonly ('nodata' | 'tidal' | 'impounded')[] => ['nodata', 'tidal', 'impounded'];
+
+/**
+ * P19a: the surge scale as the map draws it (`interpolate` on the stops): each stop at its place in the −100…+300 cm
+ * range, so the bar and its tick labels are in proportion and the labels are the stop values themselves.
+ */
+export const surgeScale = (): { cm: number; at: number; colour: string; label: string }[] => {
+  const lo = Math.min(...SURGE_STOPS_CM);
+  const span = Math.max(...SURGE_STOPS_CM) - lo;
+  return SURGE_STOPS_CM.map((cm, i) => ({
+    cm,
+    at: ((cm - lo) / span) * 100,
+    colour: SURGE_COLOURS[i] as string,
+    label: cm > 0 ? `+${cm}` : cm < 0 ? `\u2212${-cm}` : '0',
+  }));
+};

@@ -1,5 +1,5 @@
 import { type KeyboardEvent, useRef } from 'react';
-import type { Mode } from '../../lib/url/url.ts';
+import { type Group, LAYER_GROUPS, type Mode } from '../../lib/url/url.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import styles from './legend.module.css';
@@ -9,6 +9,10 @@ import { ModeControl, modeLabel } from './ModeControl.tsx';
 // legend. The summary says the current choice; inside are the native radios of the mode (name "map-mode") and the
 // Kaart/Tabel buttons. A choice closes its disclosure and returns the focus to the summary, except a choice made
 // with the arrow keys, which only moves through the radios (the disclosure closes on Enter, Space or a click).
+// P19a (O-3): the mode disclosure also holds the layer checkboxes (rivers, lakes, coast and sea; `?hide=`). They sit
+// there, not in the view disclosure, because they are a map choice like the mode and exist only on the map (the
+// view disclosure appears where WebGL runs, and the fieldset only while the map is the view). A tick never closes the
+// disclosure: the choices are several, and the map behind it shows the effect.
 
 export type View = 'map' | 'table';
 
@@ -20,9 +24,15 @@ export interface MapControlsProps {
   onView: (view: View) => void;
   /** The view choice exists only where the map can run. */
   canMap: boolean;
+  /** P19a (O-3): the hidden layer groups (`?hide=`). */
+  hide: readonly Group[];
+  /** P19a: a layer checkbox changed: the new hidden groups (written to `?hide=`). */
+  onHide: (next: readonly Group[]) => void;
 }
 
-export function MapControls({ locale, mode, onMode, view, onView, canMap }: MapControlsProps) {
+const layerWord = { rivers: m.layer_rivers, lakes: m.layer_lakes, coast: m.layer_coast } as const;
+
+export function MapControls({ locale, mode, onMode, view, onView, canMap, hide, onHide }: MapControlsProps) {
   const o = { locale };
   const modeBox = useRef<HTMLDetailsElement>(null);
   const viewBox = useRef<HTMLDetailsElement>(null);
@@ -69,6 +79,24 @@ export function MapControls({ locale, mode, onMode, view, onView, canMap }: MapC
               done(modeBox.current);
             }}
           />
+          {canMap && view === 'map' && (
+            <fieldset className={styles.layers}>
+              <legend>{m.layer_legend({}, o)}</legend>
+              {LAYER_GROUPS.map((g) => (
+                <label key={g}>
+                  <input
+                    type="checkbox"
+                    checked={!hide.includes(g)}
+                    onChange={(e) => {
+                      const visible = e.currentTarget.checked;
+                      onHide(LAYER_GROUPS.filter((x) => (x === g ? !visible : hide.includes(x))));
+                    }}
+                  />
+                  {layerWord[g]({}, o)}
+                </label>
+              ))}
+            </fieldset>
+          )}
         </div>
       </details>
       {canMap && (

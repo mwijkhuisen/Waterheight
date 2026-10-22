@@ -28,6 +28,11 @@ const WIDTH: ExpressionSpecification = ['interpolate', ['linear'], ['zoom'], 4, 
 export interface FlowHandle {
   /** The pause control (FlowToggle). */
   setEnabled(on: boolean): void;
+  /**
+   * P19a (O-3): the rivers group is hidden (`?hide=rivers`): no dashes, no arrows, no clock. Sets the visibility of
+   * every flow layer itself (StationsMap calls it after its own pass over the `rivers…` layers).
+   */
+  setHidden(hidden: boolean): void;
   /** Stops the clock, removes its listeners and every flow layer. */
   dispose(): void;
 }
@@ -102,6 +107,10 @@ export function addFlow(map: MapLibreMap, beforeId: string, enabled: boolean): F
   };
   const reduced = matchMedia('(prefers-reduced-motion: reduce)');
   let shown = 0;
+  let running = false;
+  let hidden = false;
+  // The clock's own re-check (createFlowAnimation registers it as the visibility listener): setHidden calls it.
+  let resync: (() => void) | undefined;
   const host: FlowHost = {
     raf: (cb) => requestAnimationFrame(cb),
     caf: (id) => cancelAnimationFrame(id),
@@ -113,11 +122,17 @@ export function addFlow(map: MapLibreMap, beforeId: string, enabled: boolean): F
         return () => reduced.removeEventListener('change', cb);
       },
     },
+    // A hidden rivers group (P19a) counts as a hidden tab: the clock stops and starts by the same rule, so the pause
+    // control and reduced motion decide, unchanged, whether it runs again once the group is shown.
     visibility: {
-      hidden: () => document.visibilityState === 'hidden',
+      hidden: () => hidden || document.visibilityState === 'hidden',
       onChange(cb) {
+        resync = cb;
         document.addEventListener('visibilitychange', cb);
-        return () => document.removeEventListener('visibilitychange', cb);
+        return () => {
+          resync = undefined;
+          document.removeEventListener('visibilitychange', cb);
+        };
       },
     },
     onTick(step) {
@@ -129,14 +144,21 @@ export function addFlow(map: MapLibreMap, beforeId: string, enabled: boolean): F
       // The e2e build counts the steps (apps/web/e2e); the production bundle holds no trace of this.
       if (import.meta.env.MODE === 'e2e') window.__rwsFlowFrames = (window.__rwsFlowFrames ?? 0) + 1;
     },
-    onRunning(running) {
-      for (const id of PHASES) show(id, running);
-      show(ARROWS, !running);
+    onRunning(on) {
+      running = on;
+      for (const id of PHASES) show(id, on && !hidden);
+      show(ARROWS, !on && !hidden);
     },
   };
   const animation = createFlowAnimation(host, enabled);
   return {
     setEnabled: (on) => animation.setEnabled(on),
+    setHidden(h) {
+      hidden = h;
+      resync?.();
+      // The clock only tells the host when it starts or stops: set the layers for either case (idempotent).
+      host.onRunning(running);
+    },
     dispose() {
       animation.dispose();
       // StationsMap disposes on unmount, which may run after map.remove(): a removed map has no style to ask.

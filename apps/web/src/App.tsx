@@ -38,15 +38,18 @@ import {
   useStationHorizon,
   useStations,
   useWarnings,
+  useWaterbodies,
 } from './lib/data/api.ts';
+import type { WebWaterbody } from './lib/data/chain.ts';
 import { changesAt } from './lib/data/change.ts';
 import type { FrameStore } from './lib/data/frames.ts';
 import { globalEnd, pageT, sliderEnd } from './lib/forecast.ts';
 import { pathOf, routeOf } from './lib/routes.ts';
 import { hiddenKey, lapses, stationStates, visibleStations } from './lib/stationStates.ts';
 import { ceilHour, DAY_MS, floorHour, HOUR_MS, quantise } from './lib/time/time.ts';
-import { searchOf } from './lib/url/url.ts';
+import { type Group, searchOf } from './lib/url/url.ts';
 import { useUrlState } from './lib/url/useUrlState.ts';
+import { groupsOf, lakeGauges, lakeLevels } from './lib/water.ts';
 import { m } from './paraglide/messages.js';
 import type { Locale } from './paraglide/runtime.js';
 
@@ -56,6 +59,8 @@ import type { Locale } from './paraglide/runtime.js';
 // The language link is a full page load that keeps t and s, so <html lang> always matches the page (A§10).
 
 const FETCH_DEBOUNCE_MS = 150;
+const NO_GROUPS: readonly Group[] = [];
+const NO_BODIES: readonly WebWaterbody[] = [];
 
 type HovmollerPanel = typeof import('./features/flow/hovmoller/HovmollerPanel.tsx').HovmollerPanel;
 
@@ -297,9 +302,17 @@ function Viewer({ locale }: { locale: Locale }) {
   // with its values, so hidden stations do not flash back. Off live only the snapshot of this very t has ages.
   const lastAges = !playing && (current || isLive) ? snapshot.data?.lastAge : undefined;
   const lapsed = useMemo(() => lapses(sorted, values, lastAges), [sorted, values, lastAges]);
+  // P19a: the station groups (rivers, lakes, coast) and the lake levels, from the reaches file's water bodies and the
+  // same values and forecasts the stations show (the past and now, after now, and the played frames).
+  const waterbodies = useWaterbodies().data ?? NO_BODIES;
+  const groups = useMemo(() => groupsOf(waterbodies), [waterbodies]);
+  const lakes = useMemo(
+    () => lakeLevels(waterbodies, lakeGauges(sorted, values, forecasts)),
+    [waterbodies, sorted, values, forecasts],
+  );
   const states = useMemo(
-    () => stationStates({ stations: sorted, values, forecasts, changes, ownerSources, lapsed }),
-    [sorted, values, forecasts, changes, ownerSources, lapsed],
+    () => stationStates({ stations: sorted, values, forecasts, changes, ownerSources, lapsed, groups }),
+    [sorted, values, forecasts, changes, ownerSources, lapsed, groups],
   );
   // A new array only when the hidden set changes: the map rebuilds its source (and popup) on a new list.
   const hidden = hiddenKey(states);
@@ -307,6 +320,9 @@ function Viewer({ locale }: { locale: Locale }) {
 
   const setMode = useCallback((next: typeof mode) => setUrl({ mode: next }), [setUrl]);
   const setRiver = useCallback((id: string | undefined) => setUrl({ river: id }), [setUrl]);
+  // P19a (O-3): the layer toggles; `searchOf` writes them in canonical order and drops an empty list.
+  const hide = url.hide ?? NO_GROUPS;
+  const setHide = useCallback((next: readonly Group[]) => setUrl({ hide: next }), [setUrl]);
   const select = useCallback((id: string | undefined) => setUrl({ s: id }), [setUrl]);
   // Opening a station from the map, the table, the search or the nearby list moves the focus into the panel
   // (P10e D6). Closing the panel returns the focus to what opened it (P10a T6): the table's station button while it
@@ -382,6 +398,7 @@ function Viewer({ locale }: { locale: Locale }) {
         warnings={(warnings?.features.length ?? 0) > 0}
         reaches={onMap && riverTiles !== undefined}
         shifted={shiftMax > 0}
+        hide={hide}
       />
     );
 
@@ -423,7 +440,16 @@ function Viewer({ locale }: { locale: Locale }) {
         >
           <div className={styles.top}>
             <div className={styles.controls}>
-              <MapControls locale={locale} mode={mode} onMode={setMode} view={view} onView={setView} canMap={canMap} />
+              <MapControls
+                locale={locale}
+                mode={mode}
+                onMode={setMode}
+                view={view}
+                onView={setView}
+                canMap={canMap}
+                hide={hide}
+                onHide={setHide}
+              />
               {onMap && riverTiles !== undefined && <FlowToggle locale={locale} on={flow} onChange={setFlow} />}
               <button
                 type="button"
@@ -478,6 +504,10 @@ function Viewer({ locale }: { locale: Locale }) {
                   allStations={sorted}
                   played={played}
                   shift={shift}
+                  hide={hide}
+                  groups={groups}
+                  waterbodies={waterbodies}
+                  lakes={lakes}
                 />
               ) : (
                 <StationTable
