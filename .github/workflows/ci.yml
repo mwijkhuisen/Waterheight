@@ -65,8 +65,9 @@ jobs:
     # P16b: every test database syncs the larger NL-1 registry (2,974 series, 2,311 NL-4 rows). The whole suite took
     # 33.5 minutes on one runner (main, 39574e4; crash.int.test.ts alone 9.5), one file at a time because the roles are
     # cluster-wide. Three runners, each with its own PostgreSQL, take a third of the files each (Vitest's --shard splits
-    # by a hash of the path, not by duration: about 12, 16 and 7 minutes from the per-file times of that run).
-    timeout-minutes: 25
+    # by a hash of the path, not by duration: shards 1, 2 and 3 about 12, 16 and 7 minutes from the per-file times of
+    # that run; crash.int.test.ts is in shard 2).
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
