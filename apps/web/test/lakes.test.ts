@@ -8,6 +8,8 @@ const g = (value: number | null, state: LakeGauge['state'] = 'normal', extra: Pa
   value,
   state,
   basis: null,
+  tidal: false,
+  suspect: false,
   ...extra,
 });
 const body = (reference: string | null, stations: string[]): LakeBody => ({
@@ -16,6 +18,23 @@ const body = (reference: string | null, stations: string[]): LakeBody => ({
 });
 
 describe('lakeView', () => {
+  it('says when the reference is tidal, and keeps a suspect gauge out of the spread but not out of the state (review F1, F2)', () => {
+    const m = new Map([
+      ['h', g(140, 'elevated', { tidal: true, suspect: true })],
+      ['b', g(100)],
+      ['c', g(110)],
+    ]);
+    expect(lakeView(body('h', ['b', 'c', 'h']), m)).toEqual({
+      reference: 'h',
+      state: 'elevated',
+      basis: null,
+      tidal: true,
+      spread: { cm: 10, n: 2 },
+    });
+    expect(lakeView(body('b', ['b', 'c', 'h']), m).tidal).toBe(false);
+    expect(lakeView(body(null, ['b', 'c', 'h']), m).tidal).toBe(false);
+  });
+
   it('takes the reference gauge state even when another gauge is higher or worse', () => {
     const basis = { source: 'NL-1', kind: 'operational' } as unknown as LakeGauge['basis'];
     const m = new Map([
@@ -88,7 +107,7 @@ describe('lakeView', () => {
       ['c', g(50)],
     ]);
     const v = lakeView(body('a', ['a', 'b', 'c']), m);
-    expect(Object.keys(v).sort()).toEqual(['basis', 'reference', 'spread', 'state']);
+    expect(Object.keys(v).sort()).toEqual(['basis', 'reference', 'spread', 'state', 'tidal']);
     // mean is 20, no gauge is 20
     expect(Object.values(v.spread ?? {})).not.toContain(20);
     expect(JSON.stringify(v)).not.toContain('20');
@@ -104,6 +123,8 @@ describe('lakeView', () => {
       value: fc.option(fc.double({ min: -500, max: 500, noNaN: true }), { nil: null }),
       state,
       basis: fc.constant(null),
+      tidal: fc.boolean(),
+      suspect: fc.boolean(),
     });
     fc.assert(
       fc.property(

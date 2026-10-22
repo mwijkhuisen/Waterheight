@@ -316,17 +316,20 @@ export async function syncRegistry(
         await sql`UPDATE river SET parent_river_id = ${r.parent_river_id} WHERE id = ${r.id}`.execute(tx);
       }
     }
-    // Water bodies: before the stations, which point at them. Their reference gauge (D27) is a public registry
-    // station or null; the column is not stored (circular), the check is.
+    // Water bodies: before the stations, which point at them. Their reference gauge (D27) is a public primary
+    // registry station with an H series (a lake's state is its level) or null; the column is not stored (circular),
+    // the check is.
     const wbs = rivers?.waterbodies?.waterbodies ?? null;
     if (wbs !== null) {
       for (const w of wbs) {
         const ref = w.reference_station;
         if (
           ref !== null &&
-          !input.stations.some((r) => r.id === ref && r.audience === 'public' && r.role === 'primary')
+          !input.stations.some(
+            (r) => r.id === ref && r.audience === 'public' && r.role === 'primary' && r.quantity === 'H',
+          )
         )
-          throw new RegistryError(`waterbody ${w.id}: reference_station is not a public primary station`);
+          throw new RegistryError(`waterbody ${w.id}: reference_station is not a public primary H station`);
         const names = JSON.stringify({ nl: w.name_nl, en: w.name_en, sources: w.names });
         await sql`
           INSERT INTO waterbody (id, kind, name_nl, name_en, names, wikidata, managed_level)

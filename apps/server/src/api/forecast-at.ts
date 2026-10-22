@@ -269,7 +269,7 @@ export async function readFutureSnapshot(
       if (c === undefined) return [];
       const v = values.get(r.series);
       const tideRows = tideOf.get(r.series);
-      const tide = v === undefined || tideRows === undefined ? undefined : tideAt(v, tideRows);
+      const forecastTide = v === undefined || tideRows === undefined ? undefined : tideAt(v, tideRows);
       return [
         {
           ...heldForecast(
@@ -278,7 +278,7 @@ export async function readFutureSnapshot(
             v === undefined ? { state: 'no_ref', basis: null } : { state: c.state, basis: c.basis },
             t,
           ),
-          ...(tide === undefined ? {} : { tide }),
+          ...(forecastTide === undefined ? {} : { tide: forecastTide }),
         },
       ];
     }),

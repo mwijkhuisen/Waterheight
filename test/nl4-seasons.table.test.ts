@@ -70,9 +70,9 @@ const stemOf = (label: string) => label.split('(')[0]?.trim() ?? label;
 
 type Want = { state: string; label: string | null };
 /**
- * Every outcome the oracle accepts. One, except where two bands of the lowest priority both hold the value (two
- * windows overlap on a boundary day): then the first of them in file order wins in the classifier, and both are
- * accepted here. `ties` counts those cases.
+ * The bands of the lowest priority that hold the value, the winner first: more than one only where two windows
+ * overlap on a boundary day, and then the higher From wins, then the label (KG-443: never the row order). `ties`
+ * counts those cases.
  */
 function oracle(rows: readonly Row[], md: number, v: number): Want[] {
   const holds = rows.filter(
@@ -84,7 +84,11 @@ function oracle(rows: readonly Row[], md: number, v: number): Want[] {
   );
   if (holds.length === 0) return [{ state: 'no_ref', label: null }];
   const lowest = Math.min(...holds.map((r) => r.priority));
-  const wins = holds.filter((r) => r.priority === lowest);
+  const wins = holds
+    .filter((r) => r.priority === lowest)
+    .sort(
+      (a, b) => (b.from ?? -Infinity) - (a.from ?? -Infinity) || (a.label < b.label ? -1 : a.label > b.label ? 1 : 0),
+    );
   return wins.map((r) => {
     const level = crosswalkRow('NL-4', 'stem', stemOf(r.label))?.level ?? 'no_ref';
     return level === 'no_ref' ? { state: 'no_ref', label: null } : { state: level, label: r.label };
@@ -191,7 +195,8 @@ describe('NL-4 seasonal windows on NAP level series (D12 amended, P18b)', () => 
             generated++;
             const gotWant: Want = { state: got.state, label: got.basis?.label ?? null };
             const ok =
-              want.some((w) => w.state === gotWant.state && w.label === gotWant.label) &&
+              want[0]?.state === gotWant.state &&
+              want[0]?.label === gotWant.label &&
               got.flags.tidal === tidal &&
               (got.state === 'no_ref' ? got.basis === null : got.basis?.kind === 'provider_class');
             if (!ok) bad.push({ md, hour, minute, v, want, got: gotWant });
@@ -236,6 +241,14 @@ describe('pinned seasonal days', () => {
     expect(at(315, 100, 0, 30)).toEqual(['elevated', broed, 'provider_class', true]);
     expect(at(716, 100, 0, 30)).toEqual(['normal', buiten, 'provider_class', true]);
     expect(at(715, 100, 0, 30)).toEqual(['elevated', broed, 'provider_class', true]);
+    // 140 cm holds both priority-3 bands on the overlap days: the higher From wins there, never the row order (KG-443)
+    const buiten130 = 'Licht verhoogd (>130cm)';
+    expect(at(314, 140)).toEqual(['elevated', buiten130, 'provider_class', true]);
+    expect(at(315, 140)).toEqual(['elevated', buiten130, 'provider_class', true]);
+    expect(at(316, 140)).toEqual(['elevated', broed, 'provider_class', true]);
+    expect(at(714, 140)).toEqual(['elevated', broed, 'provider_class', true]);
+    expect(at(715, 140)).toEqual(['elevated', buiten130, 'provider_class', true]);
+    expect(at(716, 140)).toEqual(['elevated', buiten130, 'provider_class', true]);
     // the Gehele-jaar rows hold on every one of these days
     for (const md of [314, 315, 316, 714, 715, 716]) {
       expect(at(md, 200), String(md)).toEqual(['high', 'Hoogwater / Stormvloed (> 190cm)', 'provider_class', true]);

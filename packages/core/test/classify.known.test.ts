@@ -241,6 +241,27 @@ describe('tidal and impounded series', () => {
     expect(r).toMatchObject({ state: 'high', flags: { tidal: true } });
   });
 
+  it('tidal: an operational set and a disagreeing NL-4 class combine exactly as on a river series (review F4)', () => {
+    const normal = [
+      ref('NL-4', 'NL4_FROM', 0, { label: 'Normaal (0 tot 500cm)' }),
+      ref('NL-4', 'NL4_TO', 500, { label: 'Normaal (0 tot 500cm)' }),
+    ];
+    const refs = [ref('DE-7', 'LANUV_INFO_1', 100), ...normal];
+    for (const [value, state] of [
+      [150, 'elevated'],
+      [50, 'normal'],
+    ] as const) {
+      for (const impounded of [false, true]) {
+        const tidal = classify(series({ value, tidal: true, impounded, refs }), 'public');
+        const river = classify(series({ value, impounded, refs }), 'public');
+        expect(tidal.state, `${value} impounded ${impounded}`).toBe(state);
+        // the operational scale is first in order and names the basis, as on a river series
+        expect(tidal.basis?.source).toBe('DE-7');
+        expect({ state: tidal.state, basis: tidal.basis }).toEqual({ state: river.state, basis: river.basis });
+      }
+    }
+  });
+
   it('tidal: an operational reference set still classifies', () => {
     const refs = [ref('DE-7', 'LANUV_INFO_1', 100)];
     expect(classify(series({ value: 150, tidal: true, refs }), 'public').state).toBe('elevated');

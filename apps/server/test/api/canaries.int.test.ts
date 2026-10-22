@@ -646,7 +646,7 @@ describe('the future snapshot and its tide (P18b)', { timeout: 120_000 }, () => 
   const forecastOf = (snap: Snap, key: string) => snap.forecasts.find((f) => f.series === ids[key]);
 
   beforeAll(async () => {
-    await q(`UPDATE station SET flags = '{"tidal": true}'`);
+    await q(`UPDATE station SET flags = flags || '{"tidal": true}'::jsonb`);
     // The fixture's own runs were fetched after the sweep's clock (a future snapshot does not know them yet): give
     // every hidden series a run fetched an hour ago, hourly like the display-only one, so that its absence is a filter.
     const visible = async (key: string, source: string, value: number) => {
