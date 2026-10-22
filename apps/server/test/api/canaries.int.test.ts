@@ -10,7 +10,7 @@ import { createApp } from '../../src/app.ts';
 import { type ChannelAudience, VIEWS } from '../../src/db/audience.ts';
 import { type Db, type DbConfig, dbConfig, openDb } from '../../src/db/pool.ts';
 import { publishOnce } from '../../src/publish/index.ts';
-import { NEVER_PUBLIC, seedAudienceFixture, WITHHELD_KEYS } from '../db/seed.ts';
+import { NEVER_PUBLIC, OWNER_CANARY, seedAudienceFixture, WITHHELD_CANARY, WITHHELD_KEYS } from '../db/seed.ts';
 import { createTestDb, type LoginRole, type TestDb } from '../db/testdb.ts';
 import { walk } from '../publish/tree.ts';
 import { ask, CODINGS, captureLog, grep, iso, type Piece, prng, type Req, seriesIdsOf } from './sweep.ts';
@@ -618,5 +618,111 @@ describe('history window', { timeout: 120_000 }, () => {
       'latest.json',
       'latest.json',
     ]);
+  });
+});
+
+// P18b (T5): the future snapshot now carries `forecasts[].tide`. The tide rows of the fixture sit on every series that
+// has a forecast run here (the canary series, the display-only series), at the run's own valid times and with the
+// canary values, so that a tide that leaked would be a grep hit as the forecast value would be. The sweep above
+// already asks two future instants and greps every public piece for both canaries; this adds the structure (who has a
+// forecast and a tide) and the display-only case. Last in the file: it makes every station tidal.
+describe('the future snapshot and its tide (P18b)', { timeout: 120_000 }, () => {
+  const T3 = NOW + 150 * 60_000;
+  const HIDDEN = ['ownerCanary', 'onlyOwner', ...WITHHELD_KEYS] as const;
+  const bodies: Piece[] = [];
+  type Fc = {
+    series: number;
+    value: number | null;
+    source: string;
+    tide?: { astro: number | null; surge: number | null };
+  };
+  type Snap = { forecasts: Fc[]; attribution: { source: string }[] };
+  const future = async (family: ChannelAudience) => {
+    const a = await ask(apps[family], get(`/api/v1/snapshot?t=${iso(T3)}`), 'identity');
+    expect(a.status, family).toBe(200);
+    if (family === 'public') bodies.push({ label: 'public future snapshot', text: a.text });
+    return JSON.parse(a.text) as Snap;
+  };
+  const forecastOf = (snap: Snap, key: string) => snap.forecasts.find((f) => f.series === ids[key]);
+
+  beforeAll(async () => {
+    await q(`UPDATE station SET flags = flags || '{"tidal": true}'::jsonb`);
+    // The fixture's own runs were fetched after the sweep's clock (a future snapshot does not know them yet): give
+    // every hidden series a run fetched an hour ago, hourly like the display-only one, so that its absence is a filter.
+    const visible = async (key: string, source: string, value: number) => {
+      const run = await q(
+        `INSERT INTO forecast_run (series_id, source_id, issued_at, first_valid, last_valid, fetched_at, content_hash, kind)
+         VALUES ($1, $2, now() - interval '1 hour', date_trunc('hour', now()) - interval '1 hour',
+                 now() + interval '6 hours', now() - interval '1 hour', decode(md5($3::text), 'hex'), 'deterministic')
+         RETURNING id`,
+        [ids[key], source, `p18b-${key}`],
+      );
+      await q(
+        `INSERT INTO forecast_value (run_id, valid_ts, value)
+         SELECT $1, date_trunc('hour', now()) + h * interval '1 hour', $2::real FROM generate_series(-1, 5) h`,
+        [(run.rows[0] as { id: string }).id, value],
+      );
+    };
+    await visible('ownerCanary', 'CANARY-OWNER', OWNER_CANARY);
+    await visible('onlyOwner', 'NL-1', 202);
+    for (const key of WITHHELD_KEYS) await visible(key, 'NL-1', WITHHELD_CANARY);
+    const astro = (key: string, value: number) =>
+      q(
+        `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id)
+         SELECT DISTINCT r.series_id, 'astro', v.valid_ts, $2::real, NULL, 1
+         FROM forecast_run r JOIN forecast_value v ON v.run_id = r.id WHERE r.series_id = $1`,
+        [ids[key], value],
+      );
+    await astro('ownerCanary', OWNER_CANARY);
+    await astro('displayOnly', 400);
+    await astro('onlyOwner', OWNER_CANARY);
+    for (const key of WITHHELD_KEYS) await astro(key, WITHHELD_CANARY);
+    for (const key of ['ownerCanary', ...WITHHELD_KEYS])
+      await q(
+        `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id)
+         VALUES ($1, 'extreme_astro', date_trunc('hour', now()), $2, 'high', 1)`,
+        [ids[key], key === 'ownerCanary' ? OWNER_CANARY : WITHHELD_CANARY],
+      );
+  });
+
+  it('the owner family sees the owner canary forecast with its tide, so the absence in the public one is a filter', async () => {
+    const own = forecastOf(await future('owner'), 'ownerCanary');
+    expect(own).toMatchObject({ source: 'CANARY-OWNER', value: Math.fround(OWNER_CANARY) });
+    expect(own?.tide).toMatchObject({ astro: Math.fround(OWNER_CANARY), derived: 'surge' });
+  });
+
+  it('owner-audience and withheld series have no forecast and no tide in the public future snapshot', async () => {
+    const snap = await future('public');
+    expect(snap.forecasts.length).toBeGreaterThan(0);
+    for (const key of HIDDEN) expect(forecastOf(snap, key), key).toBeUndefined();
+    // a public series without tide rows has no tide either
+    expect(forecastOf(snap, 'public')?.tide).toBeUndefined();
+    const sources = snap.attribution.map((a) => a.source);
+    for (const source of ['CANARY-OWNER', 'DE-3', 'BE-3', 'LU-4']) expect(sources, source).not.toContain(source);
+  });
+
+  it('the display-only series shows in the display-channel future snapshot, tide included, and is a 404 on the api channel', async () => {
+    for (const family of ['public', 'owner'] as const) {
+      const f = forecastOf(await future(family), 'displayOnly');
+      expect(f, family).toMatchObject({ source: 'CH-4' });
+      expect(f?.value, family).toBeCloseTo(654322, 0);
+      expect(f?.tide, family).toMatchObject({ astro: 400, derived: 'surge' });
+      expect(f?.tide?.surge, family).toBeCloseTo((f?.value ?? 0) - 400, 0);
+    }
+    const a = await ask(apps.public, get(`/api/v1/series/${ids.displayOnly}/forecast`), 'identity');
+    expect([a.status, a.text]).toEqual([404, '{"error":"not_found","attribution":[]}']);
+    bodies.push({ label: 'display-only forecast route', text: a.text });
+  });
+
+  it('no canary needle is in any public api body fetched here, forecast routes of the hidden series included', async () => {
+    for (const key of [...HIDDEN, 'public'] as const) {
+      const a = await ask(apps.public, get(`/api/v1/series/${ids[key]}/forecast`), 'identity');
+      expect(a.status, key).toBe(key === 'public' ? 200 : 404);
+      bodies.push({ label: `forecast route ${key}`, text: `${a.headers}\n\n${a.text}` });
+    }
+    expect(bodies.length).toBeGreaterThan(6);
+    expect(grep(bodies, [...NEVER_PUBLIC, ...CANARY_RENDERINGS, '777777.7', '123456.7'])).toEqual([]);
+    // the display-only value is the one needle that may show in the display-channel snapshot, and nowhere else
+    expect([...new Set(grep(bodies, CHANNEL_NEEDLES).map((h) => h.label))]).toEqual(['public future snapshot']);
   });
 });

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { EXTREME_WINDOW_MS } from '@rws/core';
 import { type Kysely, type RawBuilder, sql } from 'kysely';
 import { z } from 'zod';
 import { CHANNEL_AUDIENCES, type ChannelAudience, VIEWS } from '../db/audience.ts';
@@ -330,22 +331,45 @@ export const FRAMES_SCHEMA = 2;
 const FRAMES_SCHEMA_KEY = 'frames_schema:public';
 /** How far back a schema change re-renders: the 14-day playback start and its 25 h Δh lead, rounded up. */
 const SCHEMA_BUMP_MS = 16 * DAY_MS;
+/** P18a: 1 adds the tide to the snapshot files (both families: a surge at each item's ts, the extremes within 15 h). */
+export const TIDE_SCHEMA = 1;
+const TIDE_SCHEMA_KEY = 'snapshot_schema:tide';
+
+/** The sorted union of day lists. */
+export const unionDays = (...lists: readonly (readonly string[])[]): string[] => [...new Set(lists.flat())].sort();
 
 /**
- * migrate's frames schema bump (#112), under the loader lock and before registryBump: the first run with a newer
- * FRAMES_SCHEMA bumps the public days of the last 16 that may be settled (reason `schema`), so the publisher renders
- * them again in the new shape, one per cycle, while the old complete versions stay served; then it stores the schema,
- * and later runs bump nothing. Older settled days keep their old frames (the web plays them with the state unknown).
- * A database never migrated before (no stored registry map yet) has rendered nothing: it only stores the schema.
- * Returns the bumped days.
+ * migrate's schema bump (#112 frames, P18a tide), under the loader lock and before registryBump: the first run with a
+ * newer FRAMES_SCHEMA bumps the public days of the last 16 that may be settled (reason `schema`), so the publisher
+ * renders them again in the new shape, one per cycle, while the old complete versions stay served; the first run
+ * without `snapshot_schema:tide` bumps both families' settled-able days from the day of the oldest tide row minus 15 h
+ * (the files written before hold no tide; none stored: no days). The days are united per family and bumped once (a
+ * second call would give v+2); then the schemas are stored, and later runs bump nothing. Older settled days keep
+ * their old files. A database never migrated before (no stored registry map yet) has rendered nothing: it only stores
+ * the schemas. Returns the bumped days (the union over the families).
  */
-export async function framesSchemaBump(tx: Tx, now: Date): Promise<string[]> {
-  const stored = await readMeta<number>(tx, FRAMES_SCHEMA_KEY);
-  if (stored !== undefined && stored >= FRAMES_SCHEMA) return [];
+export async function schemaBump(tx: Tx, now: Date): Promise<string[]> {
+  const frames = await readMeta<number>(tx, FRAMES_SCHEMA_KEY);
+  const tide = await readMeta<number>(tx, TIDE_SCHEMA_KEY);
+  const framesDue = frames === undefined || frames < FRAMES_SCHEMA;
+  const tideDue = tide === undefined || tide < TIDE_SCHEMA;
+  if (!framesDue && !tideDue) return [];
   const first = (await readMeta<Visible>(tx, visibleKey('public'))) === undefined;
   const nowMs = now.getTime();
-  const days = first ? [] : bumpedDays(Math.floor((nowMs - SCHEMA_BUMP_MS) / DAY_MS) * DAY_MS, nowMs, nowMs);
-  await bumpDays(tx, 'public', days, 'schema', now);
-  await writeMeta(tx, FRAMES_SCHEMA_KEY, FRAMES_SCHEMA);
-  return days;
+  const framesDays =
+    framesDue && !first ? bumpedDays(Math.floor((nowMs - SCHEMA_BUMP_MS) / DAY_MS) * DAY_MS, nowMs, nowMs) : [];
+  let tideDays: string[] = [];
+  if (tideDue && !first) {
+    const { rows } = await sql<{ first: Date | null }>`SELECT min(ts) AS first FROM tide`.execute(tx);
+    const oldest = rows[0]?.first;
+    if (oldest != null) tideDays = bumpedDays(oldest.getTime() - EXTREME_WINDOW_MS, nowMs, nowMs);
+  }
+  const days: Record<ChannelAudience, string[]> = {
+    public: unionDays(framesDays, tideDays),
+    owner: tideDays,
+  };
+  for (const family of CHANNEL_AUDIENCES) await bumpDays(tx, family, days[family], 'schema', now);
+  if (framesDue) await writeMeta(tx, FRAMES_SCHEMA_KEY, FRAMES_SCHEMA);
+  if (tideDue) await writeMeta(tx, TIDE_SCHEMA_KEY, TIDE_SCHEMA);
+  return unionDays(days.public, days.owner);
 }

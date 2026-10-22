@@ -98,6 +98,10 @@
       "rws_backup": "SELECT",
       "rws_owner_api": "SELECT"
     },
+    "own_api_tide": {
+      "rws_backup": "SELECT",
+      "rws_owner_api": "SELECT"
+    },
     "own_attribution": {
       "rws_backup": "SELECT",
       "rws_owner_api": "SELECT"
@@ -216,6 +220,11 @@
       "rws_publish": "SELECT"
     },
     "pub_api_series": {
+      "rws_api": "SELECT",
+      "rws_backup": "SELECT",
+      "rws_publish": "SELECT"
+    },
+    "pub_api_tide": {
       "rws_api": "SELECT",
       "rws_backup": "SELECT",
       "rws_publish": "SELECT"
@@ -423,11 +432,18 @@
     "own_obs_at(timestamp with time zone)": [
       "rws_owner_api"
     ],
+    "own_tide_at(timestamp with time zone)": [
+      "rws_owner_api"
+    ],
     "pub_forecast_at(timestamp with time zone,timestamp with time zone)": [
       "rws_api",
       "rws_publish"
     ],
     "pub_obs_at(timestamp with time zone)": [
+      "rws_api",
+      "rws_publish"
+    ],
+    "pub_tide_at(timestamp with time zone)": [
       "rws_api",
       "rws_publish"
     ]

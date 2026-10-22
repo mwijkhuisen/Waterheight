@@ -114,6 +114,40 @@ describe('snapshot files', () => {
   });
 });
 
+describe('the tide column (P18a)', () => {
+  const tide = {
+    astro: 80,
+    surge: 21.5,
+    derived: 'surge' as const,
+    extremes: [{ ts: '2026-10-26T09:12:00.000Z', value: 95, hilo: 'high' as const, kind: 'astro' as const }],
+  };
+
+  it('is optional, one entry per series, null for a series without; toSnapshot keeps a tide and drops a null', () => {
+    const file = SnapshotFile.parse({ ...columns, tide: [tide, null] });
+    const s = toSnapshot(file);
+    expect(s.values[0]?.tide).toEqual(tide);
+    expect(s.values[1]).not.toHaveProperty('tide');
+    expect(toSnapshot(SnapshotFile.parse(columns)).values.some((v) => 'tide' in v)).toBe(false);
+    expect(SnapshotFile.safeParse({ ...columns, tide: [tide] }).success).toBe(false);
+    expect(SnapshotFile.safeParse({ ...columns, tide: [{ ...tide, surge: null }, null] }).success).toBe(false);
+  });
+
+  it('latest.json takes it too, counted against its series', () => {
+    const latest = {
+      ...columns,
+      generatedAt: columns.t,
+      seriesHash: '0123456789abcdef',
+      dh24: [null, null],
+      dh1: [null, null],
+      lapsed: [],
+      lapsedAge: [],
+    };
+    expect(LatestFile.safeParse({ ...latest, tide: [null, tide] }).success).toBe(true);
+    expect(LatestFile.safeParse({ ...latest, tide: [null, tide, null] }).success).toBe(false);
+    expect(OwnerLatestFile.safeParse({ ...latest, tide: [null, tide] }).success).toBe(true);
+  });
+});
+
 describe('stations.json (schemaVersion 2, P9b)', () => {
   const series = {
     id: 1,

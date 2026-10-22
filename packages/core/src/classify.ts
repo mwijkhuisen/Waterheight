@@ -246,7 +246,9 @@ export const nl4Stem = (label: string) => {
 /**
  * The NL-4 display class of a value (provider class): the classes valid at t whose season contains t, their
  * `NL4_FROM` and `NL4_TO` rows paired by (season, priority); a class holds [From, To) (KG-083); where bands overlap
- * the lowest Priority wins; a band with neither bound never matches; an unknown stem decides nothing.
+ * the lowest Priority wins, and on equal Priority (two seasons that overlap on their boundary day) the higher From,
+ * then the label, so the row order never decides (KG-443); a band with neither bound never matches; an unknown stem
+ * decides nothing.
  */
 function nl4Candidate(refs: readonly RefIn[], v: number, t: number, measure: Measure): Cand | null {
   const md = monthDay(t);
@@ -260,11 +262,17 @@ function nl4Candidate(refs: readonly RefIn[], v: number, t: number, measure: Mea
     else band.to = r.value;
     bands.set(key, band);
   }
-  let best: { label: string; priority: number } | undefined;
+  const before = (a: { from?: number; label: string; priority: number }, b: typeof a) =>
+    a.priority !== b.priority
+      ? a.priority < b.priority
+      : (a.from ?? -Infinity) !== (b.from ?? -Infinity)
+        ? (a.from ?? -Infinity) > (b.from ?? -Infinity)
+        : a.label < b.label;
+  let best: { from?: number; label: string; priority: number } | undefined;
   for (const b of bands.values()) {
     if (b.from === undefined && b.to === undefined) continue;
     if ((b.from === undefined || v >= b.from) && (b.to === undefined || v < b.to)) {
-      if (best === undefined || b.priority < best.priority) best = b;
+      if (best === undefined || before(b, best)) best = b;
     }
   }
   if (best === undefined) return null;
@@ -355,9 +363,10 @@ export function classify(s: SeriesIn, family: Family): Classified {
   }
   // Operational classes, then operational reference sets, then the statistical sets, then display classes (the
   // order they were pushed in: inside a group the reference sets by source in alphabetical order, our DOY sets
-  // last, and the NL-4 class at the end). D12: a tidal reach is classed from operational sources only.
+  // last, and the NL-4 class at the end). D12 (amended in P18b): a tidal reach is classed from operational sources
+  // and the NL-4 display classes; statistics (provider and DOY) describe a river regime, not a tide, and stay off.
   const ordered = ORDER.flatMap((g) => cands.filter((c) => c.group === g)).filter(
-    (c) => !s.tidal || c.group === 'operational',
+    (c) => !s.tidal || c.group !== 'statistical',
   );
   // A lower-priority candidate that disagrees is outranked, but it shows which way the value leans: the interval
   // collapses to its nearest edge. Below AGE orange (low..elevated) with HQ10 passed (high) is elevated, not the

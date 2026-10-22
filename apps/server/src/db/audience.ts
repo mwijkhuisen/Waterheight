@@ -42,6 +42,7 @@ export const VIEWS = {
       obs1d: 'pub_api_obs_1d',
       forecastRun: 'pub_api_forecast_run',
       forecastValue: 'pub_api_forecast_value',
+      tide: 'pub_api_tide',
     },
   },
   owner: {
@@ -73,6 +74,7 @@ export const VIEWS = {
       obs1d: 'own_api_obs_1d',
       forecastRun: 'own_api_forecast_run',
       forecastValue: 'own_api_forecast_value',
+      tide: 'own_api_tide',
     },
   },
 } as const satisfies Record<ChannelAudience, Family>;
@@ -100,7 +102,7 @@ export type DisplayView =
   | 'dirty'
   | 'dayVersion'
   | 'source';
-export type ApiView = 'series' | 'obs' | 'obs1h' | 'obs1d' | 'forecastRun' | 'forecastValue';
+export type ApiView = 'series' | 'obs' | 'obs1h' | 'obs1d' | 'forecastRun' | 'forecastValue' | 'tide';
 
 /**
  * Views that exist in one family only. Public health may show how many
@@ -130,6 +132,18 @@ export const OBS_AT = { public: 'pub_obs_at', owner: 'own_obs_at' } as const sat
  * filters to the series and to the run's own source, like the forecast views.
  */
 export const FORECAST_AT = { public: 'pub_forecast_at', owner: 'own_forecast_at' } as const satisfies Record<
+  ChannelAudience,
+  string
+>;
+
+/**
+ * "The tide rows a snapshot at T can use" (P18a), one set-returning function per family: `SELECT * FROM <name>($1)`
+ * gives, for the active visible primary series at tidal stations, every astronomical value in the series' staleness
+ * window before T (the window Q1 takes a measured value from), and per high/low the astronomical high and low waters
+ * just before and just after T and the measured one just before T, within 15 h. The surge is computed in TS
+ * (packages/core tide.ts). It applies the family's audience, role, display-channel and history filters, like OBS_AT.
+ */
+export const TIDE_AT = { public: 'pub_tide_at', owner: 'own_tide_at' } as const satisfies Record<
   ChannelAudience,
   string
 >;

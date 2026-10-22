@@ -479,8 +479,10 @@ export type ResolvedTide = TideRowIn & { id: number; counted: boolean };
  * batch (a replay after a fix), and only when its value or high/low label differs. A newer fetch that states the same
  * row changes nothing, not even its batch_id: a monthly re-fetch of an unchanged curve writes no tuple (79 series ×
  * 57,600 values a month). So a replay of the same lines writes nothing. A timestamp stated twice in a payload keeps
- * its last value. No touch: tide is in no published file yet (P18), so it dirties nothing and bumps no day.
- * Returns the rows inserted and updated of the series that share their source's audience, and every write.
+ * its last value. P18a: tide reaches the published files (a surge, the high and low waters within 15 h), so the caller
+ * touches the (series, ts) of every write (`touched`: the pipeline turns them into one `obs` touch per series).
+ * Returns the rows inserted and updated of the series that share their source's audience, every write, and the
+ * (series_id, ts) of each written row.
  */
 // ponytail: a confirmation keeps the older batch_id, so a value that flaps A→B→A over three fetches and is replayed
 // in the order 1, 3, 2 ends as B (fetch 2 is newer than the holder, fetch 1). The tide is near-static; move batch_id on
@@ -490,11 +492,11 @@ export async function applyTide(
   rows: readonly ResolvedTide[],
   batch: string,
   fetchedAt: Date,
-): Promise<{ n_new: number; n_changed: number; writes: number }> {
-  if (rows.length === 0) return { n_new: 0, n_changed: 0, writes: 0 };
+): Promise<{ n_new: number; n_changed: number; writes: number; touched: { series_id: number; ts: Date }[] }> {
+  if (rows.length === 0) return { n_new: 0, n_changed: 0, writes: 0, touched: [] };
   for (const r of rows) if (!Number.isFinite(r.value)) throw new RangeError('load: tide value is not finite');
   const counted = new Set(rows.filter((r) => r.counted).map((r) => r.id));
-  const { rows: written } = await sql<{ series_id: number; inserted: boolean }>`
+  const { rows: written } = await sql<{ series_id: number; ts: Date; inserted: boolean }>`
     WITH incoming AS (
       SELECT DISTINCT ON (i.series_id, i.kind, i.ts) i.series_id, i.kind, i.ts, i.value, i.hilo
       FROM unnest(${rows.map((r) => r.id)}::int[], ${rows.map((r) => r.kind)}::text[],
@@ -518,10 +520,11 @@ export async function applyTide(
     SELECT series_id, kind, ts, value, hilo, ${batch}::bigint FROM wins
     ON CONFLICT (series_id, kind, ts) DO UPDATE
       SET value = EXCLUDED.value, hilo = EXCLUDED.hilo, batch_id = EXCLUDED.batch_id
-    RETURNING t.series_id, old.series_id IS NULL AS inserted`.execute(tx);
+    RETURNING t.series_id, t.ts, old.series_id IS NULL AS inserted`.execute(tx);
   const mine = written.filter((w) => counted.has(w.series_id));
   const n_new = mine.filter((w) => w.inserted).length;
-  return { n_new, n_changed: mine.length - n_new, writes: written.length };
+  const touched = written.map((w) => ({ series_id: w.series_id, ts: w.ts }));
+  return { n_new, n_changed: mine.length - n_new, writes: written.length, touched };
 }
 
 /** #174: RWS's label of one astronomical extreme with the id of the series it attaches to; `counted` as for tide. */
@@ -530,9 +533,9 @@ export type ResolvedTideLabel = TideLabelIn & { id: number; counted: boolean };
 /**
  * #174: stores RWS's high/low labels (the GETETTPE type series) in `tide_label`, newest fetch wins exactly as
  * `applyTide`: a label is written where none is stored, or where the stored row's batch is older than this one or is
- * this very batch, and only when `hilo` differs. A confirmation keeps the older batch_id. No touch and no day bump (the
- * labels reach a published file only as `tide.hilo`, which is itself in none yet). Returns the rows written (inserted
- * and updated) of the series that share their source's audience, and every write.
+ * this very batch, and only when `hilo` differs. A confirmation keeps the older batch_id. No touch and no day bump (a
+ * label only decides the `hilo` of a stored extreme, whose own write is what the caller touches). Returns the rows
+ * written (inserted and updated) of the series that share their source's audience, and every write.
  */
 // ponytail: a type payload that loads AFTER its heights relabels nothing already stored in `tide`: the next heights
 // fetch (the monthly one, 180 s after its type) or a replay writes RWS's label (applyTide writes on a `hilo` change).

@@ -10,3 +10,16 @@ export const OFFICIAL = [
   { country: 'LU', hrefs: ['https://inondations.public.lu/'] },
   { country: 'CH', hrefs: ['https://www.naturgefahren.ch/'] },
 ] as const;
+
+/**
+ * P18b: the official storm-surge warning per sea and estuary body of registry/waterbodies.yaml, a link and never
+ * data (no warning text is copied; P19b renders it). The national service's front page, already reviewed in
+ * OFFICIAL; [U] until C14's answer or the owner confirms it is the national storm-surge page.
+ */
+export const STORM_SURGE_WARNING = {
+  noordzee: 'https://waterberichtgeving.rws.nl/',
+  waddenzee: 'https://waterberichtgeving.rws.nl/',
+  oosterschelde: 'https://waterberichtgeving.rws.nl/',
+  westerschelde: 'https://waterberichtgeving.rws.nl/',
+  'eems-dollard': 'https://waterberichtgeving.rws.nl/',
+} as const;

@@ -1,0 +1,12 @@
+{
+  "source": "NL-1",
+  "synthetic": true,
+  "recorded_at": "2026-12-12T03:55:00Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "spec": "nl-1-astro",
+  "variant": "denhelder.marsdiep/NAP",
+  "note": "hand-built (P18a, criterion 2): not a recording and not a golden. Structure copied from nl-1-astro-vlissingen-nap.raw; only Locatie, Tijdstip and Meetwaarde are replaced. Astro curve: M2-like, extremes at T0 + k * 745 min (highs, T0 = 2026-12-11T23:00Z, value round(80 + 7 sin(1.3k + 0.4))) and 372.5 min later (lows, round(-80 + 5 cos(0.9k + 0.2))), half-cosine between consecutive extremes, rounded to cm, every 10 min from 2026-12-11T04:00Z to 2026-12-12T23:50Z. Every Tijdstip carries the fixed +01:00 with milliseconds, as RWS writes it; local midnight 00:00+01:00 is 23:00Z.",
+  "bytes": 78422
+}

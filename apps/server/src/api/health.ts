@@ -174,6 +174,7 @@ export const Detail = z.object({
     })
     .optional(),
   astro_horizon: z.string().optional(),
+  surge: z.object({ tidal: z.number(), astro: z.number(), surge: z.number() }).optional(),
   backfill: z
     .object({
       jobs: z.number(),
@@ -345,6 +346,7 @@ export async function readFamilySources(
         label_offset: detail.label_offset ?? null,
         forecast: detail.forecast ?? null,
         astro_horizon: detail.astro_horizon ?? null,
+        surge: detail.surge ?? null,
         ...(detail.backfill === undefined ? {} : { backfill: detail.backfill }),
         partitions: Object.entries(detail.partitions ?? {})
           .sort(([a], [b]) => a.localeCompare(b))

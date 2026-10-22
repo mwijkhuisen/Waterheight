@@ -20,9 +20,15 @@ const ids = (source: string, audience: string) => [
   ...new Set(registry.stations.filter((s) => s.source === source && s.audience === audience).map((s) => s.id)),
 ];
 const [up, down] = ids('DE-1', 'public') as [string, string];
-const primary = [
-  ...new Set(registry.stations.filter((s) => s.role === 'primary' && s.audience === 'public').map((s) => s.id)),
-][0] as string;
+const publicPrimary = (quantity: string) =>
+  new Set(
+    registry.stations
+      .filter((s) => s.role === 'primary' && s.audience === 'public' && s.quantity === quantity)
+      .map((s) => s.id),
+  );
+const primary = [...publicPrimary('H')][0] as string;
+// P18b review S2: a public primary station without an H series is no lake reference.
+const qOnly = [...publicPrimary('Q')].find((id) => !publicPrimary('H').has(id)) as string;
 const owner = ids('BE-3', 'owner')[0] as string;
 const off = ids('LU-1', 'off')[0] as string;
 
@@ -327,8 +333,9 @@ describe('rivernet sync', { timeout: 120_000 }, () => {
     expect(await q('SELECT id FROM waterbody')).toEqual([{ id: 'meer-b' }]);
   });
 
-  it('refuses a reference_station that is an owner or off station', async () => {
-    for (const bad of [owner, off, 'xx.unknown.1'])
+  it('refuses a reference_station that is an owner or off station, or has no H series', async () => {
+    expect(qOnly).toBeDefined();
+    for (const bad of [owner, off, qOnly, 'xx.unknown.1'])
       await expect(sync(null, bodies(body('meer-c', bad)))).rejects.toThrow(/reference_station/);
     expect(await q(`SELECT id FROM waterbody WHERE id = 'meer-c'`)).toEqual([]);
   });

@@ -27,6 +27,7 @@ export function columns(t: string, values: Snapshot['values']): Columns {
     }
     return i;
   };
+  const tide = values.map((v) => v.tide ?? null);
   return {
     t,
     series: values.map((v) => v.series),
@@ -40,6 +41,8 @@ export function columns(t: string, values: Snapshot['values']): Columns {
     area: values.map((v) => (v.area === undefined ? null : { state: v.area.state, basis: at(v.area.basis) })),
     nap: values.map((v) => v.nap ?? null),
     zero: values.map((v) => v.zero ?? null),
+    // P18a: only when some series has a tide, so a file without one stays byte-identical.
+    ...(tide.some((x) => x !== null) ? { tide } : {}),
   };
 }
 
@@ -55,7 +58,13 @@ export const sourcesOf = (c: Columns, facts: ReadonlyMap<number, SeriesFacts>): 
 
 /** The values of the bucket at `t` as the API's /snapshot gives them (the public family keeps the owner-basis check). */
 export async function readValues(c: RenderCtx, t: number, current: boolean): Promise<Snapshot['values']> {
-  const read = await readStates(c.db, c.family, t, { now: c.now, current, sections: c.sections, cache: c.cache });
+  const read = await readStates(c.db, c.family, t, {
+    now: c.now,
+    current,
+    sections: c.sections,
+    cache: c.cache,
+    tide: true,
+  });
   return c.family === 'public' ? publicSnapshot(read).values : snapshotValues(read);
 }
 

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { OFFICIAL } from '../src/features/pages/official.ts';
+import { parse } from 'yaml';
+import { OFFICIAL, STORM_SURGE_WARNING } from '../src/features/pages/official.ts';
 import { contactHref } from '../src/features/pages/parts/contact.ts';
 import { COUNTRIES } from '../src/features/pages/parts/country.ts';
 
@@ -23,6 +24,27 @@ describe('OFFICIAL', () => {
       return url.host;
     });
     expect(new Set(hosts).size).toBe(hosts.length);
+  });
+});
+
+describe('STORM_SURGE_WARNING', () => {
+  it('links only reviewed OFFICIAL front pages, over https', () => {
+    const reviewed = new Set(OFFICIAL.flatMap((o) => o.hrefs));
+    for (const href of Object.values(STORM_SURGE_WARNING)) {
+      const url = new URL(href);
+      expect(url.protocol).toBe('https:');
+      expect(url.pathname).toBe('/');
+      expect(`${url.search}${url.hash}`).toBe('');
+      expect(reviewed.has(href)).toBe(true);
+    }
+  });
+
+  it('has exactly the sea and estuary water bodies of the registry (not closed_estuary)', () => {
+    const file = parse(readFileSync(new URL('../../../registry/waterbodies.yaml', import.meta.url), 'utf8')) as {
+      waterbodies: { id: string; kind: string }[];
+    };
+    const ids = file.waterbodies.filter((w) => w.kind === 'sea' || w.kind === 'estuary').map((w) => w.id);
+    expect(Object.keys(STORM_SURGE_WARNING).sort()).toEqual(ids.sort());
   });
 });
 

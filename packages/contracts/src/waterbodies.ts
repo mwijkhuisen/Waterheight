@@ -46,7 +46,10 @@ export const Waterbody = z.strictObject({
   /** Regulated by structures (true) or tidal (false). */
   managed_level: z.boolean(),
   outflows: z.array(z.strictObject({ to: Slug, via: Name })),
-  /** The D27 reference gauge: a public station, or null (null everywhere until P18b, owner decision D-2). */
+  /**
+   * The D27 reference gauge (P18b, owner decision O-3): a public station placed in the body whose H series alone
+   * gives a lake its state, or null (lakes without a placed gauge, the seas and estuaries).
+   */
   reference_station: StationRef.nullable(),
   /** The OSM object, the Wikidata item (P402 = the OSM id where present) and the outflow source. */
   evidence: z.array(Evidence).min(1),

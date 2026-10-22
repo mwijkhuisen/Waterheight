@@ -12,6 +12,7 @@ import {
   OWNER_ONLY_VIEWS,
   PUBLIC_ONLY_VIEWS,
   SOURCE_HEALTH_COLUMNS,
+  TIDE_AT,
   TWIN_CHECK_COLUMNS,
   VIEWS,
 } from '../../src/db/audience.ts';
@@ -41,11 +42,14 @@ const OWN = VIEWS.owner;
  * P16b: tide rows on the fixture's series (here, not in seed.ts, which other tests share): a public row; the owner
  * canary on its owner series and owner rows on an owner-only and a narrowed series; the withheld canary on every
  * series that must stay hidden; and two rows 40 days old, under a 30-day window with and without history export.
+ * P18a: every fixture station is tidal and the astro rows sit on the current hour, so each row would reach the api
+ * tide views and the tide-at-T functions at FIXTURE_NOW if their filters failed (the extremes are 1 h either side).
  */
 async function seedTide(admin: pg.Client, ids: Record<string, number>): Promise<void> {
+  await admin.query(`UPDATE station SET flags = '{"tidal": true}'`);
   const rows: [string, string, number, string | null, string][] = [
-    ['public', 'astro', 300, null, "now() + interval '1 hour'"],
-    ['ownerCanary', 'astro', OWNER_CANARY, null, "now() + interval '1 hour'"],
+    ['public', 'astro', 300, null, "date_trunc('hour', now())"],
+    ['ownerCanary', 'astro', OWNER_CANARY, null, "date_trunc('hour', now())"],
     ['onlyOwner', 'extreme', 301, 'high', "now() - interval '1 hour'"],
     ['narrowedOwner', 'extreme_astro', 302, 'low', "now() + interval '1 hour'"],
     ...WITHHELD_KEYS.map((k): [string, string, number, string | null, string] => [
@@ -53,7 +57,7 @@ async function seedTide(admin: pg.Client, ids: Record<string, number>): Promise<
       'astro',
       WITHHELD_CANARY,
       null,
-      "now() + interval '1 hour'",
+      "date_trunc('hour', now())",
     ]),
     ['window', 'astro', 303, null, "now() - interval '40 days'"],
     ['windowExport', 'astro', 304, null, "now() - interval '40 days'"],
@@ -365,6 +369,75 @@ describe('the latest forecast run as of T (A§8 Q2)', () => {
   });
 });
 
+describe('the tide rows at T (P18a)', () => {
+  const at = async (client: pg.Client, fn: string) =>
+    column(client, `SELECT DISTINCT series_id FROM ${fn}(${FIXTURE_NOW})`);
+
+  it('returns the rows of the visible primary series of its family only', async () => {
+    expect(await at(api, TIDE_AT.public)).toEqual([ids.public]);
+    expect(await at(owner, TIDE_AT.owner)).toEqual(
+      [ids.public, ids.ownerCanary, ids.onlyOwner, ids.narrowedOwner].sort(),
+    );
+  });
+
+  it('is executable by its own family only, and is a locked-down SECURITY DEFINER function', async () => {
+    const load = await t.connectAs('rws_load');
+    const publish = await t.connectAs('rws_publish');
+    const denied = async (client: pg.Client, fn: string) =>
+      client.query(`SELECT 1 FROM ${fn}(${FIXTURE_NOW})`).then(
+        () => 'ok',
+        (e) => e.code,
+      );
+    expect(await denied(api, TIDE_AT.public)).toBe('ok');
+    expect(await denied(publish, TIDE_AT.public)).toBe('ok');
+    expect(await denied(owner, TIDE_AT.owner)).toBe('ok');
+    expect(await denied(api, TIDE_AT.owner)).toBe('42501');
+    expect(await denied(publish, TIDE_AT.owner)).toBe('42501');
+    expect(await denied(owner, TIDE_AT.public)).toBe('42501');
+    expect(await denied(load, TIDE_AT.public)).toBe('42501');
+    expect(await denied(load, TIDE_AT.owner)).toBe('42501');
+    await load.end();
+    await publish.end();
+    const { rows } = await t.admin.query(
+      `SELECT proname, prosecdef, proconfig, provolatile, pg_get_userbyid(proowner) AS owner, prolang::regproc::text AS lang, proacl::text AS acl
+       FROM pg_proc WHERE proname = ANY($1) ORDER BY 1`,
+      [Object.values(TIDE_AT)],
+    );
+    const common = {
+      prosecdef: true,
+      proconfig: ['search_path=pg_catalog, pg_temp', 'TimeZone=UTC'],
+      provolatile: 's',
+      owner: 'rws_owner',
+    };
+    expect(rows).toMatchObject([
+      { proname: TIDE_AT.owner, ...common, acl: '{rws_owner=X/rws_owner,rws_owner_api=X/rws_owner}' },
+      {
+        proname: TIDE_AT.public,
+        ...common,
+        acl: '{rws_owner=X/rws_owner,rws_api=X/rws_owner,rws_publish=X/rws_owner}',
+      },
+    ]);
+    // A hostile search_path and temporary tables named like the base tables change nothing: the body names `public.`.
+    await t.admin.query(`
+      CREATE TEMP TABLE tide (series_id int, kind text, ts timestamptz, value real, hilo text, batch_id bigint);
+      CREATE TEMP TABLE station (id text, flags jsonb);
+      SET search_path = pg_temp, public`);
+    try {
+      expect(await at(t.admin, TIDE_AT.public)).toEqual([ids.public]);
+    } finally {
+      await t.admin.query('RESET search_path; DROP TABLE pg_temp.tide; DROP TABLE pg_temp.station');
+    }
+  });
+
+  it('the two functions are one template: the same body except the audience set', async () => {
+    const src = async (fn: string) =>
+      (await t.admin.query<{ s: string }>('SELECT prosrc AS s FROM pg_proc WHERE proname = $1', [fn])).rows[0]?.s ?? '';
+    const pub = await src(TIDE_AT.public);
+    expect(pub).toContain("e.audience IN ('public')");
+    expect(pub.replace("IN ('public')", "IN ('public', 'owner')")).toBe(await src(TIDE_AT.owner));
+  });
+});
+
 describe('dependent rows are filtered by their own source AND their parent', () => {
   it('an owner-audience reference on a public series is in the owner reference view, not in the public one', async () => {
     expect(await column(api, `SELECT kind FROM ${PUB.reference} WHERE series_id = $1`, [ids.public])).toEqual(['MHW']);
@@ -471,11 +544,13 @@ describe('dependent rows are filtered by their own source AND their parent', () 
 });
 
 describe('the tide view pair (P16b)', () => {
-  it('keeps the visible primary series of its family, under the history rule', async () => {
-    expect(await column(api, `SELECT series_id FROM ${PUB.tide}`)).toEqual([ids.public, ids.windowExport].sort());
-    expect(await column(owner, `SELECT series_id FROM ${OWN.tide}`)).toEqual(
-      [ids.public, ids.windowExport, ids.ownerCanary, ids.onlyOwner, ids.narrowedOwner].sort(),
-    );
+  it('keeps the visible primary series of its family, under the history rule (the api pair too, P18a)', async () => {
+    for (const view of [PUB.tide, PUB.api.tide])
+      expect(await column(api, `SELECT series_id FROM ${view}`), view).toEqual([ids.public, ids.windowExport].sort());
+    for (const view of [OWN.tide, OWN.api.tide])
+      expect(await column(owner, `SELECT series_id FROM ${view}`), view).toEqual(
+        [ids.public, ids.windowExport, ids.ownerCanary, ids.onlyOwner, ids.narrowedOwner].sort(),
+      );
   });
 
   it('shows the owner canary in the owner view only, and the withheld canary in neither', async () => {
@@ -493,8 +568,10 @@ describe('the tide view pair (P16b)', () => {
 
   it('the table is read by no reader role, and each view by its own family only', async () => {
     for (const client of [api, owner]) expect(await sqlState(client, 'SELECT 1 FROM tide LIMIT 1')).toBe('42501');
-    expect(await sqlState(api, `SELECT 1 FROM ${OWN.tide} LIMIT 1`)).toBe('42501');
-    expect(await sqlState(owner, `SELECT 1 FROM ${PUB.tide} LIMIT 1`)).toBe('42501');
+    for (const view of [OWN.tide, OWN.api.tide])
+      expect(await sqlState(api, `SELECT 1 FROM ${view} LIMIT 1`)).toBe('42501');
+    for (const view of [PUB.tide, PUB.api.tide])
+      expect(await sqlState(owner, `SELECT 1 FROM ${view} LIMIT 1`)).toBe('42501');
   });
 
   it('a tide view that lost its filter would be caught by the sweep (mutation check)', async () => {
@@ -529,17 +606,21 @@ describe('the canaries', () => {
 describe('sweeps over whole families', () => {
   it('no public view shows an owner, off, withheld, mirror or canary row in any column', async () => {
     const forecast = await sweepForecastAt(api, FORECAST_AT.public);
-    const text = (await sweep(api, familyViews('public'))) + (await sweepAt(api, OBS_AT.public)) + forecast;
+    const tide = await sweepAt(api, TIDE_AT.public);
+    const text = (await sweep(api, familyViews('public'))) + (await sweepAt(api, OBS_AT.public)) + forecast + tide;
     expect(text).toContain('nl.rws.public');
     expect(forecast).toContain('"source_id":"NL-1"'); // the sweep has a forecast row to look at
+    expect(tide).toContain('"value":300'); // …and a tide row
     expect(found(text, NEVER_PUBLIC)).toEqual([]);
   });
 
   it('the owner views show the owner canary and nothing off, withheld, mirror or twin', async () => {
     const forecast = await sweepForecastAt(owner, FORECAST_AT.owner);
-    const text = (await sweep(owner, familyViews('owner'))) + (await sweepAt(owner, OBS_AT.owner)) + forecast;
+    const tide = await sweepAt(owner, TIDE_AT.owner);
+    const text = (await sweep(owner, familyViews('owner'))) + (await sweepAt(owner, OBS_AT.owner)) + forecast + tide;
     expect(text).toContain(OWNER_CANARY_REAL);
     expect(await sweepAt(owner, OBS_AT.owner)).toContain(OWNER_CANARY_REAL);
+    expect(tide).toContain(OWNER_CANARY_REAL);
     expect(forecast).toContain(OWNER_CANARY_REAL);
     expect(forecast).toContain('"source_id":"DE-3"'); // an owner source's run on a public series
     expect(text).toContain('CANARY-OWNER');
@@ -598,9 +679,9 @@ describe('the withheld canary on every series that must stay hidden (invariant 8
   });
 
   it('is in no view and no at-T function of either family, series, reference and forecast views included', async () => {
-    for (const [client, family, fn, forecastFn] of [
-      [api, PUB, OBS_AT.public, FORECAST_AT.public],
-      [owner, OWN, OBS_AT.owner, FORECAST_AT.owner],
+    for (const [client, family, fn, forecastFn, tideFn] of [
+      [api, PUB, OBS_AT.public, FORECAST_AT.public, TIDE_AT.public],
+      [owner, OWN, OBS_AT.owner, FORECAST_AT.owner, TIDE_AT.owner],
     ] as const) {
       const bySeries = [
         family.obs,
@@ -614,6 +695,7 @@ describe('the withheld canary on every series that must stay hidden (invariant 8
         family.forecastRun,
         family.api.forecastRun,
         family.tide,
+        family.api.tide,
       ];
       for (const view of bySeries)
         expect(
@@ -624,9 +706,11 @@ describe('the withheld canary on every series that must stay hidden (invariant 8
         expect(await column(client, `SELECT count(*)::int FROM ${view} WHERE id = ANY($1)`, [hidden()]), view).toEqual([
           0,
         ]);
-      expect(
-        await column(client, `SELECT count(*)::int FROM ${fn}(${FIXTURE_NOW}) WHERE series_id = ANY($1)`, [hidden()]),
-      ).toEqual([0]);
+      for (const f of [fn, tideFn])
+        expect(
+          await column(client, `SELECT count(*)::int FROM ${f}(${FIXTURE_NOW}) WHERE series_id = ANY($1)`, [hidden()]),
+          f,
+        ).toEqual([0]);
       // The forecast side: the values of the withheld runs, and the latest-run function (any t the runs reach).
       for (const view of [family.forecastValue, family.api.forecastValue])
         expect(
@@ -693,7 +777,7 @@ describe('the families are one template', () => {
     const { api: ownApi, ...ownDisplay } = OWN;
     for (const k of Object.keys(pubDisplay) as (keyof typeof pubDisplay)[]) pairs.push([pubDisplay[k], ownDisplay[k]]);
     for (const k of Object.keys(pubApi) as (keyof typeof pubApi)[]) pairs.push([pubApi[k], ownApi[k]]);
-    expect(pairs).toHaveLength(27);
+    expect(pairs).toHaveLength(28);
     for (const [pub, own] of pairs) {
       const d = await def(pub);
       // The meta pair holds the two display-window instants and no audience data, so it has no filter; the dirty and

@@ -205,6 +205,12 @@ export const healthSources = (source: z.ZodString) =>
            */
           astro_horizon: iso.nullable(),
           /**
+           * Surge coverage (P18a), counts only, for a source with tier-1 tidal primary series (null otherwise): how
+           * many there are, how many have an astronomical row within a day of now, and how many of those have one at
+           * exactly the timestamp of their newest value (the surge is measured there).
+           */
+          surge: z.strictObject({ tidal: count, astro: count, surge: count }).nullable(),
+          /**
            * Backfill jobs (P14a), for a source that has some (omitted otherwise): their number, those still active
            * (planned, running or paused) and the sums of their chunks, inserted and revised rows and unreconciled chunks;
            * `chunks_with_data` (chunks that wrote a manifest line, compared with the ledger) and `quarantined` (backfill

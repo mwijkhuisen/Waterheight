@@ -2,7 +2,15 @@ import { Snapshot } from '@rws/contracts';
 import type { Classified } from '@rws/core';
 import { describe, expect, it } from 'vitest';
 import { publicSnapshot } from '../../src/api/data.ts';
-import { classCoverage, readStates, type StateRead, type Static, StaticCache } from '../../src/api/states.ts';
+import {
+  classCoverage,
+  readStates,
+  type StateRead,
+  type Static,
+  StaticCache,
+  snapshotValues,
+} from '../../src/api/states.ts';
+import { TIDE_AT } from '../../src/db/audience.ts';
 import { errorCode } from '../../src/db/pool.ts';
 import { fakeDb } from './fake-db.ts';
 
@@ -251,5 +259,97 @@ describe('StaticCache.doy keeps no expired day (P14f review R1-5)', () => {
     // no day key: no query
     await cache.doy(db, 'public', []);
     expect(queries).toBe(3);
+  });
+});
+
+describe('the tide of a snapshot value (P18a)', () => {
+  const OBS_TS = T - 600_000; // the value read() gives every series
+  const astro = (ts: number, value: number) => ({ kind: 'astro' as const, hilo: null, ts, value });
+  const high = { kind: 'extreme_astro' as const, hilo: 'high' as const, ts: T - 5 * 3_600_000, value: 120 };
+
+  it('snapshotValues attaches tideAt only to a series with tide rows; publicSnapshot keeps it', () => {
+    const r: StateRead = {
+      ...read([
+        ['a', 'DE', gauge()],
+        ['b', 'DE', gauge()],
+      ]),
+      tide: new Map([[1, [astro(OBS_TS, 80), astro(T, 90), high]]]),
+    };
+    const [one, two] = snapshotValues(r);
+    // astro at the value's own ts (T − 10 min), never the row at T
+    expect(one?.tide).toEqual({
+      astro: 80,
+      surge: 20,
+      derived: 'surge',
+      extremes: [{ ts: new Date(high.ts).toISOString(), value: 120, hilo: 'high', kind: 'astro' }],
+    });
+    expect(two && 'tide' in two).toBe(false);
+    const snap = publicSnapshot(r);
+    expect(Snapshot.parse(snap).values[0]?.tide?.surge).toBe(20);
+  });
+
+  it('no astro row at the value ts: astro and surge null, the extremes kept', () => {
+    const r: StateRead = { ...read([['a', 'DE', gauge()]]), tide: new Map([[1, [astro(T, 90), high]]]) };
+    expect(snapshotValues(r)[0]?.tide).toMatchObject({ astro: null, surge: null, extremes: [{ hilo: 'high' }] });
+  });
+
+  // readStates on a fake database: which statements run, and what the read keeps.
+  const fixed = {
+    stations: [{ id: 'nl.rws.x', country: 'NL', lon: null, lat: null, tier: 1, flags: { tidal: true } }],
+    series: [
+      {
+        id: 7,
+        station_id: 'nl.rws.x',
+        source_id: 'NL-1',
+        quantity: 'H',
+        value_kind: 'level',
+        datum: 'NAP',
+        staleness_ms: 3_600_000,
+        audience: 'public',
+      },
+    ],
+    refs: [],
+    zeros: [],
+    attached: new Map(),
+    sources: new Set<string>(),
+    attribution: [],
+    dates: new Map(),
+    history: new Map(),
+  } as unknown as Static;
+  const opts = { now: T, current: false, sections: new Map<string, string>() };
+  const cache = { get: async () => fixed, doy: async () => [] } as unknown as StaticCache;
+  function db(asked: string[]) {
+    return fakeDb(async (q) => {
+      asked.push(q.sql);
+      if (q.sql.includes(TIDE_AT.public))
+        return { rows: [{ series_id: 7, kind: 'astro', hilo: null, ts: new Date(OBS_TS), value: 80 }] };
+      if (q.sql.includes('series_id, ts, value, qc'))
+        return { rows: [{ series_id: 7, ts: new Date(OBS_TS), value: 101, qc: 0 }] };
+      return { rows: [] };
+    });
+  }
+
+  it('without the tide option no TIDE_AT query is made and no rows are kept', async () => {
+    const asked: string[] = [];
+    const r = await readStates(db(asked), 'public', T, { ...opts, cache });
+    expect(asked.some((q) => q.includes(TIDE_AT.public))).toBe(false);
+    expect('tide' in r).toBe(false);
+  });
+
+  it('a past or current t with the option reads TIDE_AT[family] in the snapshot and keeps its rows by series', async () => {
+    const asked: string[] = [];
+    const r = await readStates(db(asked), 'public', T, { ...opts, cache, tide: true });
+    expect(asked.filter((q) => q.includes(`"${TIDE_AT.public}"(`))).toHaveLength(1);
+    expect(r.tide).toEqual(new Map([[7, [{ kind: 'astro', hilo: null, ts: OBS_TS, value: 80 }]]]));
+    expect(snapshotValues(r)[0]?.tide).toMatchObject({ astro: 80, surge: 21 });
+  });
+
+  it('a forecast t reads no tide and attaches none', async () => {
+    const asked: string[] = [];
+    const forecast = new Map([[7, { ts: T, value: 150 }]]);
+    const r = await readStates(db(asked), 'public', T, { ...opts, cache, forecast, tide: true });
+    expect(asked.some((q) => q.includes(TIDE_AT.public))).toBe(false);
+    expect('tide' in r).toBe(false);
+    expect(snapshotValues(r).every((v) => !('tide' in v))).toBe(true);
   });
 });

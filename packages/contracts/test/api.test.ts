@@ -710,3 +710,34 @@ describe('openApiDocument', () => {
     expect(openApiDocument()).toEqual(doc);
   });
 });
+
+describe('tide (P18a)', () => {
+  const hw = { ts: '2026-10-26T09:12:00.000Z', value: 95, hilo: 'high', kind: 'astro' };
+  const tide = { astro: 80, surge: 21.5, derived: 'surge', extremes: [hw, { ...hw, hilo: 'low', kind: 'measured' }] };
+  const sv = (t: unknown) => ok(Snapshot, { t: T, values: [{ ...snapshotValue, tide: t }] });
+
+  it('a snapshot value takes an optional tide; surge is null exactly when astro is', () => {
+    expect(ok(Snapshot, { t: T, values: [snapshotValue] })).toBe(true);
+    expect(sv(tide)).toBe(true);
+    expect(sv({ ...tide, astro: null, surge: null })).toBe(true);
+    expect(sv({ ...tide, surge: null })).toBe(false);
+    expect(sv({ ...tide, astro: null })).toBe(false);
+    expect(sv({ ...tide, derived: true })).toBe(false);
+    expect(sv({ ...tide, extra: 1 })).toBe(false);
+    expect(sv({ ...tide, extremes: Array.from({ length: 6 }, () => hw) })).toBe(true);
+    expect(sv({ ...tide, extremes: Array.from({ length: 7 }, () => hw) })).toBe(false);
+    expect(sv({ ...tide, extremes: [{ ...hw, hilo: null }] })).toBe(false);
+    expect(sv({ ...tide, extremes: [{ ...hw, kind: 'extreme_astro' }] })).toBe(false);
+    expect(sv({ ...tide, extremes: [{ ...hw, ts: '2026-10-26T10:12:00+01:00' }] })).toBe(false);
+  });
+
+  it('the raw series takes an optional tide, the 1h and 1d series none', () => {
+    const t = { astro: [{ ts: T, value: 80 }], surge: [{ ts: T, value: 21.5 }], derived: 'surge', extremes: [hw] };
+    expect(ok(Series, { ...seriesRaw, tide: t })).toBe(true);
+    expect(ok(Series, { ...seriesRaw, tide: { ...t, astro: [], surge: [], extremes: [] } })).toBe(true);
+    expect(ok(Series, { ...seriesRaw, tide: { ...t, surge: [{ ts: T, value: null }] } })).toBe(false);
+    expect(ok(Series, { ...seriesRaw, tide: { ...t, astro: [{ ts: T, value: 80, qc: 0 }] } })).toBe(false);
+    expect(ok(Series, { ...series1h, tide: t })).toBe(false);
+    expect(ok(Series, { ...series1d, tide: t })).toBe(false);
+  });
+});

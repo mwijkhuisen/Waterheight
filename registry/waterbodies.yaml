@@ -18,7 +18,11 @@
 #                     (owner decision R-2): the rest is a curated `waterbody:` override in registry/snap-overrides.yaml
 #   managed_level     true: the level is regulated by structures; false: tidal water
 #   outflows          [{to, via}] only between bodies of this file and only with a source in `evidence`
-#   reference_station null everywhere (D27, owner decision D-2: no reference gauge before P18b)
+#   reference_station the D27 reference gauge (P18b, owner decision O-3 of 2026-10-22): a public primary NL-1 station
+#                     placed in this body, whose H series alone gives the lake its state (the spread between the
+#                     body's gauges is information, never a state); null for a lake without a placed gauge
+#                     (veluwemeer, wolderwijd, vossemeer, zoommeer) and for the seas and estuaries (coloured per
+#                     station, D26). drontermeer's gauge has no NL-4 rows, so that lake shows no class.
 #   evidence          https URLs: the Wikidata item, the OSM relation when `osm` is set, the outflow source
 version: 1
 waterbodies:
@@ -32,7 +36,7 @@ waterbodies:
       NL-1: ["IJsselmeer"]
     managed_level: true
     outflows: []
-    reference_station: null
+    reference_station: nl.rws.krabbersgat.ijsselmeer
     evidence:
       - https://www.wikidata.org/wiki/Q4121
       - https://www.openstreetmap.org/relation/945096
@@ -47,7 +51,7 @@ waterbodies:
       NL-1: ["Markermeer"]
     managed_level: true
     outflows: []
-    reference_station: null
+    reference_station: nl.rws.markermeer.midden
     evidence:
       - https://www.wikidata.org/wiki/Q939766
       - https://www.openstreetmap.org/relation/49368
@@ -63,7 +67,7 @@ waterbodies:
     managed_level: true
     outflows:
       - {to: ijsselmeer, via: "open connection (Wikidata P201)"}
-    reference_station: null
+    reference_station: nl.rws.ketelhaven.ketelmeer
     evidence:
       - https://www.wikidata.org/wiki/Q1739879
       - https://www.openstreetmap.org/relation/1316262
@@ -78,7 +82,7 @@ waterbodies:
     managed_level: true
     outflows:
       - {to: ketelmeer, via: "Ramsdiep (Wikidata P201)"}
-    reference_station: null
+    reference_station: nl.rws.kadoelen.zwanediep
     evidence:
       - https://www.wikidata.org/wiki/Q231747
       - https://www.openstreetmap.org/relation/1316264
@@ -108,7 +112,7 @@ waterbodies:
       NL-1: ["Drontermeer"]
     managed_level: true
     outflows: []
-    reference_station: null
+    reference_station: nl.rws.dronten.reevesluis.drontermeer
     evidence:
       - https://www.wikidata.org/wiki/Q202929
       - https://www.openstreetmap.org/relation/1316265
@@ -151,7 +155,7 @@ waterbodies:
       NL-1: ["Nuldernauw"]
     managed_level: true
     outflows: []
-    reference_station: null
+    reference_station: nl.rws.nijkerk.nuldernauw
     evidence:
       - https://www.wikidata.org/wiki/Q943170
       - https://www.openstreetmap.org/relation/1204375
@@ -166,7 +170,7 @@ waterbodies:
       NL-1: ["Nijkerkernauw"]
     managed_level: true
     outflows: []
-    reference_station: null
+    reference_station: nl.rws.nijkerk.nijkerkernauw
     evidence:
       - https://www.wikidata.org/wiki/Q2647497
       - https://www.openstreetmap.org/relation/19389865
@@ -180,7 +184,7 @@ waterbodies:
     names: {}
     managed_level: true
     outflows: []
-    reference_station: null
+    reference_station: nl.rws.eemdijk
     evidence:
       - https://www.wikidata.org/wiki/Q1295357
       - https://www.openstreetmap.org/relation/1204424
@@ -194,7 +198,7 @@ waterbodies:
     names: {}
     managed_level: true
     outflows: []
-    reference_station: null
+    reference_station: nl.rws.almere.hollandsebrug
     evidence:
       - https://www.wikidata.org/wiki/Q629864
       - https://www.openstreetmap.org/relation/1204456
@@ -208,7 +212,7 @@ waterbodies:
     names: {}
     managed_level: true
     outflows: []
-    reference_station: null
+    reference_station: nl.rws.amsterdam.schellingwouderbrug
     evidence:
       - https://www.wikidata.org/wiki/Q1653947
       - https://www.openstreetmap.org/relation/1321001
@@ -225,7 +229,7 @@ waterbodies:
       NL-1: ["Volkerak"]
     managed_level: true
     outflows: []
-    reference_station: null
+    reference_station: nl.rws.willemstad.volkerak
     evidence:
       - https://www.wikidata.org/wiki/Q2437978
       - https://www.openstreetmap.org/relation/1408100
@@ -257,7 +261,7 @@ waterbodies:
     names: {}
     managed_level: true
     outflows: []
-    reference_station: null
+    reference_station: nl.rws.bommenede
     evidence:
       - https://www.wikidata.org/wiki/Q1546115
       - https://www.openstreetmap.org/relation/940363
@@ -273,7 +277,7 @@ waterbodies:
     names: {}
     managed_level: true
     outflows: []
-    reference_station: null
+    reference_station: nl.rws.kamperland.schotsman
     evidence:
       - https://www.wikidata.org/wiki/Q958780
       - https://www.openstreetmap.org/relation/1188130
@@ -292,7 +296,7 @@ waterbodies:
     managed_level: true
     outflows:
       - {to: noordzee, via: "Haringvlietsluizen (Wikidata P403)"}
-    reference_station: null
+    reference_station: nl.rws.hellevoetsluis
     evidence:
       - https://www.wikidata.org/wiki/Q1585393
       - https://www.openstreetmap.org/relation/8115766

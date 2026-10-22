@@ -262,6 +262,55 @@ $$;
 
 
 --
+-- Name: own_tide_at(timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.own_tide_at(p_t timestamp with time zone) RETURNS TABLE(series_id integer, kind text, hilo text, ts timestamp with time zone, value real)
+    LANGUAGE sql STABLE SECURITY DEFINER ROWS 1500
+    SET search_path TO 'pg_catalog', 'pg_temp'
+    SET "TimeZone" TO 'UTC'
+    AS $$
+  WITH tidal AS MATERIALIZED (
+    SELECT e.series_id, e.lic_history_export, e.history_window, s.staleness_limit
+    FROM public.series_eff e
+    JOIN public.series s ON s.id = e.series_id
+    WHERE s.active AND e.audience IN ('public', 'owner') AND e.role = 'primary' AND e.lic_display
+      AND EXISTS (SELECT 1 FROM public.station st WHERE st.id = e.station_id AND st.flags ->> 'tidal' = 'true')
+  )
+  SELECT e.series_id, d.kind, d.hilo, d.ts, d.value
+  FROM tidal e
+  JOIN public.tide d ON d.series_id = e.series_id
+  WHERE d.kind = 'astro' AND d.ts <= p_t AND d.ts > p_t - e.staleness_limit
+    AND (e.lic_history_export OR d.ts >= statement_timestamp() - e.history_window)
+  UNION ALL
+  SELECT e.series_id, d.kind, d.hilo, d.ts, d.value
+  FROM tidal e
+  CROSS JOIN (VALUES ('extreme_astro', 'high'), ('extreme_astro', 'low'), ('extreme', 'high'), ('extreme', 'low'))
+    k (kind, hilo)
+  CROSS JOIN LATERAL (
+    SELECT d.kind, d.hilo, d.ts, d.value
+    FROM public.tide d
+    WHERE d.series_id = e.series_id AND d.kind = k.kind AND d.hilo = k.hilo
+      AND d.ts <= p_t AND d.ts > p_t - interval '15 hours'
+      AND (e.lic_history_export OR d.ts >= statement_timestamp() - e.history_window)
+    ORDER BY d.ts DESC
+    LIMIT 1) d
+  UNION ALL
+  SELECT e.series_id, d.kind, d.hilo, d.ts, d.value
+  FROM tidal e
+  CROSS JOIN (VALUES ('high'), ('low')) k (hilo)
+  CROSS JOIN LATERAL (
+    SELECT d.kind, d.hilo, d.ts, d.value
+    FROM public.tide d
+    WHERE d.series_id = e.series_id AND d.kind = 'extreme_astro' AND d.hilo = k.hilo
+      AND d.ts > p_t AND d.ts <= p_t + interval '15 hours'
+      AND (e.lic_history_export OR d.ts >= statement_timestamp() - e.history_window)
+    ORDER BY d.ts
+    LIMIT 1) d
+$$;
+
+
+--
 -- Name: pub_forecast_at(timestamp with time zone, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -328,6 +377,55 @@ CREATE FUNCTION public.pub_obs_at(p_t timestamp with time zone) RETURNS TABLE(se
     ORDER BY o.ts DESC
     LIMIT 1) o
   WHERE s.active AND e.audience IN ('public') AND e.role = 'primary' AND e.lic_display
+$$;
+
+
+--
+-- Name: pub_tide_at(timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.pub_tide_at(p_t timestamp with time zone) RETURNS TABLE(series_id integer, kind text, hilo text, ts timestamp with time zone, value real)
+    LANGUAGE sql STABLE SECURITY DEFINER ROWS 1500
+    SET search_path TO 'pg_catalog', 'pg_temp'
+    SET "TimeZone" TO 'UTC'
+    AS $$
+  WITH tidal AS MATERIALIZED (
+    SELECT e.series_id, e.lic_history_export, e.history_window, s.staleness_limit
+    FROM public.series_eff e
+    JOIN public.series s ON s.id = e.series_id
+    WHERE s.active AND e.audience IN ('public') AND e.role = 'primary' AND e.lic_display
+      AND EXISTS (SELECT 1 FROM public.station st WHERE st.id = e.station_id AND st.flags ->> 'tidal' = 'true')
+  )
+  SELECT e.series_id, d.kind, d.hilo, d.ts, d.value
+  FROM tidal e
+  JOIN public.tide d ON d.series_id = e.series_id
+  WHERE d.kind = 'astro' AND d.ts <= p_t AND d.ts > p_t - e.staleness_limit
+    AND (e.lic_history_export OR d.ts >= statement_timestamp() - e.history_window)
+  UNION ALL
+  SELECT e.series_id, d.kind, d.hilo, d.ts, d.value
+  FROM tidal e
+  CROSS JOIN (VALUES ('extreme_astro', 'high'), ('extreme_astro', 'low'), ('extreme', 'high'), ('extreme', 'low'))
+    k (kind, hilo)
+  CROSS JOIN LATERAL (
+    SELECT d.kind, d.hilo, d.ts, d.value
+    FROM public.tide d
+    WHERE d.series_id = e.series_id AND d.kind = k.kind AND d.hilo = k.hilo
+      AND d.ts <= p_t AND d.ts > p_t - interval '15 hours'
+      AND (e.lic_history_export OR d.ts >= statement_timestamp() - e.history_window)
+    ORDER BY d.ts DESC
+    LIMIT 1) d
+  UNION ALL
+  SELECT e.series_id, d.kind, d.hilo, d.ts, d.value
+  FROM tidal e
+  CROSS JOIN (VALUES ('high'), ('low')) k (hilo)
+  CROSS JOIN LATERAL (
+    SELECT d.kind, d.hilo, d.ts, d.value
+    FROM public.tide d
+    WHERE d.series_id = e.series_id AND d.kind = 'extreme_astro' AND d.hilo = k.hilo
+      AND d.ts > p_t AND d.ts <= p_t + interval '15 hours'
+      AND (e.lic_history_export OR d.ts >= statement_timestamp() - e.history_window)
+    ORDER BY d.ts
+    LIMIT 1) d
 $$;
 
 
@@ -904,6 +1002,71 @@ CREATE VIEW public.own_api_series WITH (security_barrier='true') AS
 
 
 --
+-- Name: station; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.station (
+    id text NOT NULL,
+    name text NOT NULL,
+    water_name text,
+    country text NOT NULL,
+    lon double precision,
+    lat double precision,
+    operator_provider_id text,
+    river_id text,
+    reach_id integer,
+    km_official real,
+    km_system text,
+    km_to_nl_entry real,
+    nl_entry_node text,
+    flags jsonb DEFAULT '{}'::jsonb NOT NULL,
+    tier smallint NOT NULL,
+    waterbody_id text,
+    CONSTRAINT station_check CHECK (((lon IS NULL) = (lat IS NULL))),
+    CONSTRAINT station_country_check CHECK ((country = ANY (ARRAY['NL'::text, 'DE'::text, 'BE'::text, 'FR'::text, 'LU'::text, 'CH'::text]))),
+    CONSTRAINT station_id_check CHECK (((id ~ '^[a-z]{2}\.[a-z0-9-]+\.[A-Za-z0-9._-]+$'::text) AND (length(id) <= 80))),
+    CONSTRAINT station_lat_check CHECK (((lat >= ('-90'::integer)::double precision) AND (lat <= (90)::double precision))),
+    CONSTRAINT station_lon_check CHECK (((lon >= ('-180'::integer)::double precision) AND (lon <= (180)::double precision))),
+    CONSTRAINT station_tier_check CHECK ((tier = ANY (ARRAY[1, 2])))
+);
+
+
+--
+-- Name: tide; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tide (
+    series_id integer NOT NULL,
+    kind text NOT NULL,
+    ts timestamp with time zone NOT NULL,
+    value real NOT NULL,
+    hilo text,
+    batch_id bigint NOT NULL,
+    CONSTRAINT tide_check CHECK (((kind = 'astro'::text) = (hilo IS NULL))),
+    CONSTRAINT tide_hilo_check CHECK ((hilo = ANY (ARRAY['high'::text, 'low'::text]))),
+    CONSTRAINT tide_kind_check CHECK ((kind = ANY (ARRAY['astro'::text, 'extreme'::text, 'extreme_astro'::text]))),
+    CONSTRAINT tide_value_check CHECK (((value <> 'NaN'::real) AND (abs(value) <> 'Infinity'::real)))
+);
+
+
+--
+-- Name: own_api_tide; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.own_api_tide WITH (security_barrier='true') AS
+ SELECT d.series_id,
+    d.kind,
+    d.ts,
+    d.value,
+    d.hilo
+   FROM (public.tide d
+     JOIN public.series_eff e ON ((e.series_id = d.series_id)))
+  WHERE ((e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (d.ts >= (statement_timestamp() - e.history_window))) AND (EXISTS ( SELECT 1
+           FROM public.station st
+          WHERE ((st.id = e.station_id) AND ((st.flags ->> 'tidal'::text) = 'true'::text)))));
+
+
+--
 -- Name: own_attribution; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -1321,36 +1484,6 @@ CREATE VIEW public.own_source_health WITH (security_barrier='true') AS
 
 
 --
--- Name: station; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.station (
-    id text NOT NULL,
-    name text NOT NULL,
-    water_name text,
-    country text NOT NULL,
-    lon double precision,
-    lat double precision,
-    operator_provider_id text,
-    river_id text,
-    reach_id integer,
-    km_official real,
-    km_system text,
-    km_to_nl_entry real,
-    nl_entry_node text,
-    flags jsonb DEFAULT '{}'::jsonb NOT NULL,
-    tier smallint NOT NULL,
-    waterbody_id text,
-    CONSTRAINT station_check CHECK (((lon IS NULL) = (lat IS NULL))),
-    CONSTRAINT station_country_check CHECK ((country = ANY (ARRAY['NL'::text, 'DE'::text, 'BE'::text, 'FR'::text, 'LU'::text, 'CH'::text]))),
-    CONSTRAINT station_id_check CHECK (((id ~ '^[a-z]{2}\.[a-z0-9-]+\.[A-Za-z0-9._-]+$'::text) AND (length(id) <= 80))),
-    CONSTRAINT station_lat_check CHECK (((lat >= ('-90'::integer)::double precision) AND (lat <= (90)::double precision))),
-    CONSTRAINT station_lon_check CHECK (((lon >= ('-180'::integer)::double precision) AND (lon <= (180)::double precision))),
-    CONSTRAINT station_tier_check CHECK ((tier = ANY (ARRAY[1, 2])))
-);
-
-
---
 -- Name: own_station; Type: VIEW; Schema: public; Owner: -
 --
 
@@ -1373,24 +1506,6 @@ CREATE VIEW public.own_station WITH (security_barrier='true') AS
   WHERE (EXISTS ( SELECT 1
            FROM public.series_eff e
           WHERE ((e.station_id = st.id) AND (e.audience = ANY (ARRAY['public'::public.audience, 'owner'::public.audience])) AND (e.role = 'primary'::text) AND e.lic_display)));
-
-
---
--- Name: tide; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.tide (
-    series_id integer NOT NULL,
-    kind text NOT NULL,
-    ts timestamp with time zone NOT NULL,
-    value real NOT NULL,
-    hilo text,
-    batch_id bigint NOT NULL,
-    CONSTRAINT tide_check CHECK (((kind = 'astro'::text) = (hilo IS NULL))),
-    CONSTRAINT tide_hilo_check CHECK ((hilo = ANY (ARRAY['high'::text, 'low'::text]))),
-    CONSTRAINT tide_kind_check CHECK ((kind = ANY (ARRAY['astro'::text, 'extreme'::text, 'extreme_astro'::text]))),
-    CONSTRAINT tide_value_check CHECK (((value <> 'NaN'::real) AND (abs(value) <> 'Infinity'::real)))
-);
 
 
 --
@@ -1626,6 +1741,23 @@ CREATE VIEW public.pub_api_series WITH (security_barrier='true') AS
    FROM (public.series s
      JOIN public.series_eff e ON ((e.series_id = s.id)))
   WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api);
+
+
+--
+-- Name: pub_api_tide; Type: VIEW; Schema: public; Owner: -
+--
+
+CREATE VIEW public.pub_api_tide WITH (security_barrier='true') AS
+ SELECT d.series_id,
+    d.kind,
+    d.ts,
+    d.value,
+    d.hilo
+   FROM (public.tide d
+     JOIN public.series_eff e ON ((e.series_id = d.series_id)))
+  WHERE ((e.audience = 'public'::public.audience) AND (e.role = 'primary'::text) AND e.lic_display AND e.lic_api AND (e.lic_history_export OR (d.ts >= (statement_timestamp() - e.history_window))) AND (EXISTS ( SELECT 1
+           FROM public.station st
+          WHERE ((st.id = e.station_id) AND ((st.flags ->> 'tidal'::text) = 'true'::text)))));
 
 
 --
@@ -2950,4 +3082,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261115000002'),
     ('20261115000003'),
     ('20261116000001'),
-    ('20261117000001');
+    ('20261117000001'),
+    ('20261118000001');

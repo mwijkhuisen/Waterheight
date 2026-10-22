@@ -1,10 +1,11 @@
 import { CANARIES } from '@rws/contracts';
-import { emptyNormalised, type TideRowIn } from '@rws/core';
+import { EXTREME_WINDOW_MS, emptyNormalised, type TideRowIn } from '@rws/core';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { recorded, writePayload } from '../../../../scripts/fixture-archive.ts';
 import { VIEWS } from '../../src/db/audience.ts';
 import type { LoadAdapter } from '../../src/load/adapters.ts';
 import { syncOwnerCanary } from '../../src/load/canary.ts';
+import { bumpedDays, DATA_FLOOR, PENDING_BUMPS_KEY, versionKey } from '../../src/load/dirty.ts';
 import { replay } from '../../src/load/replay.ts';
 import { lock } from '../../src/load/store.ts';
 import { sqlState } from '../db/testdb.ts';
@@ -21,7 +22,7 @@ const ASTRO = recorded('nl-1-astro-vlissingen-nap', 'NL-1');
 const VLISSINGEN = 'vlissingen/WATHTE/NAP/other:F007';
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
-/** The loader's clock: after every fetch below (it dates the dirty rows only; tide makes none). */
+/** The loader's clock: after every fetch below (it clips the dirty rows and dates the bumps). */
 const NOW = new Date(ASTRO.at.getTime() + 40 * DAY);
 
 type Row = Record<string, unknown>;
@@ -34,6 +35,32 @@ const deps = () => ({
   now: () => NOW,
 });
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+const WINDOW = EXTREME_WINDOW_MS;
+const meta = async <T>(key: string): Promise<T | undefined> =>
+  (await q('SELECT value FROM app_meta WHERE key = $1', [key]))[0]?.value as T | undefined;
+const dirtyRows = () => q('SELECT family, kind, from_ts, to_ts FROM publish_dirty ORDER BY id');
+/**
+ * P18a: a tide write dirties its ±15 h (D-6a): one `obs` touch per series, clipped to [DATA_FLOOR, now], both families
+ * for a public series; its settled days wait in the pending set (D-6b: a deferred bump), no version moves yet.
+ */
+async function expectTouch(first: number, last: number, deferred = true) {
+  const from = Math.max(first - WINDOW, Date.parse(DATA_FLOOR));
+  const to = Math.min(last + WINDOW, NOW.getTime());
+  expect(await dirtyRows()).toEqual(
+    ['public', 'owner'].map((family) => ({ family, kind: 'obs', from_ts: new Date(from), to_ts: new Date(to) })),
+  );
+  const days = bumpedDays(from, to, NOW.getTime());
+  expect(days.length).toBeGreaterThan(0);
+  if (deferred) {
+    expect(await meta(versionKey('public'))).toBeUndefined();
+    expect(await meta(versionKey('owner'))).toBeUndefined();
+    expect(await meta<{ days: unknown }>(PENDING_BUMPS_KEY)).toMatchObject({ days: { public: days, owner: days } });
+  } else {
+    // A spec that does not defer (the stand-ins below): every settled day moves to version 2 at once.
+    for (const f of ['public', 'owner'] as const)
+      expect(Object.keys((await meta<Record<string, unknown>>(versionKey(f))) ?? {})).toEqual(days);
+  }
+}
 const REPLAY = { source: 'NL-1', spec: 'nl-1-astro', from: day(ASTRO.at.getTime()), to: day(NOW.getTime()) } as const;
 
 const put = (body: Buffer, at: Date, spec = 'nl-1-astro') =>
@@ -119,8 +146,8 @@ describe('the astronomical tide through the loader (criterion 3)', { timeout: 30
       },
     ]);
     expect(h.alerts.filter((a) => a.code === 'quarantined' || a.code === 'load_stalled')).toEqual([]);
-    // Tide is in no published file yet: no dirty row, no day bump.
-    expect(await h.count('publish_dirty')).toBe(0);
+    // Tide reaches the published files: the written span ± 15 h is dirty, its settled days deferred.
+    await expectTouch(from.getTime(), to.getTime());
   });
 
   it('a second pass writes nothing: no row is rewritten, not even its batch', async () => {
@@ -245,6 +272,33 @@ describe('the pipeline attaches tide rows to primary series only', { timeout: 30
       { parse_status: 'ok', n_rows: 2, n_new: 2, n_changed: 0, n_skipped: 1 + 3, error: null },
     ]);
     expect(h.alerts).toEqual([{ code: 'hwlw_unlabelled', fields: { source: 'NL-1', spec: 'nl-1-hwlw-astro', n: 3 } }]);
+    // One touch per series (not per row), only for the rows stored: the first row − 15 h to the last + 15 h.
+    await expectTouch(Date.parse('2026-10-21T01:00:00.000Z'), Date.parse('2026-10-21T13:20:00.000Z'), false);
+  });
+
+  it('a write that lies wholly more than 15 h ahead of now dirties nothing and defers no bump', async () => {
+    const before = { dirty: await h.count('publish_dirty'), pending: await meta(PENDING_BUMPS_KEY) };
+    const ahead = new Date(NOW.getTime() + WINDOW + HOUR).toISOString();
+    const FUTURE: Readonly<Record<string, LoadAdapter>> = {
+      'NL-1': {
+        version: 1,
+        specs: {
+          'nl-1-astro': {
+            maxBytes: 1024,
+            needsVariant: false,
+            run: () => ({
+              ...emptyNormalised(),
+              tide: [{ ...row(VLISSINGEN, ahead, 210), kind: 'astro', hilo: null }],
+            }),
+          },
+        },
+      },
+    };
+    await put(Buffer.from('{}'), new Date(AT.getTime() + HOUR), 'nl-1-astro');
+    expect(await h.loader({ now: NOW, adapters: FUTURE }).tick()).toEqual({ lines: 1, loaded: 1 });
+    expect(await h.count('tide')).toBe(3);
+    expect(await h.count('publish_dirty')).toBe(before.dirty);
+    expect(await meta(PENDING_BUMPS_KEY)).toEqual(before.pending);
   });
 });
 
@@ -350,7 +404,10 @@ describe("RWS's labels of the astronomical extremes (#174)", { timeout: 300_000 
     expect(alertsOf('hwlw_type_conflict')).toEqual([]);
     expect(alertsOf('hwlw_unlabelled')).toEqual([]);
     expect(await h.count('obs')).toBe(0);
-    expect(await h.count('publish_dirty')).toBe(0);
+    await expectTouch(
+      Math.min(...tide.map((r) => (r.ts as Date).getTime())),
+      Math.max(...tide.map((r) => (r.ts as Date).getTime())),
+    );
     // A second pass (replay of both lines) writes nothing: no label and no tide row is rewritten.
     expect(await replay(deps(), { ...REPLAY_HW, dryRun: false })).toEqual({
       lines: 2,

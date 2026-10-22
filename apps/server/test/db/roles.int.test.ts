@@ -3,7 +3,7 @@ import { CANARIES, CANARY_RENDERINGS } from '@rws/contracts';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parse as parseYaml } from 'yaml';
-import { FORECAST_AT, familyViews, VIEWS } from '../../src/db/audience.ts';
+import { FORECAST_AT, familyViews, TIDE_AT, VIEWS } from '../../src/db/audience.ts';
 import { OWNER_CANARY, OWNER_CANARY_REAL, seedAudienceFixture, WITHHELD_CANARY } from './seed.ts';
 import { createTestDb, LOGIN_ROLES, sqlState, type TestDb, testPassword, upMigrations } from './testdb.ts';
 
@@ -85,6 +85,11 @@ describe.each([
     expect((await callForecast(client(), FORECAST_AT.public)).rows).toEqual([
       { series_id: expect.any(Number), source_id: 'NL-1', value: 200 },
     ]);
+  });
+
+  it('executes the tide-at-T function of its own family and not the owner one (P18a)', async () => {
+    expect(await sqlState(client(), `SELECT 1 FROM ${TIDE_AT.public}(now())`)).toBe('ok');
+    expect(await sqlState(client(), `SELECT 1 FROM ${TIDE_AT.owner}(now())`)).toBe('42501');
   });
 
   it('cannot INSERT, UPDATE or DELETE, even after switching its read-only default off', async () => {
@@ -259,6 +264,8 @@ describe('rws_owner_api (owner reader)', () => {
   it('executes the owner latest-run forecast function only, and it shows the owner canary and never the withheld one', async () => {
     expect(await sqlState(owner, `SELECT 1 FROM ${FORECAST_AT.owner}(now(), now())`)).toBe('ok');
     expect(await sqlState(owner, `SELECT 1 FROM ${FORECAST_AT.public}(now(), now())`)).toBe('42501');
+    expect(await sqlState(owner, `SELECT 1 FROM ${TIDE_AT.owner}(now())`)).toBe('ok');
+    expect(await sqlState(owner, `SELECT 1 FROM ${TIDE_AT.public}(now())`)).toBe('42501');
     const text = JSON.stringify((await callForecast(owner, FORECAST_AT.owner)).rows);
     expect(text).toContain(OWNER_CANARY_REAL);
     expect(text).not.toContain(CANARIES.withheld.real);
@@ -337,6 +344,8 @@ describe('rws_load (the loader)', () => {
   it('cannot execute either latest-run forecast function, and writes forecast runs and values only through its own grants', async () => {
     for (const fn of Object.values(FORECAST_AT))
       expect(await sqlState(load, `SELECT 1 FROM ${fn}(now(), now())`), fn).toBe('42501');
+    for (const fn of Object.values(TIDE_AT))
+      expect(await sqlState(load, `SELECT 1 FROM ${fn}(now())`), fn).toBe('42501');
     expect(await sqlState(load, 'DELETE FROM forecast_run')).toBe('42501');
     expect(await sqlState(load, 'DELETE FROM forecast_value')).toBe('42501');
     expect(await sqlState(load, 'SELECT count(*) FROM forecast_run')).toBe('ok');

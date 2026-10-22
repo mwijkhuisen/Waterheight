@@ -332,6 +332,27 @@ export const astroHorizons = () => sql<{ source_id: string; horizon: Date }>`
     AND src.lic_display AND COALESCE((s.lic_override ->> 'display')::boolean, true)
   GROUP BY s.source_id`;
 
+/**
+ * P18a (D-7): per source, the tier-1 tidal primary series, those with an astronomical row within a day of now,
+ * and of those the ones whose newest value (obs_latest, within its staleness limit) has an astro row at exactly its
+ * ts, the one the surge is measured against. Two primary-key probes of tide per series, no obs join.
+ */
+export const surgeCoverage = (now: Date) => sql<{ source_id: string; tidal: number; astro: number; surge: number }>`
+  SELECT s.source_id, count(*)::int AS tidal,
+         (count(*) FILTER (WHERE x.near))::int AS astro,
+         (count(*) FILTER (WHERE x.near AND x.exact))::int AS surge
+  FROM series s
+  JOIN source src ON src.id = s.source_id
+  JOIN station st ON st.id = s.station_id AND st.tier = 1 AND st.flags ->> 'tidal' = 'true'
+  LEFT JOIN obs_latest l ON l.series_id = s.id AND l.ts > ${now}::timestamptz - s.staleness_limit
+  CROSS JOIN LATERAL (
+    SELECT EXISTS (SELECT 1 FROM tide t WHERE t.series_id = s.id AND t.kind = 'astro'
+                     AND t.ts >= ${now}::timestamptz - interval '1 day'
+                     AND t.ts <= ${now}::timestamptz + interval '1 day') AS near,
+           EXISTS (SELECT 1 FROM tide t WHERE t.series_id = s.id AND t.kind = 'astro' AND t.ts = l.ts) AS exact) x
+  WHERE s.active AND s.role = 'primary' AND ${SAME_AUDIENCE}
+  GROUP BY s.source_id`;
+
 type Tier1 = { total: number; fresh: number; provider_stale: number };
 
 /**
@@ -425,6 +446,9 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
   const nowMs = inputs.now.getTime();
   const astro = await astroHorizons().execute(db);
   const astroOf = new Map(astro.rows.map((r) => [r.source_id, r.horizon]));
+  const surgeOf = new Map(
+    (await surgeCoverage(inputs.now).execute(db)).rows.map(({ source_id, ...c }) => [source_id, c]),
+  );
 
   await db.transaction().execute(async (tx) => {
     await lock(tx);
@@ -468,6 +492,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
         ...(inputs.coverage?.has(src.id) ? { coverage: inputs.coverage.get(src.id) } : {}),
         ...(forecasts.has(src.id) ? { forecast: forecasts.get(src.id) } : {}),
         ...(astroOf.has(src.id) ? { astro_horizon: astroOf.get(src.id)?.toISOString() } : {}),
+        ...(surgeOf.has(src.id) ? { surge: surgeOf.get(src.id) } : {}),
         ...(backfillOf.has(src.id) ? { backfill: backfillOf.get(src.id) } : {}),
         min_interval_s: minIntervals(intervalsOf.get(src.id) ?? { last: {}, hours: {} }, inputs.now),
       };
@@ -480,7 +505,7 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
           quarantine_count = EXCLUDED.quarantine_count,
           lag_p95 = EXCLUDED.lag_p95,
           status = EXCLUDED.status,
-          detail = (h.detail - 'tier1' - 'missing_buckets_24h' - 'outage' - 'coverage' - 'min_interval_s' - 'forecast' - 'astro_horizon' - 'backfill')
+          detail = (h.detail - 'tier1' - 'missing_buckets_24h' - 'outage' - 'coverage' - 'min_interval_s' - 'forecast' - 'astro_horizon' - 'surge' - 'backfill')
                    || EXCLUDED.detail,
           updated_at = EXCLUDED.updated_at`.execute(tx);
       // P8a: a due DE-2 run that missed its deadline raises `forecast_run_late` once per due day (the day is

@@ -15,6 +15,7 @@ export * from './json.ts';
 export * from './lag.ts';
 export * from './qc.ts';
 export * from './sentinels.ts';
+export * from './tide.ts';
 export * from './tiles-manifest.ts';
 export * from './time.ts';
 export * from './trend.ts';

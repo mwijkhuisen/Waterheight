@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { STALE_SERIES } from '../apps/server/src/adapters/nl-1/normalise.ts';
@@ -10,6 +10,7 @@ import {
   validateStations,
   validateTwins,
 } from '../packages/contracts/src/index.ts';
+import { durationMs, EXTREME_WINDOW_MS } from '../packages/core/src/index.ts';
 import { evident, generate, type Inputs, OUTPUT, readInputs, WATERS } from '../scripts/gen-nl1-stations.ts';
 import { locations } from '../scripts/rws-inventory.ts';
 import { repoRoot } from './catalogue.ts';
@@ -198,6 +199,16 @@ describe('registry/stations/nl-1.yaml', () => {
     for (const r of rows) {
       const want = tidalNow.includes(r.provider_code) ? true : r.tier === 1 ? false : null;
       expect([r.id, r.flags.tidal]).toEqual([r.id, want]);
+    }
+  });
+
+  it('every active primary series of a tidal station has a staleness limit within the +-15 h tide touch (P18a)', () => {
+    for (const f of readdirSync(`${repoRoot}registry/stations`)) {
+      const file = StationsFile.parse(parse(readFileSync(`${repoRoot}registry/stations/${f}`, 'utf8')));
+      for (const r of file.stations) {
+        if (r.audience === 'public' && r.role === 'primary' && r.flags.tidal === true)
+          expect([r.id, durationMs(r.staleness_limit) <= EXTREME_WINDOW_MS]).toEqual([r.id, true]);
+      }
     }
   });
 

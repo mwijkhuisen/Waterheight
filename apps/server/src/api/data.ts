@@ -7,7 +7,7 @@ import {
   type Snapshot,
   type Stations,
 } from '@rws/contracts';
-import { FORECAST_SOURCES, OWNER_ONLY_SOURCES } from '@rws/core';
+import { FORECAST_SOURCES, OWNER_ONLY_SOURCES, seriesTide, type TideRow } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import { type ChannelAudience, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
@@ -212,7 +212,7 @@ export async function readSnapshot(
   t: number,
   opts: { now: number; sections: ReadonlyMap<string, string>; cache: StaticCache },
 ): Promise<Snapshot> {
-  const read = await readStates(db, family, t, { ...opts, current: t >= floorBucket(opts.now) });
+  const read = await readStates(db, family, t, { ...opts, current: t >= floorBucket(opts.now), tide: true });
   return family === 'public' ? publicSnapshot(read) : { t: iso(new Date(read.t)), values: snapshotValues(read) };
 }
 
@@ -254,11 +254,24 @@ export async function readSeries(
         SELECT ts, value, qc FROM ${sql.table(V.obs)}
         WHERE series_id = ${p.id} AND ts >= ${from}::timestamptz AND ts < ${to}::timestamptz
         ORDER BY ts LIMIT ${MAX_POINTS + 1}`.execute(tx);
+      const points = rows.slice(0, MAX_POINTS);
+      // P18a: the span's tide rows (tidal stations only, the api channel); ponytail: at most MAX_POINTS of them (one
+      // more is read to flag `truncated`), which 14 days at 10 minutes (≈ 2,100 with the high and low waters) never reach.
+      const tideRows = await sql<Omit<TideRow, 'ts'> & { ts: Date }>`
+        SELECT kind, hilo, ts, value FROM ${sql.table(V.tide)}
+        WHERE series_id = ${p.id} AND ts >= ${from}::timestamptz AND ts < ${to}::timestamptz
+        ORDER BY ts LIMIT ${MAX_POINTS + 1}`.execute(tx);
+      const tideKept = tideRows.rows.slice(0, MAX_POINTS);
+      const tide = seriesTide(
+        points.map((r) => ({ ts: r.ts.getTime(), value: r.value })),
+        tideKept.map((r) => ({ ...r, ts: r.ts.getTime() })),
+      );
       return {
         ...span,
         res: 'raw' as const,
-        truncated: rows.length > MAX_POINTS,
-        points: rows.slice(0, MAX_POINTS).map((r) => ({ ts: iso(r.ts), value: r.value, qc: r.qc })),
+        truncated: rows.length > MAX_POINTS || tideRows.rows.length > MAX_POINTS,
+        points: points.map((r) => ({ ts: iso(r.ts), value: r.value, qc: r.qc })),
+        ...(tide === undefined ? {} : { tide }),
       };
     }
     const { rows } = await sql<BucketRow>`

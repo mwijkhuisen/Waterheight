@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { type Normalised, type ObsRow, obsParts, SchemaDrift } from '@rws/core';
+import { EXTREME_WINDOW_MS, type Normalised, type ObsRow, obsParts, SchemaDrift } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
 import { ManifestLine } from '../archive/manifest.ts';
 import { ArchiveError, type ArchiveReader, type RawLine } from '../archive/reader.ts';
@@ -984,12 +984,24 @@ export class Loader {
       if (result.providerUpdated !== undefined) await storeProviderUpdated(tx, line.source, result.providerUpdated);
       const fw = await applyForecasts(tx, line.source, forecasts, state.id, fetchedAt, headDrops, touches.forecast);
       const staged = await this.stage(tx, line, spec, result, refRegistry, state.id, fetchedAt, touches.forecast);
-      // P16b: in no published file yet, so no touch.
       // #174: the labels of this payload first, then every `extreme_astro` row takes RWS's stored label (read here, inside
       // the transaction that holds the loader lock), the alternation label or, with neither, is not stored.
       const tl = await applyTideLabels(tx, tideLabels, state.id, fetchedAt);
       const lab = await labelTide(tx, tide);
       const tw = await applyTide(tx, lab.rows, state.id, fetchedAt);
+      // P18a: tide reaches the published files (a surge at the item's ts, the high and low waters within 15 h of t), so
+      // the written rows dirty their ±EXTREME_WINDOW_MS, one `obs` touch per series. A touch that starts after now (a
+      // future-only monthly astro write) dirties nothing; markDirty clips the end to now.
+      const span = new Map<number, [number, number]>();
+      for (const w of tw.touched) {
+        const at = w.ts.getTime();
+        const [lo, hi] = span.get(w.series_id) ?? [at, at];
+        span.set(w.series_id, [Math.min(lo, at), Math.max(hi, at)]);
+      }
+      const nowMs = this.deps.now().getTime();
+      for (const [series, [lo, hi]] of span)
+        if (lo - EXTREME_WINDOW_MS <= nowMs)
+          touches.obs.push({ series, from: lo - EXTREME_WINDOW_MS, to: hi + EXTREME_WINDOW_MS });
       if (lab.unlabelled > 0) result.dropped.hwlw_unlabelled = (result.dropped.hwlw_unlabelled ?? 0) + lab.unlabelled;
       // Counted, not RETAINED: the row is stored with RWS's label, so a replay has nothing more to load.
       if (lab.conflicts > 0) result.dropped.hwlw_type_conflict = lab.conflicts;

@@ -1,4 +1,4 @@
-import { dayOf } from '@rws/contracts';
+import { dayOf, LatestFile, SnapshotFile, toSnapshot } from '@rws/contracts';
 import { describe, expect, it } from 'vitest';
 import { type Fetcher, loadMeta, loadSnapshot, loadStations } from '../src/lib/data/chain.ts';
 import { snapshotSource, versionKey } from '../src/lib/data/static.ts';
@@ -178,6 +178,26 @@ describe('loadSnapshot', () => {
     const settled = fake({ '/data/v1/settled/2026-10-23/v2/1200.json': { body: file('2026-10-23T12:00:00.000Z') } });
     await loadSnapshot(settled.f, T('2026-10-23T12:00:00Z'), meta({ dayVersions: { '2026-10-23': 2 } }), null);
     expect(settled.asked).toEqual(['/data/v1/settled/2026-10-23/v2/1200.json']);
+  });
+
+  it('P18a (D-8): files with and without the tide column parse; a tide entry reaches the snapshot, a null none', async () => {
+    const tide = {
+      astro: 80,
+      surge: 21.5,
+      derived: 'surge',
+      extremes: [{ ts: '2026-10-26T09:12:00.000Z', value: 95, hilo: 'high', kind: 'astro' }],
+    };
+    for (const body of [file(NOW), file(NOW, { tide: [null, tide] })])
+      expect(SnapshotFile.safeParse(body).success).toBe(true);
+    for (const body of [latest(NOW), { ...latest(NOW), tide: [tide, null] }])
+      expect(LatestFile.safeParse(body).success).toBe(true);
+    expect(SnapshotFile.safeParse(file(NOW, { tide: [tide] })).success).toBe(false);
+    const snap = toSnapshot(SnapshotFile.parse(file(NOW, { tide: [null, tide] })));
+    expect(snap.values.map((v) => v.tide ?? null)).toEqual([null, tide]);
+    expect(snap.values[0]).not.toHaveProperty('tide');
+    const { f } = fake({ '/data/v1/latest.json': { body: { ...latest(NOW), tide: [tide, null] } } });
+    const s = await loadSnapshot(f, T(NOW), m, 'aaaaaaaaaaaaaaaa');
+    expect(s.values.map((v) => v.tide ?? null)).toEqual([tide, null]);
   });
 
   it('a file for another t is not taken', async () => {

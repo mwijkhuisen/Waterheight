@@ -22,6 +22,8 @@ const versions = async (family: 'public' | 'owner') =>
     | undefined;
 const framesSchema = async () =>
   (await h.t.admin.query("SELECT value FROM app_meta WHERE key = 'frames_schema:public'")).rows[0]?.value;
+const tideSchema = async () =>
+  (await h.t.admin.query("SELECT value FROM app_meta WHERE key = 'snapshot_schema:tide'")).rows[0]?.value;
 const counts = async () => {
   const n: number[] = [];
   for (const t of [
@@ -174,5 +176,44 @@ describe('migrate publish tail', { timeout: 60_000 }, () => {
     const pub = (await versions('public')) ?? {};
     expect(pub['2026-10-01']).toMatchObject({ v: (map['2026-10-01']?.v ?? 1) + 1, reason: 'narrowed' });
     expect(pub['2026-09-30']?.reason).toBe('schema');
+  });
+
+  it('P18a: the first run with tide rows and no snapshot_schema:tide key bumps both families once, reason schema', async () => {
+    await h.t.admin.query("DELETE FROM app_meta WHERE key = 'snapshot_schema:tide'");
+    // No tide row yet: nothing to re-render, the key is stored.
+    expect(await publishTail(migrator.db, NOW)).toMatchObject({ schema: [], bumped: {} });
+    expect(await tideSchema()).toBe(1);
+
+    // Tide from 2026-09-25 10:00: its 15 h window starts on 2026-09-24, so the days 2026-09-24..2026-10-02 are due.
+    const id = await h.seriesId('vlissingen/WATHTE/NAP/other:F007');
+    await h.t.admin.query(
+      `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id) VALUES
+         ($1, 'astro', '2026-09-25T10:00:00Z', 1, NULL, 0), ($1, 'astro', '2026-10-09T10:00:00Z', 2, NULL, 0)`,
+      [id],
+    );
+    const days = bumpedDays(Date.parse('2026-09-24T19:00:00Z'), NOW.getTime(), NOW.getTime());
+    expect(days[0]).toBe('2026-09-24');
+    const before = { public: (await versions('public')) ?? {}, owner: (await versions('owner')) ?? {} };
+    // Both keys missing: the 16 frames days (public) and the tide days overlap, and the overlap still moves by 1 (once).
+    await h.t.admin.query("DELETE FROM app_meta WHERE key IN ('snapshot_schema:tide', 'frames_schema:public')");
+    const frames = bumpedDays(
+      Math.floor((NOW.getTime() - 16 * 86_400_000) / 86_400_000) * 86_400_000,
+      NOW.getTime(),
+      NOW.getTime(),
+    );
+    const tail = await publishTail(migrator.db, NOW);
+    expect(tail).toMatchObject({ schema: [...new Set([...frames, ...days])].sort(), bumped: {} });
+    const pub = (await versions('public')) ?? {};
+    const own = (await versions('owner')) ?? {};
+    for (const d of [...new Set([...frames, ...days])])
+      expect(pub[d], d).toMatchObject({ v: (before.public[d]?.v ?? 1) + 1 });
+    for (const d of days) expect(own[d], d).toMatchObject({ v: (before.owner[d]?.v ?? 1) + 1 });
+    // The owner family has no frames: its other days are untouched.
+    for (const d of frames.filter((x) => !days.includes(x))) expect(own[d], d).toEqual(before.owner[d]);
+    expect(await tideSchema()).toBe(1);
+    // Once: the next run bumps nothing.
+    expect(await publishTail(migrator.db, NOW)).toMatchObject({ schema: [], bumped: {} });
+    expect(await versions('public')).toEqual(pub);
+    expect(await versions('owner')).toEqual(own);
   });
 });

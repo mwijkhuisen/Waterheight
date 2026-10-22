@@ -42,6 +42,20 @@ describe('render columns', () => {
     const file = SnapshotFile.parse({ schemaVersion: 1, ...cols, attribution: [] });
     expect(toSnapshot(file)).toEqual({ t: T, values });
   });
+  it('P18a: no tide column without a tide; with one, null for the other series, through the contract and back', () => {
+    expect('tide' in cols).toBe(false);
+    const tide = {
+      astro: 80,
+      surge: 22.5,
+      derived: 'surge' as const,
+      extremes: [{ ts: '2026-10-04T09:12:00.000Z', value: 95, hilo: 'high' as const, kind: 'astro' as const }],
+    };
+    const tidal = [values[0] as Snapshot['values'][number], { ...(values[1] as Snapshot['values'][number]), tide }];
+    const withTide = columns(T, tidal);
+    expect(withTide.tide).toEqual([null, tide]);
+    const file = SnapshotFile.parse({ schemaVersion: 1, ...withTide, attribution: [] });
+    expect(toSnapshot(file)).toEqual({ t: T, values: tidal });
+  });
   it('an empty snapshot is an empty file', () => {
     expect(SnapshotFile.parse({ schemaVersion: 1, ...columns(T, []), attribution: [] }).series).toEqual([]);
   });

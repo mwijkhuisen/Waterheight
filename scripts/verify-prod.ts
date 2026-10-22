@@ -1753,14 +1753,19 @@ type TideStation = {
 export function nl1TideSets(
   stations: readonly TideStation[] = readRegistry().stations,
   seed: readonly Readonly<Record<string, string>>[] = readSeed(REGISTRY_DIR, 'nl-1'),
+  tideSeed: readonly Readonly<Record<string, string>>[] = readSeed(REGISTRY_DIR, 'nl-1-tide'),
 ) {
   const sea = new Set(seed.filter((r) => r.tier === 'sea').map((r) => r.code));
   const t1 = stations.filter((st) => st.source === 'NL-1' && st.role === 'primary' && st.tier === 1);
   const ids = (rows: readonly TideStation[]) => [...new Set(rows.map((st) => st.id))].sort();
   const coast = t1.filter((st) => st.flags.tidal === true);
   const lakes = t1.filter((st) => st.flags.lake === true);
+  // P18a (O-1): the coast stations with an astronomical series of the datum of their H row (blank: NAP).
+  const astro = new Set(tideSeed.filter((r) => r.series === 'astro').map((r) => `${r.code}/${r.hoedanigheid}`));
+  const datum = new Map(seed.filter((r) => r.quantity === 'H').map((r) => [r.code, r.hoedanigheid || 'NAP']));
   return {
     coast: ids(coast),
+    coastAstro: ids(coast.filter((st) => astro.has(`${st.provider_code}/${datum.get(st.provider_code)}`))),
     lakes: ids(lakes),
     added: ids([...coast, ...lakes].filter((st) => sea.has(st.provider_code))),
   };
@@ -1789,6 +1794,29 @@ export function checkFreshSet(
   ).length;
   const detail = `listed ${listed}/${ids.length}, fresh ${fresh}/${ids.length} (a value no older than ${FRESH_MAX_AGE_S} s)`;
   return fresh * 100 >= ids.length * BELGIAN_FRESH_PCT ? pass(check, detail) : miss(check, detail);
+}
+
+/**
+ * P18a [agent-prod] (O-1): at least 90% of the tier-1 tidal NL-1 stations that have an RWS astronomical series
+ * (`astroIds`, of `coastIds`) have a surge number on one of their series in the "now" snapshot at the server's own now.
+ * Counts only; a station the API does not list has no surge.
+ */
+export function checkSurge(
+  coastIds: readonly string[],
+  astroIds: readonly string[],
+  stations: Stations | undefined,
+  snapshot: Snapshot | undefined,
+  now: string | undefined,
+): Result {
+  const check = 'surge';
+  if (snapshot === undefined || stations === undefined || now === undefined)
+    return noDocument(check, snapshot === undefined ? 'snapshot' : stations === undefined ? 'stations' : 'meta');
+  if (astroIds.length === 0) return miss(check, 'no station to look for');
+  const withSurge = new Set(snapshot.values.filter((v) => typeof v.tide?.surge === 'number').map((v) => v.series));
+  const byId = new Map(stations.stations.map((st) => [st.id, st]));
+  const surge = astroIds.filter((id) => byId.get(id)?.series.some((x) => withSurge.has(x.id))).length;
+  const detail = `with astro ${astroIds.length}/${coastIds.length}, surge ${surge}/${astroIds.length} (a number in the "now" snapshot), ${coastIds.length - astroIds.length} without an astro series`;
+  return surge * 100 >= astroIds.length * BELGIAN_FRESH_PCT ? pass(check, detail) : miss(check, detail);
 }
 
 /**
@@ -3131,6 +3159,7 @@ export const CHECKS = [
   `fresh NL-1 coast: the NL-1 tier-1 stations with flags.tidal (read from the registry) have >= ${BELGIAN_FRESH_PCT}% a value in the "now" snapshot no older than ${FRESH_MAX_AGE_S} s at the server's own now`,
   `fresh NL-1 lakes: the same over the NL-1 tier-1 stations with flags.lake`,
   `astro horizon: NL-1 astro_horizon in /api/v1/health/sources (the earliest of its series' newest astronomical instants) is at least 60 days past the server's own now`,
+  `surge: of the NL-1 tier-1 tidal stations (flags.tidal, read from the registry) those with an RWS astronomical series of the datum of their H row (registry/seed/nl-1-tide.csv) have >= ${BELGIAN_FRESH_PCT}% a surge number on one of their series in the "now" snapshot at the server's own now; counts only`,
   `catch-up NL-1: every series of the roadmap-2 tier-1 tidal and lake stations (a seed row of tier sea) has dataSince <= ${DATA_EPOCH} + 1 h, and NL-1 coverage.ratio >= ${COVERAGE_MIN * 100}%`,
   `belgian set: the 25 points of catalogue §0.6 (the NL-1 locations ${BELGIAN_NL1.join(', ')} as nl.rws.<code>, the 18 FR-1 partners of registry/seed/fr-1-be.csv as fr.sandre.<code>) are all stations of /api/v1/stations, and >= ${BELGIAN_FRESH_PCT}% have a value in the "now" snapshot no older than ${BELGIAN_MAX_AGE_S / 3600} h at the server's own now`,
   `tiles manifest: GET /tiles/manifest.json is 200 with Cache-Control exactly "${MANIFEST_CACHE}" (never immutable) and a body parseTilesManifest accepts`,
@@ -3350,6 +3379,7 @@ async function main(argv: string[]): Promise<number> {
       checkFreshSet('fresh NL-1 coast', tide.coast, stationsRead.data, nowSnap, metaRead.data?.now),
       checkFreshSet('fresh NL-1 lakes', tide.lakes, stationsRead.data, nowSnap, metaRead.data?.now),
       checkAstroHorizon(sources.data, metaRead.data?.now),
+      checkSurge(tide.coast, tide.coastAstro, stationsRead.data, nowSnap, metaRead.data?.now),
       checkCatchupNl1(tide.added, stationsRead.data, sources.data),
     );
 
