@@ -4,6 +4,19 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## P19a lakes, coast and sea layers (#67)
+
+What P19a leaves (`PHASES.md` §54 "P19a as built").
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-444 | design | **Coast points are hollow during playback:** frames v2 carry no surge (O-1), so the played values show no surge on coast markers. Frames v3 are out of scope. | A reviewed frames v3 | open [U] |
+| KG-445 | design | **Sea and estuary polygons are not drawn:** coast is per station (D26); the basemap water shows the sea. | A reviewed decision to draw them | open |
+| KG-446 | perf | **The settled snapshot is 3.05× the P9 estimate:** 137,322 B plain (2026-10-19, 1,717 series) against about 45 KB; about 9 GB a year projected against the 5 GB static line (T9, 2026-10-22; `settledBytes` 973,317,100). P19a adds no snapshot field. | P20 owns the publisher budgets | open [U] |
+| KG-447 | owner | **A look on a phone and a desktop around one high tide** (Action D10). | [owner] after the deploy | open [U] |
+
+KG-439 stands: the static P9 forecast files carry no forecast surge; the future surge comes from the API.
+
 ## P18b coast and lake classes (#66)
 
 What P18b leaves (`PHASES.md` §54 "P18b as built", `docs/runbooks/tide.md` §8).
@@ -470,7 +483,7 @@ KG-202 and KG-114 are updated by this PR (their rows stay in the older sections 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
 | KG-212 | deploy, owner | The owner site (`caddy-owner`, `deploy/compose.owner.yaml`) is not in production: the overlay is used by the CI deploy job only, the owner publisher writes its files, and nothing serves them until WireGuard (P12a). `owner_basic_auth` is generated in P12a, not by `bootstrap.sh`; without it `caddy-owner` does not start (by design: it fails closed) | [owner] P12a | open [U] |
-| KG-222 | agent-prod | The `static rerender` and `static lag` checks of `verify-prod.sh` PASS with "none yet" in CI and mean something only in production (a settled day's render time, the lag between `meta.latestFrom` and `loader.last_commit`); the settled size (about 45 KB a snapshot, 3–4 GB a year, A§11.4) is an estimate until `status.json` `settledBytes` shows it | [agent-prod] after the deploy | open [U] |
+| KG-222 | agent-prod | The `static rerender` and `static lag` checks of `verify-prod.sh` PASS with "none yet" in CI and mean something only in production (a settled day's render time, the lag between `meta.latestFrom` and `loader.last_commit`); the settled size (estimated at about 45 KB a snapshot, 3–4 GB a year, A§11.4) is now measured: 137,322 B, see KG-446 | [agent-prod] after the deploy | open [U] |
 | KG-223 | publish | Review round 1's accepted nits: `meta.json` is written after the cycle's settled-day render, so a long render delays it (CR-7; within the watchdog's 5 min); each station file reads the family's series facts again (CR-8; the 35 s budget spreads a sweep over cycles); a browser whose cached `meta.json` and `latest.json` straddle a bucket boundary reads that bucket from the API once (CR-9; fail-safe). | Revisit with P12's load test | open |
 
 ### Known limits
