@@ -84,3 +84,9 @@ export const REACH_HATCH_COLOURS = ['rgb(60 80 100)', 'rgb(226 234 240)'] as con
 
 /** P11b: the casing under a coloured reach, as the dark ring of a normal marker: steady and normal are near-white. */
 export const REACH_CASING_COLOUR = '#5f5f5f';
+
+/**
+ * P18b (D26, owner decision O-2): the surge scale's stops in cm, continuous and diverging at 0, for coastal gauges
+ * beside their NL-4 class. Derived (measured − astronomical), never an official class; P19a draws it.
+ */
+export const SURGE_STOPS_CM = [-100, -50, 0, 50, 100, 150, 200, 300] as const;
