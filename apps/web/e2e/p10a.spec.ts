@@ -844,8 +844,10 @@ test("latest.json's lapsed ages: stale past the limit, hidden after 25 hours (KG
       'zero',
       'dh24',
       'dh1',
+      // P18a's optional column, present once a series has a tide (P19a's coast seed): it is parallel like the rest.
+      'tide',
     ])
-      file[col] = (file[col] as unknown[]).filter((_, i) => keep[i]);
+      if (file[col] !== undefined) file[col] = (file[col] as unknown[]).filter((_, i) => keep[i]);
     file.lapsed = [...(file.lapsed as number[]), ...ids];
     file.lapsedAge = [...(file.lapsedAge as unknown[]), ...ids.map(() => age)];
     await route.fulfill({ json: file });
