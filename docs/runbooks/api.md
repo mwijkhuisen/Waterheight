@@ -111,7 +111,7 @@ Make one request from your own phone on mobile data (an IPv4 address) and, if yo
 sudo docker compose -p rws logs --since 24h api | jq -c 'select(.msg == "beacon") | {beacon, d: .fields["violated-directive"], b: .fields["blocked-uri"]}' | sort | uniq -c | sort -rn | head
 ```
 
-A CSP report is a defect of ours (a page that loads something the CSP forbids) or a browser extension; look at `blocked-uri` and `violated-directive`, and never open a URL from a report. A flood of beacon lines means abuse: the per-client bucket is 1 a second and all clients together 20 a second, and the logs rotate at 5 files of 20 MB, so a flood costs log history, not the disk. Over the global limit real reports are refused with 429, which is acceptable.
+A CSP report is a defect of ours (a page that loads something the CSP forbids) or a browser extension; look at `blocked-uri` and `violated-directive`, and never open a URL from a report. One is neither: Safari 27 (WebKit 27) reports its own styling of every `<select>` as `style-src-attr` with `blocked-uri` `inline`, which the e2e excuses for WebKit's `<select>` alone (#193, `apps/web/e2e/clean.ts`). A flood of beacon lines means abuse: the per-client bucket is 1 a second and all clients together 20 a second, and the logs rotate at 5 files of 20 MB, so a flood costs log history, not the disk. Over the global limit real reports are refused with 429, which is acceptable.
 
 ## 9. The owner API (`api-owner`)
 
