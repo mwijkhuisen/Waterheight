@@ -159,6 +159,7 @@ describe('popup text', () => {
     expect(surgeLine(surge(-60), 'state', 'en')).toBe('Surge: -60 cm (derived)');
     expect(surgeLine(surge(12.5), 'state', 'nl')).toBe('Opzet: +12,5 cm (afgeleid)');
     expect(surgeLine(surge(0), 'state', 'en')).toBe('Surge: 0 cm (derived)');
+    expect(surgeLine(surge(-0), 'state', 'en')).toBe('Surge: 0 cm (derived)');
     // none without a surge (playback, no tide), for no state, and in the other modes
     expect(surgeLine(surge(null), 'state', 'en')).toBe('');
     expect(surgeLine(undefined, 'state', 'en')).toBe('');

@@ -51,8 +51,9 @@ export function badgeLine({ state, tidal, impounded }: BadgeInput, locale: Local
  */
 export function surgeLine(state: StationState | undefined, mode: Mode, locale: Locale): string {
   if (mode !== 'state' || state?.surge == null) return '';
-  const sign = state.surge > 0 ? '+' : '';
-  return m.popup_surge({ cm: `${sign}${formatNumber(state.surge, locale)}` }, { locale });
+  // A JSON -0 would format as "−0" (review round 2).
+  const cm = state.surge === 0 ? 0 : state.surge;
+  return m.popup_surge({ cm: `${cm > 0 ? '+' : ''}${formatNumber(cm, locale)}` }, { locale });
 }
 
 export interface ModeLinesInput {

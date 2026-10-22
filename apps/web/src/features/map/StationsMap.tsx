@@ -301,7 +301,7 @@ export function StationsMap({
       mode === 'state' ? lakes : new Map([...lakes.keys()].map((id) => [id, { level: null }] as const)),
     );
   }, [waterOn, lakes, mode]);
-  // The hatch of a lake whose reference gauge is tidal: a pattern cannot read feature-state, so an id filter.
+  // The hatch of a lake whose reference gauge is tidal: a pattern cannot read feature-state, so a `waterbody_id` filter.
   const tidalLakes = [...lakes].flatMap(([id, l]) => (l.view.tidal ? [id] : [])).join(',');
   useEffect(() => {
     if (waterOn) waterLayer.current?.setTidal(tidalLakes === '' ? [] : tidalLakes.split(','));
