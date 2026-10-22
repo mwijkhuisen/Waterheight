@@ -20,7 +20,7 @@ const fixtures = fileURLToPath(new URL('../../../tools/geo/fixtures/', import.me
 // P11a (issue #26): the river release is the committed fixture one, whose reach ids the tiles carry (read by path, no
 // tools/geo import): test/fixtures/reaches-fixture.json (version 20261003, regenerated and compared by
 // test/reaches-fixture.test.ts) and tools/geo/fixtures/rivers-fixture.pmtiles (1,829 reaches; layers `rivers`,
-// `reach_bins` and, from P17b, `waterbodies` and `canals`, which the web does not draw before P19).
+// `reach_bins` and, from P17b, `waterbodies` and `canals`, which P19a draws).
 const reachesFixture = fileURLToPath(new URL('../../../test/fixtures/reaches-fixture.json', import.meta.url));
 
 /**
@@ -36,6 +36,20 @@ export const E2E_CHAIN: readonly [station: string, reach: string, kmToNlEntry: n
   ['nl.e2e.xss', 'rhine.58', 204.1],
   ['nl.e2e.dst', 'rhine.55', 234.27],
 ];
+/**
+ * P19a (issue #67): the e2e stations of the water bodies (apps/server/test/e2e/api.ts P19A_STATIONS), added to the
+ * release's `stations` of their body: a second lake gauge and the D27 reference of the IJsselmeer (replacing the
+ * release's real krabbersgat), a lake without a reference (the Veluwemeer has none), a Wadden Sea point and an offshore
+ * MSL platform. [body, stations, reference station or undefined to keep the release's].
+ */
+const E2E_BODIES: readonly [body: string, stations: readonly string[], reference?: string][] = [
+  ['ijsselmeer', ['nl.e2e.lake-gauge', 'nl.e2e.lake-ref'], 'nl.e2e.lake-ref'],
+  ['veluwemeer', ['nl.e2e.lake-noref']],
+  ['waddenzee', ['nl.e2e.coast']],
+  ['noordzee', ['nl.e2e.platform']],
+];
+/** P19a: the Gooimeer's name in both languages, HTML-looking (payload 5: 1 to 3 are the xss station's and its class); it must render as text. */
+export const E2E_HOSTILE_LAKE = '<img src=x onerror=alert(5)>Gooimeer';
 function e2eReaches(release: ReachesFile): ReachesFile {
   const stations = [...release.stations];
   const reaches = release.reaches.map((r) => ({ ...r }));
@@ -54,7 +68,22 @@ function e2eReaches(release: ReachesFile): ReachesFile {
       nl_entry_node: null,
     });
   }
-  const out = ReachesFile.parse({ ...release, reaches, stations });
+  if (release.waterbodies === undefined) throw new Error('e2e reaches: the release has no waterbodies');
+  const waterbodies = release.waterbodies.map((w) => {
+    const extra = E2E_BODIES.find(([body]) => body === w.id);
+    const name = w.id === 'gooimeer' ? { name_nl: E2E_HOSTILE_LAKE, name_en: E2E_HOSTILE_LAKE } : {};
+    if (extra === undefined) return { ...w, ...name };
+    // Default sort order is the UTF-16 order of checkReaches' `<`.
+    return {
+      ...w,
+      ...name,
+      stations: [...new Set([...w.stations, ...extra[1]])].sort(),
+      reference_station_id: extra[2] ?? w.reference_station_id,
+    };
+  });
+  for (const [body] of E2E_BODIES)
+    if (!waterbodies.some((w) => w.id === body)) throw new Error(`e2e reaches: no water body ${body}`);
+  const out = ReachesFile.parse({ ...release, reaches, stations, waterbodies });
   const problems = checkReaches(out);
   if (problems.length > 0) throw new Error(`e2e reaches: ${problems[0]}`);
   return out;
