@@ -161,6 +161,6 @@ describe('the NL-4 stems of the tidal and lake NL-1 level series (D30)', () => {
     expect(block).toMatch(/never warnings/);
     expect(block).toMatch(/link to the national service/);
     expect(block).toMatch(/D12 amended/);
-    expect(block).toMatch(/proposed, owner sign-off pending/);
+    expect(block).toMatch(/signed off by the owner on 2026-10-22, as proposed/);
   });
 });

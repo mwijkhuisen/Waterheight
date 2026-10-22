@@ -14,7 +14,7 @@ export const OFFICIAL = [
 /**
  * P18b: the official storm-surge warning per sea and estuary body of registry/waterbodies.yaml, a link and never
  * data (no warning text is copied; P19b renders it). The national service's front page, already reviewed in
- * OFFICIAL; [U] until C14's answer or the owner confirms it is the national storm-surge page.
+ * OFFICIAL; the owner confirmed it as the national storm-surge page on 2026-10-22 (KG-438).
  */
 export const STORM_SURGE_WARNING = {
   noordzee: 'https://waterberichtgeving.rws.nl/',
