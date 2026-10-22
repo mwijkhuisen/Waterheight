@@ -8,11 +8,12 @@ type W = Window & { __csp: string[] };
 
 const CSP_CONSOLE = /Refused to|Content[- ]Security[- ]Policy/i;
 // #193: WebKit 27 (Playwright 1.64) reports its own styling of every <select> as a style-src-attr violation, even of
-// a static <select> on a blank page (WebKit 26 did not), and logs this generic line for it. In WebKit only, those
-// events and that exact line are excused. The line names no element (and the console log spans navigations, the
-// events one document), so it cannot be paired with its event; the events still fail on any element but a <select>,
-// Chromium and Firefox stay strict, and the CSP is unchanged.
-const WEBKIT_SELECT = 'style-src-attr inline SELECT';
+// a static <select> on a blank page (WebKit 26 did not), and logs this generic line for it. A <select> that is gone
+// again when WebKit reports it is reported on the document (CSP: a disconnected element's report goes to the
+// document). In WebKit only, those events and that exact line are excused. The line names no element (and the console
+// log spans navigations, the events one document), so it cannot be paired with its event; the events still fail on
+// any connected element but a <select>, Chromium and Firefox stay strict, and the CSP is unchanged.
+const WEBKIT_SELECT = new Set(['style-src-attr inline SELECT', 'style-src-attr inline #document']);
 const WEBKIT_SELECT_LINE =
   "error: Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive of the Content Security Policy.";
 
@@ -50,7 +51,7 @@ export async function instrument(page: Page, context: BrowserContext, baseURL: s
 export async function expectClean(page: Page, log: Log) {
   const webkit = page.context().browser()?.browserType().name() === 'webkit';
   const csp = await page.evaluate(() => (window as unknown as W).__csp);
-  expect(csp.filter((v) => !(webkit && v === WEBKIT_SELECT))).toEqual([]);
+  expect(csp.filter((v) => !(webkit && WEBKIT_SELECT.has(v)))).toEqual([]);
   expect(log.console.filter((l) => CSP_CONSOLE.test(l) && !(webkit && l === WEBKIT_SELECT_LINE))).toEqual([]);
   expect(log.failed.filter((l) => /BLOCKED_BY_CSP|blocked/i.test(l))).toEqual([]);
   expect(log.requests.filter((u) => !u.startsWith('data:') && new URL(u).origin !== log.origin)).toEqual([]);
