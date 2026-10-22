@@ -185,3 +185,30 @@ curl -s https://<domain>/api/v1/health/sources | jq '.sources[] | select(.id=="N
 4. A gauge with `surge: null` during the storm: the astro row is missing at its instant (look at `nl-1-astro` in `/status/capture.json`), not a storm effect.
 5. **No roadmap-2 deploy while an official flood or storm-surge warning is active**; a restart of `capture` or `publish` waits until it is lifted.
 6. **Action D9 (owner):** after the storm, export the payloads of the affected window from the production archive (`nl-1-obs-sea`, `nl-1-astro`, `nl-1-hwlw-astro`) and import them as a real golden (`scripts/import-fixtures.ts`, `docs/plan/PHASES.md` §18). Until then the only storm fixture is the synthetic Den Helder one (`nl-1-storm-denhelder-*.synthetic.raw`, +250 cm for six hours; KG-437).
+
+## 8. P18b: coast and lake classes, lake references and forecast surge (#66)
+
+**NL-4 on tidal series (D12 amended, owner O-1, 2026-10-22).** A tidal series is now classed from its operational thresholds and from the NL-4 display classes (`provider_class`), as every other series. Statistical references (MHW, MNW, HSW and the like) stay off tidal series. About 57 tidal NAP stations gain a class: the coast, and the tidal delta rivers (waalwijk, heesbeen, gouda.hollandscheijssel, hank, werkendam and others). The only golden that moved is Delfzijl (`no_ref` to `normal`, NL-4 `Normaal (-223 tot 260 cm)`).
+
+- A NL-4 class is a **Waterinfo display class**, never a warning. "Stormvloed" is `high` (D18), not an alert. The detail view says so, with the basis `provider_class`.
+- A tidal station is still hatched and never interpolated (D12, D31). The map colour of a coastal gauge is its NL-4 state; its surge (section 7) is shown beside it and is **derived, never a state** ("afgeleid, geen officiële klasse"). The surge scale stops are -100, -50, 0, +50, +100, +150, +200 and +300 cm (`SURGE_STOPS_CM` in `apps/web/src/features/legend/palette.ts`, owner O-2).
+- Frames settled before the deploy keep `no_ref` on tidal stations; `/api/v1/snapshot?t=<past>` shows the new classes (KG-440). Nothing is republished.
+
+**Lake reference gauges (D27, owner O-3).** `registry/waterbodies.yaml` names one `reference_station` per lake (ids `nl.rws.<code>`): ijsselmeer krabbersgat.ijsselmeer, markermeer markermeer.midden, ketelmeer ketelhaven.ketelmeer, veerse-meer kamperland.schotsman, volkerak willemstad.volkerak, grevelingenmeer bommenede, eemmeer eemdijk, gooimeer almere.hollandsebrug, ijmeer amsterdam.schellingwouderbrug, zwarte-meer kadoelen.zwanediep, nijkerkernauw nijkerk.nijkerkernauw, nuldernauw nijkerk.nuldernauw, drontermeer dronten.reevesluis.drontermeer, haringvliet hellevoetsluis. It is `null` for veluwemeer, wolderwijd, vossemeer and zoommeer (no placed gauge) and for the sea and estuary bodies (the coast is coloured per station). Drontermeer's gauge has no NL-4 rows, so that lake shows no class (the owner chose it knowingly, KG-441).
+
+- `apps/web/src/lib/lakes.ts` (`lakeView`, a pure function, owner O-4): the lake's state and basis are those of the reference gauge's H series and nothing else. Never an average, never another gauge's state.
+- The **spread** is the highest minus the lowest NAP level (cm) over the lake's H gauges with a value at T, when there are at least two. It is information beside the state, never a state. Wind can pile the water up on one shore and lower it on the other.
+- The references reach the map after the next `geo.yml` release on main (KG-442).
+
+**Forecast surge in the future snapshot.** `GET /api/v1/snapshot?t=<future>` (at most now + 48 h): a held forecast of a tidal series carries `forecasts[].tide` (the same object as `values[].tide`). The astronomical tide is taken at the held point's own valid time, and surge = forecast - astro at that same instant, else `null`. Measured high and low waters are not read there (observations stop at now); the astronomical ones are. The tide is omitted when the series has no tide rows or the forecast is below the floor. The static P9 forecast files carry no forecast surge (KG-439).
+
+**Storm-surge warning link.** `STORM_SURGE_WARNING` in `apps/web/src/features/pages/official.ts` holds one https link per sea and estuary body (today `https://waterberichtgeving.rws.nl/`). It is config, a link only; no warning text is copied. It stays **[U]** until C14's answer or the owner confirms it is the national storm-surge page (KG-438).
+
+**Storm checklist** (a surge is forecast, or Waterinfo shows "Stormvloed"):
+
+1. Run the section 7 checklist first.
+2. `curl -s 'https://<domain>/api/v1/snapshot?t=<now+12h, UTC>'`: for the coastal series look at `forecasts[].tide` (`astro`, `surge`). A `null` surge means no astronomical row at that instant, not calm weather.
+3. `scripts/verify-prod.sh <domain> --edge cloudflare`: `surge` and `fresh NL-1 coast` pass.
+4. On the site, the coastal gauge shows its NL-4 class (if "Stormvloed", it is a display class) and the surge as derived. Check that the official link opens the national service, and read the warning there.
+
+**Owner step after merge.** Run `geo.yml` on main (the D27 references enter the reaches file and the tiles), then `rws-rivers-refresh`. Then `verify-prod rivers`. D30 (the crosswalk addendum) must be signed before the merge.

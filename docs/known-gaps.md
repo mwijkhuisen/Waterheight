@@ -4,6 +4,19 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## P18b coast and lake classes (#66)
+
+What P18b leaves (`PHASES.md` §54 "P18b as built", `docs/runbooks/tide.md` §8).
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-438 | ops | **The storm-surge warning URL (`https://waterberichtgeving.rws.nl/`) is [U]:** the front page of the national service, not confirmed as the storm-surge page. | C14's answer or the owner confirms | open |
+| KG-439 | design | **Static P9 forecast files carry no forecast surge;** only the API future snapshot (`forecasts[].tide`) does. | P19 reads the future through P8 | open |
+| KG-440 | ops | **Settled static frames from before the deploy keep `no_ref` on tidal stations,** while `/snapshot?t=<past>` shows NL-4 (retroactive). Nothing is republished. | None; ages out | open |
+| KG-441 | data | **Lakes without a placed gauge have no reference:** veluwemeer, wolderwijd, vossemeer, zoommeer. Drontermeer's reference has no NL-4 rows, so it shows no class (the owner's knowing choice, O-3). | A gauge placed in the body; NL-4 rows for Drontermeer | open |
+| KG-442 | ops | **The lake references reach the map only after the next `geo.yml` release** and `rws-rivers-refresh`. | Owner runs `geo.yml` on main | open |
+| KG-443 | data | **Haringvliet overlap days (03-15 and 07-15):** `Haringvliet_broedseizoen` (315-715) and `_buitenbroedseizoen` (715-315) are both active (inclusive), and hellevoetsluis has two bands of equal priority 3 ("Licht verhoogd (>80cm)" and "Licht verhoogd (>130cm)") that both hold above 130 cm. The classifier takes the first in CSV row order, so the label (not the state, both `elevated`) depends on row order on those two days. | An owner decision on the priority of the two bands | open |
+
 ## P18a tide and surge (#66)
 
 What P18a leaves (`PHASES.md` §54 "P18a as built", `docs/runbooks/tide.md` §7). KG-371 is accepted above; KG-366 and KG-367 stay as they are.

@@ -395,6 +395,7 @@ Deviations from A§3, decided in P0b: pnpm **12.5.1** instead of 12.6.0 (12.6.0 
   - **Only public stations cut reaches** (primary, audience public, source `display`); owner and `off` stations are placed and given chainage but appear in no public output, not even as a count in the snap report.
   - **`km_to_nl_entry`** is positive outside the Netherlands, 0 at the entry node, negative below it and falls downstream; five entry nodes only, so a tributary that enters NL on its own has null (KG-165).
 - **MinIO** stopped publishing images in 2025; CI uses Chainguard's source-built `cgr.dev/chainguard/minio` by digest.
+- **Tidal series take NL-4** (D12 amended, P18b); surge and lake spread are derived, never a state.
 - **Protomaps** builds are kept for one week only; **Hub'Eau v1** answers 403 (use v2); **RWS documentation moves to the CTD on 2026-11-05** (URLs live in config; the NL-4 file path is at risk).
 
 - **CAP `valueName` (P7a, LU-5):** AGE writes the `eventCode` `valueName` as `LU-Alert` in the 2025 files and `LU_Alert` in 2026; the adapter accepts both. The real 2026-02-02 TEST carries `<status>Actual</status>`, so a TEST is told only by `cb-eu-level` `TEST` or its headline; a status other than Actual (Exercise, System, Test, Draft) is `not_actual`. A Cancel has no `<info>`; an Update references the message it replaces, so both feed `cancels`. An element named `__proto__`, `constructor` or `prototype` is `xml_name` drift.
