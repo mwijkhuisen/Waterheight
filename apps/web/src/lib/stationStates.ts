@@ -4,7 +4,7 @@ import { type DhBin, dhBin, levelOf, type QSize, qSize } from '../features/legen
 import type { Change } from './data/change.ts';
 import type { WebForecast } from './data/static.ts';
 import type { Group } from './url/url.ts';
-import { surgeAt } from './water.ts';
+import { isMsl, surgeAt } from './water.ts';
 
 // The feature-state contract of the station markers (P10a T3): one plain record per station, computed once per t
 // and mode, written with `setFeatureState` only (the source is never rebuilt). The table, popup and panel read the
@@ -85,11 +85,11 @@ export interface StationState {
   /** No value at t, and every series' newest value is older than 25 hours (KG-233): not drawn, listed or found. */
   hidden: boolean;
   /**
-   * P19a (T2): the station is in a sea or estuary (the coast group): in the state mode it is coloured by its surge
-   * only, and hollow without one, whatever its level.
+   * P19a (T2): the station is in a sea or estuary (the coast group), or its primary H series is in MSL: in the state
+   * mode it is coloured by its surge only, and hollow without one, whatever its level.
    */
   coast: boolean;
-  /** The coast group only: the surge (cm) of its primary H series at t; null elsewhere, without one and in play (O-1). */
+  /** Coast stations only: the surge (cm) of its primary H series at t; null elsewhere, without one and in play (O-1). */
   surge: number | null;
 }
 
@@ -120,7 +120,8 @@ export function stationStates({
   const out = new Map<string, StationState>();
   for (const st of stations) {
     const owner = st.series.some((s) => ownerSources.has(s.source));
-    const coast = groups?.get(st.id) === 'coast';
+    // An MSL level is never on the NAP/NL-4 ladder, so it counts as coast in any water body (P19a, review CR-8).
+    const coast = groups?.get(st.id) === 'coast' || isMsl(st);
     const surge = coast ? surgeAt(st, values, forecasts) : null;
     const qSeries = st.series.find((s) => s.quantity === 'Q');
     if (forecasts !== undefined) {

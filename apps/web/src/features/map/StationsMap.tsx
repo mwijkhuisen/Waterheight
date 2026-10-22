@@ -21,7 +21,7 @@ import { forecastLine } from '../station/forecast.ts';
 import { stateWord } from '../station/state.ts';
 import { formatNumber } from '../station/value.ts';
 import styles from './map.module.css';
-import { badgeLine, changeLine, modeLines } from './popup.ts';
+import { badgeLine, changeLine, modeLines, surgeLine } from './popup.ts';
 import { hasReachBins, highlightRiver, RIVERS, RIVERS_HIGHLIGHT, showRivers } from './rivers.ts';
 import { SOURCE, setStationMode, showStations } from './stationLayer.ts';
 import { useMapLibre } from './useMapLibre.ts';
@@ -287,13 +287,20 @@ export function StationsMap({
       setWaterOn(false);
     };
   }, [map, riverTiles]);
-  // `?hide=` (O-3) on every toggled layer, again whenever a lazy layer set arrives.
+  // `?hide=` (O-3) on every toggled layer when it changes. A lazy layer set applies the current one itself when it
+  // arrives (`hidden()` above, from the ref), and the reach bins added later take their twin's (reachLayer.ts); so this
+  // effect needs no ready flags (review CR-1).
   useEffect(() => {
     if (map !== null) applyHide(map, hideKey === '' ? [] : hideKey.split(','), flowLayer.current);
   }, [map, hideKey]);
+  // Lakes colour in the state mode only (plan T2): in the delta and Q modes every lake is "geen klasse" grey (review
+  // CR-3). The tidal hatch stays in every mode: it says the reference is tidal, not a class.
   useEffect(() => {
-    if (waterOn) waterLayer.current?.update(lakes);
-  }, [waterOn, lakes]);
+    if (!waterOn) return;
+    waterLayer.current?.update(
+      mode === 'state' ? lakes : new Map([...lakes.keys()].map((id) => [id, { level: null }] as const)),
+    );
+  }, [waterOn, lakes, mode]);
   // The hatch of a lake whose reference gauge is tidal: a pattern cannot read feature-state, so an id filter.
   const tidalLakes = [...lakes].flatMap(([id, l]) => (l.view.tidal ? [id] : [])).join(',');
   useEffect(() => {
@@ -345,7 +352,7 @@ export function StationsMap({
       locale,
     );
     const words = played ? [badges, m.played_note({}, { locale })].filter((w) => w !== '').join(' · ') : badges;
-    return words === '' ? body : [...body, words];
+    return [...body, surgeLine(states.get(selected.id), mode, locale), words].filter((w) => w !== '');
   }, [selected, values, forecasts, changes, states, mode, locale, played]);
   const linesNow = useRef(lines);
   linesNow.current = lines;
@@ -407,6 +414,12 @@ export function StationsMap({
       map.off('click', WATER_LAKES, click);
     };
   }, [map]);
+  // A station chosen anywhere (the map, the search, the table, a link) closes the lake popup, so its own popup shows
+  // (review CR-5). On the id: a new station object of the same station is no new choice.
+  const selectedId = selected?.id;
+  useEffect(() => {
+    if (selectedId !== undefined) setLake(undefined);
+  }, [selectedId]);
   // A hidden lakes group has no lake to point at.
   useEffect(() => {
     if (hideKey.split(',').includes('lakes')) setLake(undefined);

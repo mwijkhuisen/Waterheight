@@ -245,7 +245,13 @@ export function addReaches(
     if (!has || disposed || map.getSource(SOURCE) === undefined) return;
     try {
       for (const layer of binLayers()) map.addLayer(layer, before);
-      for (const l of reachLayers()) map.setLayerZoomRange(l.id, 0, BIN_MINZOOM);
+      for (const l of reachLayers()) {
+        map.setLayerZoomRange(l.id, 0, BIN_MINZOOM);
+        // A bin copy takes its twin's visibility: StationsMap's `?hide=` pass (P19a O-3) ran before it existed (review
+        // CR-1); later passes reach both.
+        if (map.getLayoutProperty(l.id, 'visibility') === 'none')
+          map.setLayoutProperty(`${l.id}-bin`, 'visibility', 'none');
+      }
       binsOn = true;
       map.on('zoomend', onZoom);
       if (last !== undefined) handle.update(last);

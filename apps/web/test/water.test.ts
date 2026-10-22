@@ -300,8 +300,8 @@ describe('honest display at the state level', () => {
     expect(states(st, new Map([[1, high]]))).toMatchObject({ coast: true, surge: null });
     expect(states(st, new Map([[1, { ...high, tide: tide(80) }]]))).toMatchObject({ coast: true, surge: 80 });
   });
-  it('a station outside the coast group is not coast and has no surge', () => {
-    const st = station('p', [series(1, { datum: 'MSL' })]);
+  it('a NAP station outside the coast group is not coast and has no surge (an MSL one is: water-states.test.ts)', () => {
+    const st = station('p', [series(1)]);
     const r = stationStates({
       stations: [st],
       values: new Map([[1, val(1, { tide: tide(5) })]]),

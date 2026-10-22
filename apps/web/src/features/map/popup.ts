@@ -45,6 +45,16 @@ export function badgeLine({ state, tidal, impounded }: BadgeInput, locale: Local
   return words.filter((w) => w !== '').join(' · ');
 }
 
+/**
+ * P19a (review CR-7): the surge of a coast station in the state mode, signed and marked derived: its marker's colour
+ * in words. Empty without one (playback, no tide, the other modes).
+ */
+export function surgeLine(state: StationState | undefined, mode: Mode, locale: Locale): string {
+  if (mode !== 'state' || state?.surge == null) return '';
+  const sign = state.surge > 0 ? '+' : '';
+  return m.popup_surge({ cm: `${sign}${formatNumber(state.surge, locale)}` }, { locale });
+}
+
 export interface ModeLinesInput {
   mode: Mode;
   series: readonly Series[];

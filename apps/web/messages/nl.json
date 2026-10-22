@@ -284,6 +284,7 @@
   "legend_lake": "Meer: kleur van het referentiepunt",
   "legend_msl": "MSL: zeespiegel-hoogte op een platform, niet vergelijkbaar met NAP",
   "legend_canal": "Kanaal (geen stroming)",
+  "popup_surge": "Opzet: {cm} cm (afgeleid)",
   "legend_section": "sectie: toestand van het gebied, niet van de meter",
   "legend_owner": "alleen eigenaar",
   "legend_warnings": "Waarschuwingsgebieden, gekleurd naar klasse",

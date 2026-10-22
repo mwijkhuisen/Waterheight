@@ -13,6 +13,15 @@ const LAYERS = [WATER_LAKES, WATER_LAKES_TIDAL, WATER_LAKES_LINE, WATER_CANALS] 
 /** A lake without a class ("geen klasse"): a neutral grey. */
 const NO_CLASS = '#c8ccd0';
 const POLYGON: ExpressionSpecification = ['==', ['geometry-type'], 'Polygon'];
+/**
+ * The hatch's filter: the lakes `ids`, by the tile property. Not by `['id']`: a filter sees the tile's own feature id,
+ * not the promoted one (MapLibre `toEvaluationFeature`), so the hatch drew nothing (P19a, review CR-6).
+ */
+const tidalFilter = (ids: readonly string[]): FilterSpecification => [
+  'all',
+  POLYGON,
+  ['in', ['get', 'waterbody_id'], ['literal', [...ids]]],
+];
 
 export interface WaterHandle {
   /** Writes each lake's `lv` feature-state (null: "geen klasse", the neutral grey). */
@@ -57,7 +66,7 @@ export function addWater(map: MapLibreMap, beforeId: string): WaterHandle {
       type: 'fill',
       source: SOURCE,
       'source-layer': 'waterbodies',
-      filter: ['all', POLYGON, ['in', ['id'], ['literal', []]]],
+      filter: tidalFilter([]),
       paint: { 'fill-pattern': 'hatch-area', 'fill-opacity': 0.8 },
     },
     before,
@@ -98,8 +107,7 @@ export function addWater(map: MapLibreMap, beforeId: string): WaterHandle {
         map.setFeatureState({ source: SOURCE, sourceLayer: 'waterbodies', id }, { lv: level });
     },
     setTidal(ids) {
-      if (map.getLayer(WATER_LAKES_TIDAL) !== undefined)
-        map.setFilter(WATER_LAKES_TIDAL, ['in', ['id'], ['literal', [...ids]]]);
+      if (map.getLayer(WATER_LAKES_TIDAL) !== undefined) map.setFilter(WATER_LAKES_TIDAL, tidalFilter(ids));
     },
     dispose() {
       // StationsMap disposes on unmount, which may run after map.remove(): a removed map has no style to ask.

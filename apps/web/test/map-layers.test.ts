@@ -3,7 +3,7 @@ import { createExpression, validateStyleMin } from '@maplibre/maplibre-gl-style-
 import { describe, expect, it } from 'vitest';
 import { LAPSED_COLOUR, LAPSED_RADIUS, STATE_COLOUR } from '../src/features/legend/palette.ts';
 import { hatchAreaIcon, hatchIcon, triangleIcon } from '../src/features/map/icons.ts';
-import { badgeLine, changeLine } from '../src/features/map/popup.ts';
+import { badgeLine, changeLine, surgeLine } from '../src/features/map/popup.ts';
 import { riverFilter, riverUrl, showRivers } from '../src/features/map/rivers.ts';
 import { hollow, layerPaints, stationPoints } from '../src/features/map/stationLayer.ts';
 import { warningLayers, warningsGeoJson } from '../src/features/map/warnings.ts';
@@ -152,6 +152,18 @@ describe('popup text', () => {
     expect(badgeLine({ state: stale(false), tidal: false, impounded: false }, 'en')).toBe(
       'no value within the staleness limit',
     );
+  });
+  it('words a coast surge, signed and derived, in the state mode only (P19a, review CR-7)', () => {
+    const surge = (cm: number | null) => ({ surge: cm }) as never;
+    expect(surgeLine(surge(80), 'state', 'nl')).toBe('Opzet: +80 cm (afgeleid)');
+    expect(surgeLine(surge(-60), 'state', 'en')).toBe('Surge: -60 cm (derived)');
+    expect(surgeLine(surge(12.5), 'state', 'nl')).toBe('Opzet: +12,5 cm (afgeleid)');
+    expect(surgeLine(surge(0), 'state', 'en')).toBe('Surge: 0 cm (derived)');
+    // none without a surge (playback, no tide), for no state, and in the other modes
+    expect(surgeLine(surge(null), 'state', 'en')).toBe('');
+    expect(surgeLine(undefined, 'state', 'en')).toBe('');
+    expect(surgeLine(surge(80), 'delta', 'en')).toBe('');
+    expect(surgeLine(surge(80), 'q', 'en')).toBe('');
   });
 });
 
@@ -309,6 +321,10 @@ describe('water layers (P19a T3)', () => {
     const filter = only(calls, 'setFilter')[0]?.args;
     expect(filter?.[0]).toBe(WATER_LAKES_TIDAL);
     expect(JSON.stringify(filter?.[1])).toContain('["literal",["haringvliet"]]');
+    // by the tile property, with the polygon guard: a filter never sees the promoted id (review CR-6)
+    expect(JSON.stringify(filter?.[1])).toContain('["get","waterbody_id"]');
+    expect(JSON.stringify(filter?.[1])).not.toContain('["id"]');
+    expect(JSON.stringify(filter?.[1])).toContain('geometry-type');
     handle.update(
       new Map([
         ['ijsselmeer', { level: 3 }],

@@ -113,6 +113,17 @@ describe('stationStates: coast and surge (P19a)', () => {
     expect(stateOf({ values, groups: new Map() })).toMatchObject({ coast: false, surge: null });
   });
 
+  it('an MSL station is coast in any group, so its level never takes the NAP ladder (review CR-8)', () => {
+    const msl = station('nl.e2e.msl', [{ ...series(7), datum: 'MSL' }]);
+    const values = new Map([[7, value(7, { tide: tide(30) })]]);
+    for (const g of [new Map<string, Group>([[msl.id, 'rivers']]), new Map<string, Group>(), undefined])
+      expect(
+        stationStates({ stations: [msl], values, forecasts: undefined, groups: g, ...base }).get(msl.id),
+      ).toMatchObject({ coast: true, surge: 30 });
+    // a NAP station of the rivers group stays rivers
+    expect(stateOf({ values: new Map([[2, value(2, { tide: tide(30) })]]) }, river.id)).toMatchObject({ coast: false });
+  });
+
   it('uses the primary H series, not a Q series of the station', () => {
     const both = station('nl.e2e.both', [series(5, 'Q'), series(6)]);
     const values = new Map([

@@ -284,6 +284,7 @@
   "legend_lake": "Lake: colour of its reference gauge",
   "legend_msl": "MSL: platform level against mean sea level, not comparable with NAP",
   "legend_canal": "Canal (no flow)",
+  "popup_surge": "Surge: {cm} cm (derived)",
   "legend_section": "section: the state of the area, not of the gauge",
   "legend_owner": "owner only",
   "legend_warnings": "Warning areas, coloured by class",

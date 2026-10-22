@@ -1,6 +1,7 @@
 import { createExpression } from '@maplibre/maplibre-gl-style-spec';
 import { expect, type Page, test } from '@playwright/test';
 import {
+  chooseMode,
   expectNoSeriousAxe,
   featureState,
   finish,
@@ -9,6 +10,7 @@ import {
   open,
   openMode,
   param,
+  pickStation,
   playHold,
   start,
 } from './helpers.ts';
@@ -137,6 +139,18 @@ const alertStub = (page: Page) =>
       w.__alerts.push(String(message));
     };
   });
+/** The flow clock's steps so far (the e2e build counts them, p11a.spec.ts). */
+const frames = (page: Page) =>
+  page.evaluate(() => (window as unknown as { __rwsFlowFrames?: number }).__rwsFlowFrames ?? 0);
+/** The ids of the toggled river layers in the style now: every `rivers…` layer and the canals (O-3). */
+const riverLayers = (page: Page) =>
+  page.evaluate(
+    () =>
+      (window as unknown as Win).__rws?.map
+        ?.getStyle()
+        .layers.map((l) => l.id)
+        .filter((id) => id.startsWith('rivers') || id === 'water-canals') ?? [],
+  );
 const alerts = (page: Page) => page.evaluate(() => (window as unknown as { __alerts: string[] }).__alerts);
 
 /** The map is mounted and the station states of the page's t have arrived (nl.e2e.coast has a value at every seeded hour). */
@@ -242,6 +256,32 @@ test('lakes: the fill takes the reference gauge state, a lake without a referenc
   await finish(page, s);
 });
 
+test('the lakes colour in the state mode only: grey "geen klasse" in the delta and Q modes, the tidal hatch in every mode', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await open(page, '/?mode=delta');
+  await coastReady(page);
+  // Delta (review CR-3): every lake is "geen klasse", the IJsselmeer too.
+  await expect.poll(() => lakeState(page, 'ijsselmeer')).toMatchObject({ lv: null });
+  await chooseMode(page, 'state');
+  await expect.poll(() => lakeState(page, 'ijsselmeer')).toMatchObject({ lv: ELEVATED });
+  await chooseMode(page, 'q');
+  await expect.poll(() => lakeState(page, 'ijsselmeer')).toMatchObject({ lv: null });
+  // The Haringvliet's reference (hellevoetsluis) is tidal: the hatch layer's id filter holds it, in this mode as well,
+  // and the hatch renders where the Haringvliet is (review CR-6).
+  await expect
+    .poll(() =>
+      page.evaluate(() => JSON.stringify((window as unknown as Win).__rws?.map?.getFilter('water-lakes-tidal'))),
+    )
+    .toContain('"haringvliet"');
+  await jump(page, [4.25, 51.8], 9);
+  await expect.poll(() => renderedIds(page, ['water-lakes-tidal'])).toContain('haringvliet');
+  await finish(page, s);
+});
+
 // ---------------------------------------------------------------- 2: coast
 
 test('coast: the station has coast true and surge 80, sits in the tidal hatch layer and shows the ▲', async ({
@@ -261,6 +301,30 @@ test('coast: the station has coast true and surge 80, sits in the tidal hatch la
   expect(await paint(page, 'stations-surge-down', 'icon-opacity', state ?? {})).toBe(0);
   // Coloured (not hollow): the circle is drawn.
   expect(await paint(page, 'stations', 'circle-opacity', state ?? {})).toBeGreaterThan(0);
+  await finish(page, s);
+});
+
+test('a station chosen in the search replaces an open lake popup; its popup says the surge, derived', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await open(page, '/');
+  await coastReady(page);
+  await clickLake(page, 'veluwemeer', [5.7, 52.4], 11);
+  await expect(popup(page)).toContainText(nl('lake_no_class'));
+  // A lake click never sets `?s=`.
+  expect(param(page, 's')).toBeNull();
+  // Review CR-5: the search's choice closes the lake popup, so the station's own popup shows.
+  await pickStation(page, 'E2E coast');
+  await expect.poll(() => param(page, 's')).toBe(COAST);
+  await expect(popup(page)).toHaveCount(1);
+  await expect(popup(page)).toContainText('E2E coast');
+  await expect(popup(page)).not.toContainText(nl('lake_no_class'));
+  // Review CR-7: the surge its marker is coloured by, in words, signed and marked derived.
+  await expect(popup(page)).toContainText(nl('popup_surge', { cm: '+80' }));
+  expect(nl('popup_surge', { cm: '+80' })).toBe('Opzet: +80 cm (afgeleid)');
   await finish(page, s);
 });
 
@@ -411,16 +475,12 @@ test('"Rivieren" hides the river lines, the canals and the flow; the river stati
   await mapReady(page);
   await expect.poll(async () => (await flowIds(page)).length).toBeGreaterThan(0);
   await expect.poll(() => visibility(page, 'rivers-flow')).toBe('visible');
+  await expect.poll(() => frames(page)).toBeGreaterThan(2);
   await openMode(page);
   await checkbox(page, 'layer_rivers').uncheck();
   await expect.poll(() => param(page, 'hide')).toBe('rivers');
   await mapUp(page);
-  const layers = await page.evaluate(() =>
-    (window as unknown as Win).__rws.map
-      .getStyle()
-      .layers.map((l) => l.id)
-      .filter((id) => id.startsWith('rivers') || id === 'water-canals'),
-  );
+  const layers = await riverLayers(page);
   expect(layers).toEqual(
     expect.arrayContaining(['rivers', 'rivers-reach', 'rivers-flow', 'rivers-flow-arrows', 'water-canals']),
   );
@@ -433,6 +493,47 @@ test('"Rivieren" hides the river lines, the canals and the flow; the river stati
   await expect
     .poll(() => held(page, [...LAKE_STATIONS, ...COAST_STATIONS]))
     .toEqual([...LAKE_STATIONS, ...COAST_STATIONS]);
+  // The hidden group stops the flow clock, not just its layers (review CR-6, the p11a hidden-tab check).
+  await page.waitForTimeout(300); // a frame that was already in flight
+  const frozen = await frames(page);
+  await page.waitForTimeout(1500);
+  expect(await frames(page), 'no flow step while the rivers are hidden').toBe(frozen);
+  // Shown again: the clock runs on and the dashes are back.
+  await checkbox(page, 'layer_rivers').check();
+  await expect.poll(() => param(page, 'hide')).toBeNull();
+  await expect.poll(() => frames(page)).toBeGreaterThan(frozen);
+  await expect.poll(() => visibility(page, 'rivers-flow')).toBe('visible');
+  expect(await visibility(page, 'rivers-flow-arrows')).toBe('none');
+  await finish(page, s);
+});
+
+test('a ?hide=rivers link hides the river layers that arrive later too: the reach bins and the flow (review CR-1)', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await open(page, '/?hide=rivers');
+  // Not mapReady: it waits for nl.e2e.xss, a river station, which the hidden group takes off the map. The coast point
+  // has a value; the bins come after the archive's metadata read, the flow and the water layers from their own chunks.
+  await coastReady(page);
+  await expect
+    .poll(() => riverLayers(page))
+    .toEqual(
+      expect.arrayContaining([
+        'rivers',
+        'rivers-reach',
+        'rivers-reach-tidal-bin',
+        'rivers-flow-arrows',
+        'water-canals',
+      ]),
+    );
+  const layers = await riverLayers(page);
+  expect(layers.filter((id) => id.endsWith('-bin'))).toHaveLength(5);
+  for (const id of layers) await expect.poll(() => visibility(page, id), { message: id }).toBe('none');
+  for (const id of ['water-lakes', 'water-lakes-line'])
+    await expect.poll(() => visibility(page, id), { message: id }).toBe('visible');
+  await expect.poll(() => held(page, ['nl.e2e.xss', COAST])).toEqual([COAST]);
   await finish(page, s);
 });
 
