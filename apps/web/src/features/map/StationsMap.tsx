@@ -149,6 +149,8 @@ export function StationsMap({
     const off = hideKey === '' ? [] : hideKey.split(',');
     return off.length === 0 ? stations : stations.filter((st) => !off.includes(groups.get(st.id) ?? 'rivers'));
   }, [stations, groups, hideKey]);
+  const shownNow = useRef(shown);
+  shownNow.current = shown;
 
   useEffect(() => {
     if (state.status === 'error') onFailure(state.code);
@@ -178,7 +180,13 @@ export function StationsMap({
       ready.getCanvas().style.cursor = '';
     };
     const add = () => {
-      showStations(ready, shown, modeNow.current, m.legend_impounded({}, { locale }), m.map_msl_short({}, { locale }));
+      showStations(
+        ready,
+        shownNow.current,
+        modeNow.current,
+        m.legend_impounded({}, { locale }),
+        m.map_msl_short({}, { locale }),
+      );
       ready.on('click', riverClick);
       ready.on('click', SOURCE, click);
       ready.on('mouseenter', SOURCE, pointer);
@@ -197,7 +205,13 @@ export function StationsMap({
       if (testHook) testHook.map = null;
       setMap(null);
     };
-  }, [state, shown, locale]);
+  }, [state, locale]);
+  // A new station list (a hidden group, KG-233's hidden stations) only replaces the points. Never through the set-up
+  // above: MapLibre fires `load` once, so a set-up re-run while tiles load would wait for it forever (P19a).
+  useEffect(() => {
+    if (map !== null)
+      showStations(map, shown, modeNow.current, m.legend_impounded({}, { locale }), m.map_msl_short({}, { locale }));
+  }, [map, shown, locale]);
 
   useEffect(() => {
     if (map === null) return;
