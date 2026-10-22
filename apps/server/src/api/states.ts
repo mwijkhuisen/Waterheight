@@ -49,7 +49,19 @@ type StationRow = {
   flags: unknown;
 };
 type ObsRow = { series_id: number; ts: Date; value: number; qc: number };
-type TideAtRow = Omit<TideRow, 'ts'> & { series_id: number; ts: Date };
+/** A TIDE_AT row (P18a). */
+export type TideAtRow = Omit<TideRow, 'ts'> & { series_id: number; ts: Date };
+
+/** TIDE_AT rows by series, ts in epoch ms (the snapshot at t and, from P18b, the future snapshot). */
+export function tideBySeries(rows: readonly TideAtRow[]): Map<number, TideRow[]> {
+  const tide = new Map<number, TideRow[]>();
+  for (const { series_id, ts, ...r } of rows) {
+    const list = tide.get(series_id) ?? [];
+    list.push({ ...r, ts: ts.getTime() });
+    tide.set(series_id, list);
+  }
+  return tide;
+}
 type RefRow = {
   series_id: number;
   source_id: string;
@@ -510,13 +522,7 @@ export async function readStates(
   for (const r of doy) kinds.set(r.series_id, (kinds.get(r.series_id) ?? new Set()).add(r.kind));
   const doySeries = new Set([...kinds].filter(([, k]) => k.size === DOY_KINDS.length).map(([id]) => id));
   if (rows.tide === undefined) return { t, series: states, stations, publicSeries, doySeries };
-  const tide = new Map<number, TideRow[]>();
-  for (const { series_id, ts, ...r } of rows.tide) {
-    const list = tide.get(series_id) ?? [];
-    list.push({ ...r, ts: ts.getTime() });
-    tide.set(series_id, list);
-  }
-  return { t, series: states, stations, publicSeries, doySeries, tide };
+  return { t, series: states, stations, publicSeries, doySeries, tide: tideBySeries(rows.tide) };
 }
 
 /** The snapshot's values: the series with a value at t, with their state, basis and detail-view height. */

@@ -3129,6 +3129,72 @@
                   ],
                   "type": "string"
                 },
+                "tide": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "astro": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "derived": {
+                      "const": "surge",
+                      "type": "string"
+                    },
+                    "extremes": {
+                      "items": {
+                        "additionalProperties": false,
+                        "properties": {
+                          "hilo": {
+                            "enum": [
+                              "high",
+                              "low"
+                            ],
+                            "type": "string"
+                          },
+                          "kind": {
+                            "enum": [
+                              "measured",
+                              "astro"
+                            ],
+                            "type": "string"
+                          },
+                          "ts": {
+                            "format": "date-time",
+                            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",
+                            "type": "string"
+                          },
+                          "value": {
+                            "type": "number"
+                          }
+                        },
+                        "required": [
+                          "ts",
+                          "value",
+                          "hilo",
+                          "kind"
+                        ],
+                        "type": "object"
+                      },
+                      "maxItems": 6,
+                      "type": "array"
+                    },
+                    "surge": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "astro",
+                    "surge",
+                    "derived",
+                    "extremes"
+                  ],
+                  "type": "object"
+                },
                 "ts": {
                   "format": "date-time",
                   "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z))$",

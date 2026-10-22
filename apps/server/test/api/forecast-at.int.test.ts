@@ -7,6 +7,7 @@ import {
   Snapshot,
   SnapshotAnswer,
 } from '@rws/contracts';
+import { sql } from 'kysely';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { forecastCoverage, visibleSources } from '../../src/api/forecast.ts';
@@ -15,6 +16,7 @@ import { lu3Limits } from '../../src/api/forecast-latest.ts';
 import { readStates } from '../../src/api/states.ts';
 import { DisplayWindow } from '../../src/api/window.ts';
 import { createApp } from '../../src/app.ts';
+import { TIDE_AT } from '../../src/db/audience.ts';
 import { readRegistry, readRiverRegistry, syncRegistry } from '../../src/load/registry-sync.ts';
 import { vigicruesSections } from '../../src/load/tables.ts';
 import { type Harness, harness } from '../load/harness.ts';
@@ -55,6 +57,37 @@ async function seriesOf(st: string, quantity: 'H' | 'Q', source: string): Promis
   if (rows[0] === undefined) throw new Error(`no series ${st} ${quantity} ${source}`);
   return rows[0].id;
 }
+
+const seriesByKey = async (key: string): Promise<number> => {
+  const rows = await q<{ id: number }>('SELECT id FROM series WHERE provider_key = $1 AND active', [key]);
+  if (rows[0] === undefined) throw new Error(`no series ${key}`);
+  return rows[0].id;
+};
+
+// P18b (T5): the coastal grid. Den Helder's run is 20:00Z on the 5th plus i x 10 min (73 points, to 08:00Z on the 6th).
+const COAST_FROM = '2026-10-05T20:00:00Z';
+const COAST_N = 73;
+/** 23:00Z: the astro row is 5 min later (23:05Z). */
+const OFF_GRID = 18;
+/** 01:00Z to 03:00Z on the 6th: no astro row at all (the high and low waters stay). */
+const ABSENT = [30, 42] as const;
+/** 06:00Z on the 6th: below the provider's floor (no number). */
+const BELOW = 60;
+const MEASURED_HIGH = '2026-10-05T08:30:00Z';
+/** The astronomical value of grid step i, one decimal. */
+const astroOf = (i: number) => Number((41.3 + (i % 5)).toFixed(1));
+
+/** tide rows as the superuser (the loader's store: astro has no hilo). */
+const tideRows = (
+  series: number,
+  kind: 'astro' | 'extreme' | 'extreme_astro',
+  rows: { ts: string; value: number; hilo?: 'high' | 'low' }[],
+) =>
+  q(
+    `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id)
+     SELECT $1::int, $2::text, u.ts, u.v, u.h, 1 FROM unnest($3::timestamptz[], $4::real[], $5::text[]) AS u(ts, v, h)`,
+    [series, kind, rows.map((r) => r.ts), rows.map((r) => r.value), rows.map((r) => r.hilo ?? null)],
+  );
 
 const COLUMNS = ['value', 'p10', 'p25', 'p30', 'p50', 'p70', 'p75', 'p90', 'vmin', 'vmax'] as const;
 type Pt = { ts: string; flags?: number } & Partial<Record<(typeof COLUMNS)[number], number | null>>;
@@ -447,6 +480,45 @@ beforeAll(async () => {
     stepS: 600,
     points: grid('2026-10-05T06:00:00Z', 6 * 40, TEN, () => ({ value: CANARIES.withheld.value })),
   });
+
+  // --- P18b (T5): a coastal tidal series, a lake and a tidal series without tide rows ----------------------------
+  // Their runs begin only at 20:00Z, so no read of the tests above (at 09:35Z and earlier) holds them, and they end
+  // on the 6th before now + 48 h. Den Helder: 240 + i cm every ten minutes (NL-4 bands on a tidal series since T1),
+  // the point of 06:00Z on the 6th below the provider's floor.
+  id.denHelder = await seriesByKey('denhelder.marsdiep/WATHTE/NAP/other:F007');
+  id.vlissingen = await seriesOf('nl.rws.vlissingen', 'H', 'NL-1');
+  id.markermeer = await seriesOf('nl.rws.markermeer.midden', 'H', 'NL-1');
+  const coastal = (series: number, n: number, at: (i: number) => Omit<Pt, 'ts'>) =>
+    seedRun({
+      series,
+      source: 'NL-1',
+      issued: null,
+      fetched: '2026-10-05T06:25:00Z',
+      kind: 'deterministic',
+      stepS: 600,
+      points: grid(COAST_FROM, n, TEN, (i) => at(i)),
+    });
+  await coastal(id.denHelder, COAST_N, (i) => (i === BELOW ? { value: 55, flags: 1024 } : { value: 240 + i }));
+  await coastal(id.vlissingen, 13, (i) => ({ value: 100 + i }));
+  await coastal(id.markermeer, 13, () => ({ value: 15 }));
+  // Den Helder's tide rows: astro every ten minutes except the step OFF_GRID (a row five minutes later in its place)
+  // and the two hours of ABSENT; the astronomical high and low waters around the day; and a measured high water
+  // before now, which TIDE_AT returns inside its 15 h window but a forecast must never show.
+  const stepAt = (i: number) => iso(T(COAST_FROM) + i * TEN);
+  const astro = Array.from({ length: COAST_N }, (_, i) => i).filter(
+    (i) => i !== OFF_GRID && !(i >= ABSENT[0] && i <= ABSENT[1]),
+  );
+  await tideRows(id.denHelder, 'astro', [
+    ...astro.map((i) => ({ ts: stepAt(i), value: astroOf(i) })),
+    { ts: iso(T(stepAt(OFF_GRID)) + 5 * 60_000), value: 99.9 },
+  ]);
+  await tideRows(id.denHelder, 'extreme_astro', [
+    { ts: '2026-10-05T12:20:00Z', value: -88, hilo: 'low' },
+    { ts: '2026-10-05T18:40:00Z', value: 119, hilo: 'high' },
+    { ts: '2026-10-06T01:10:00Z', value: -91, hilo: 'low' },
+    { ts: '2026-10-06T07:30:00Z', value: 122, hilo: 'high' },
+  ]);
+  await tideRows(id.denHelder, 'extreme', [{ ts: MEASURED_HIGH, value: 135, hilo: 'high' }]);
 }, 300_000);
 
 afterAll(async () => {
@@ -673,6 +745,110 @@ describe('classification of a forecast value', { timeout: 120_000 }, () => {
     expect(now(id.chw as number)).toMatchObject({ section: true });
     expect(await state(id.chq as number, '2026-10-05T10:00:00Z')).toEqual({ state: 'no_ref', basis: null, value: 103 });
     expect(await state(id.chw as number, '2026-10-05T10:00:00Z')).toEqual({ state: 'no_ref', basis: null, value: 103 });
+  });
+});
+
+describe('a coastal forecast carries its tide and its NL-4 class (P18b, T5, T1)', { timeout: 120_000 }, () => {
+  const stepAt = (i: number) => iso(T(COAST_FROM) + i * TEN);
+  const den = async (when: string) => {
+    const snap = await futurePub(T(when));
+    expect(Snapshot.safeParse(snap).success, when).toBe(true);
+    return entry(snap, id.denHelder as number);
+  };
+  /** Core `tideAt` rounds the surge to 0.1 cm. */
+  const surge = (value: number, astro: number) => Math.round((value - astro) * 10) / 10;
+
+  it('the surge is the forecast minus the astro at the held point own valid time, derived "surge", in both families', async () => {
+    // 22:00Z is step 12: forecast 252, astro 41.3 + 2
+    const f = await den('2026-10-05T22:00:00Z');
+    expect(f).toMatchObject({ ts: stepAt(12), value: 252 });
+    expect(f?.tide).toMatchObject({ astro: 43.3, surge: surge(252, 43.3), derived: 'surge' });
+    expect(f?.tide?.surge).toBe(208.7);
+    // between two grid points the held point (and so its astro) is the earlier one: 22:07Z holds 22:00Z
+    const held = await den('2026-10-05T22:07:00Z');
+    expect(held).toMatchObject({ ts: stepAt(12), value: 252 });
+    expect(held?.tide).toMatchObject({ astro: 43.3, surge: 208.7 });
+    // a later step: 00:30Z on the 6th is step 27, forecast 267, astro 41.3 + 2
+    const later = await den('2026-10-06T00:30:00Z');
+    expect(later).toMatchObject({ ts: stepAt(27), value: 267 });
+    expect(later?.tide).toMatchObject({ astro: astroOf(27), surge: surge(267, astroOf(27)), derived: 'surge' });
+    // the owner family sees the same public series with the same tide
+    const own = entry(await futureOwn(T('2026-10-05T22:00:00Z')), id.denHelder as number);
+    expect(own?.tide).toEqual(f?.tide);
+  });
+
+  it('astro five minutes off the held point, or absent, gives astro null and surge null (the high and low waters stay)', async () => {
+    // step 18 (23:00Z) has its astro row at 23:05Z: neither a read at 23:00Z nor one at 23:07Z uses it
+    for (const when of ['2026-10-05T23:00:00Z', '2026-10-05T23:07:00Z']) {
+      const f = await den(when);
+      expect(f, when).toMatchObject({ ts: stepAt(OFF_GRID), value: 240 + OFF_GRID });
+      expect(f?.tide, when).toMatchObject({ astro: null, surge: null, derived: 'surge' });
+      expect(f?.tide?.extremes.length, when).toBeGreaterThan(0);
+    }
+    // 02:30Z on the 6th: no astro row between 01:00Z and 03:00Z at all
+    const gap = await den('2026-10-06T02:30:00Z');
+    expect(gap).toMatchObject({ ts: stepAt(39), value: 240 + 39 });
+    expect(gap?.tide).toMatchObject({ astro: null, surge: null, derived: 'surge' });
+    expect(gap?.tide?.extremes.length).toBeGreaterThan(0);
+  });
+
+  it('a measured high water before now is not in the forecast tide; the astronomical ones are', async () => {
+    const t = T('2026-10-05T22:00:00Z');
+    // the read of the future snapshot sees the measured row (inside its 15 h window), so the exclusion is real
+    const rows = (
+      await sql<{ kind: string; ts: Date }>`
+        SELECT kind, ts FROM ${sql.id(TIDE_AT.public)}(${iso(t)}::timestamptz) WHERE series_id = ${id.denHelder as number}`.execute(
+        pub.db,
+      )
+    ).rows;
+    expect(rows.some((r) => r.kind === 'extreme' && r.ts.getTime() === T(MEASURED_HIGH))).toBe(true);
+    const f = await den('2026-10-05T22:00:00Z');
+    expect(f?.tide?.extremes).toEqual([
+      { ts: '2026-10-05T12:20:00.000Z', value: -88, hilo: 'low', kind: 'astro' },
+      { ts: '2026-10-05T18:40:00.000Z', value: 119, hilo: 'high', kind: 'astro' },
+      { ts: '2026-10-06T01:10:00.000Z', value: -91, hilo: 'low', kind: 'astro' },
+      { ts: '2026-10-06T07:30:00.000Z', value: 122, hilo: 'high', kind: 'astro' },
+    ]);
+    expect(JSON.stringify(f?.tide)).not.toContain('measured');
+    expect(JSON.stringify(f?.tide)).not.toContain('2026-10-05T08:30');
+  });
+
+  it('the coastal forecast carries its NL-4 state and basis (a tidal series is classed by NL-4 since T1)', async () => {
+    // 252 cm: Waterinfo "Verhoogde waterstand (> 190cm)"; 267 cm: "Stormvloed (> 260cm)"
+    const a = await den('2026-10-05T22:00:00Z');
+    expect(a?.basis).toMatchObject({ source: 'NL-4', kind: 'provider_class', label: 'Verhoogde waterstand (> 190cm)' });
+    const b = await den('2026-10-06T00:30:00Z');
+    expect(b?.basis).toMatchObject({ source: 'NL-4', kind: 'provider_class', label: 'Stormvloed (> 260cm)' });
+    expect(a?.state).not.toBe('no_ref');
+    expect(b?.state).not.toBe('no_ref');
+    expect(b?.state).not.toBe(a?.state);
+  });
+
+  it('a below-floor point (no number) has no tide, though the astro row of its instant exists', async () => {
+    const when = '2026-10-06T06:00:00Z';
+    const f = await den(when);
+    expect(f).toMatchObject({ ts: stepAt(BELOW), value: null, flags: 1024 });
+    expect(f).not.toHaveProperty('tide');
+    const row = await q('SELECT 1 FROM tide WHERE series_id = $1 AND kind = $2 AND ts = $3', [
+      id.denHelder,
+      'astro',
+      when,
+    ]);
+    expect(row).toHaveLength(1);
+  });
+
+  it('a lake forecast has no tide, and a tidal series without any tide row has none either', async () => {
+    const snap = await futurePub(T('2026-10-05T22:00:00Z'));
+    const lake = entry(snap, id.markermeer as number);
+    expect(lake).toMatchObject({ value: 15, basis: { source: 'NL-4', kind: 'provider_class' } });
+    expect(lake).not.toHaveProperty('tide');
+    const none = entry(snap, id.vlissingen as number);
+    expect(none).toMatchObject({ value: 100 + 12 });
+    expect(await q('SELECT 1 FROM tide WHERE series_id = $1', [id.vlissingen])).toHaveLength(0);
+    expect(none).not.toHaveProperty('tide');
+    // and no forecast of the tests above (series without tide rows) has the key
+    for (const f of (await futurePub(T('2026-10-05T09:35:00Z'))).forecasts ?? [])
+      expect(f, `${f.series}`).not.toHaveProperty('tide');
   });
 });
 

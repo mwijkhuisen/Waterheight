@@ -7,14 +7,14 @@ import {
   type Snapshot,
   type SnapshotForecast,
 } from '@rws/contracts';
-import { type CurrentRun, de2Superseded, FORECAST_FLAGS, FORECAST_SOURCES, isCurrent } from '@rws/core';
+import { type CurrentRun, de2Superseded, FORECAST_FLAGS, FORECAST_SOURCES, isCurrent, tideAt } from '@rws/core';
 import { type Kysely, sql } from 'kysely';
-import { type ChannelAudience, FORECAST_AT, VIEWS } from '../db/audience.ts';
+import { type ChannelAudience, FORECAST_AT, TIDE_AT, VIEWS } from '../db/audience.ts';
 import type { DB } from '../db/generated.ts';
 import { channelViews } from './channels.ts';
 import { assertVisible, ruhrortCm, visibleSources } from './forecast.ts';
 import { AGENCY, BAND_COLUMNS, type BandColumn, lu3Limits } from './forecast-latest.ts';
-import { readStates, type StaticCache } from './states.ts';
+import { readStates, type StaticCache, type TideAtRow, tideBySeries } from './states.ts';
 import { iso, snapshot } from './util.ts';
 
 // Official forecasts on the API (P8b, A§8 Q2, A§9.2): the future snapshot (`t` after now), /series/{id}/forecast
@@ -178,6 +178,8 @@ const RUN_COLUMNS = sql`run_id::text AS id, series_id, source_id, issued_at, iss
  * The snapshot at a future `t` (t > now, at most now + 48 h; the route has checked it): no observation, and per
  * series the forecast that shows at `t`, its value classified against the references valid at t. Q2 runs at
  * asof = now floored to the 10-minute grid. A run of a source the family cannot see fails closed (`owner_source`).
+ * P18b: a tidal series' forecast carries its tide (astronomical at the held point's own valid time, the surge =
+ * forecast − astro) from TIDE_AT at t, without the measured high and low waters (observations stop at now).
  */
 export async function readFutureSnapshot(
   db: Kysely<DB>,
@@ -193,7 +195,7 @@ export async function readFutureSnapshot(
 ): Promise<Snapshot> {
   const asof = new Date(floorBucket(opts.now)).toISOString();
   const at = new Date(t).toISOString();
-  const { rows, ruhrort, stations } = await snapshot(db, async (tx) => {
+  const { rows, ruhrort, stations, tide } = await snapshot(db, async (tx) => {
     const rows = (
       await sql<HeldSql>`
         SELECT ${RUN_COLUMNS}, valid_ts, value, p10, p90, p25, p75, p30, p70, vmin, vmax, flags
@@ -214,8 +216,18 @@ export async function readFutureSnapshot(
               await sql<{ id: number; station_id: string }>`
                 SELECT id, station_id FROM ${sql.table(VIEWS[family].series)} WHERE id = ANY(${lu3}::int[])`.execute(tx)
             ).rows,
+      // The astronomical rows only: a measured `extreme` row is an observation, and none passes now.
+      tide:
+        rows.length === 0
+          ? []
+          : (
+              await sql<TideAtRow>`
+                SELECT series_id, kind, hilo, ts, value FROM ${sql.id(TIDE_AT[family])}(${at}::timestamptz)
+                WHERE kind <> 'extreme'`.execute(tx)
+            ).rows,
     };
   });
+  const tideOf = tideBySeries(tide);
   const stationOf = new Map(stations.map((s) => [s.id, s.station_id]));
   const rules: ForecastRules = {
     now: opts.now,
@@ -255,13 +267,19 @@ export async function readFutureSnapshot(
       const c = stateOf.get(r.series);
       // A series the family's series view does not show cannot be placed (as in forecast/latest.json).
       if (c === undefined) return [];
+      const v = values.get(r.series);
+      const tideRows = tideOf.get(r.series);
+      const tide = v === undefined || tideRows === undefined ? undefined : tideAt(v, tideRows);
       return [
-        heldForecast(
-          r,
-          rules,
-          values.has(r.series) ? { state: c.state, basis: c.basis } : { state: 'no_ref', basis: null },
-          t,
-        ),
+        {
+          ...heldForecast(
+            r,
+            rules,
+            v === undefined ? { state: 'no_ref', basis: null } : { state: c.state, basis: c.basis },
+            t,
+          ),
+          ...(tide === undefined ? {} : { tide }),
+        },
       ];
     }),
   };

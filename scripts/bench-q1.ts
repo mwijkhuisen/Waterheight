@@ -144,6 +144,26 @@ try {
      CROSS JOIN (SELECT id FROM series ORDER BY id LIMIT $2) s`,
     [DAYS, TIDAL],
   );
+  // P18b: the astronomical curve and the astronomical high and low waters 48 h ahead (a prediction, so it exists), for the
+  // future snapshot's tide read at now + 24 h. No forecast runs are seeded (the Q2 benchmark, bench-q2.ts, covers that
+  // read), and no measured value lies ahead.
+  await t.admin.query(
+    `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id)
+     SELECT s.id, 'astro', ts, (random() * 200 - 100)::real, NULL, 1
+     FROM generate_series(date_bin('10 min', now(), timestamptz '2000-01-01 00:00:00+00') + interval '10 min',
+                          date_bin('10 min', now(), timestamptz '2000-01-01 00:00:00+00') + interval '48 hours',
+                          interval '10 min') ts
+     CROSS JOIN (SELECT id FROM series ORDER BY id LIMIT $1) s`,
+    [TIDAL],
+  );
+  await t.admin.query(
+    `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id)
+     SELECT s.id, 'extreme_astro', date_bin('6 hours', now(), timestamptz '2000-01-01 00:00:00+00') + g * interval '6 hours',
+            (random() * 200 - 100)::real, CASE WHEN g % 2 = 0 THEN 'high' ELSE 'low' END, 1
+     FROM generate_series(1, 8) g
+     CROSS JOIN (SELECT id FROM series ORDER BY id LIMIT $1) s`,
+    [TIDAL],
+  );
   await seedClassification(SERIES, DAYS);
   await t.admin.query('ANALYZE');
   const { rows: size } = await t.admin.query<{ n: string }>('SELECT count(*) AS n FROM obs');
@@ -211,6 +231,30 @@ try {
   );
   if (tideMedian >= TIDE_MS) {
     console.error(`bench-q1: FAIL: tide median ${tideMedian.toFixed(1)} ms is not under ${TIDE_MS} ms`);
+    failed = true;
+  }
+  // P18b: the same function at a future instant (now + 24 h), the extra read of the future snapshot (readFutureSnapshot).
+  const ahead = (i: number) => new Date(Date.now() + 24 * 3_600_000 + i * 61_000);
+  const aheadTimes: number[] = [];
+  let aheadRows = 0;
+  for (let i = 0; i < RUNS + 3; i++) {
+    const t0 = process.hrtime.bigint();
+    const result = await api.query(TIDE, [ahead(i)]);
+    const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+    aheadRows = result.rowCount ?? 0;
+    if (i >= 3) aheadTimes.push(ms);
+  }
+  aheadTimes.sort((a, b) => a - b);
+  const aheadMedian = aheadTimes[Math.floor(aheadTimes.length / 2)] as number;
+  console.log(
+    `${TIDE_AT.public} "tide rows at now + 24 h": ${aheadRows} rows over ${TIDAL} tidal series; median ${aheadMedian.toFixed(1)} ms, p95 ${(aheadTimes[Math.ceil(aheadTimes.length * 0.95) - 1] as number).toFixed(1)} ms, max ${(aheadTimes.at(-1) as number).toFixed(1)} ms over ${RUNS} runs (limit ${TIDE_MS} ms)`,
+  );
+  if (aheadRows < TIDAL) {
+    console.error(`bench-q1: FAIL: ${aheadRows} tide rows ahead for ${TIDAL} tidal series`);
+    failed = true;
+  }
+  if (aheadMedian >= TIDE_MS) {
+    console.error(`bench-q1: FAIL: future tide median ${aheadMedian.toFixed(1)} ms is not under ${TIDE_MS} ms`);
     failed = true;
   }
   // P14f: the day read of a cold /snapshot (readDoy): one UTC day key through the reference view, as rws_api. The

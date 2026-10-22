@@ -463,6 +463,12 @@ export function apiContracts(source: z.ZodString) {
     /** The state of the forecast value against the agencies' references (never a class or area of the present). */
     state: z.enum(STATES),
     basis: StateBasis.nullable(),
+    /**
+     * Tidal series only (P18b): the astronomical tide at the forecast's own valid time `ts`, the surge = forecast −
+     * astro (null without an astronomical row at exactly `ts`) and the astronomical high and low waters; never a
+     * measured one. Absent when the series has no tide rows.
+     */
+    tide: SnapshotTide.optional(),
   });
 
   const Snapshot = z.strictObject({
