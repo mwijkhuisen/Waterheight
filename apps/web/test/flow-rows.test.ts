@@ -100,6 +100,44 @@ describe('chainRows', () => {
     expect([none.state, none.basis, none.section]).toEqual([null, null, false]);
   });
 
+  // P18b: a coastal station shows its NL-4 class (D12 amended) and a lake its seasonal class, each as a Waterinfo
+  // display class: the basis names the legend and the stored label, never a warning.
+  it.each(LOCALES)('gives the coastal "Stormvloed" class as a Waterinfo basis, high and not extreme (%s)', (locale) => {
+    const stations = stationsOf(['nl.rws.x']);
+    const series = stations.get('nl.rws.x')?.series[0]?.id ?? 0;
+    const basis = {
+      source: 'NL-4',
+      kind: 'provider_class',
+      measure: 'level',
+      ref: 'Stormvloed',
+      label: 'Stormvloed (>200cm)',
+    };
+    const values = new Map([[series, value(series, 'high', basis as Value['basis'])]]);
+    const row = first(chainRows([node(['nl.rws.x'])], ctx(locale, { stations, values })));
+    expect(row.state).toBe(stateWord('high', locale));
+    expect(row.basis).toBe(`${basisKind({ kind: 'provider_class', source: 'NL-4' }, locale)}: Stormvloed (>200cm)`);
+    expect(row.basis).toContain(m.basis_nl4({}, { locale }));
+    expect(row.section).toBe(false);
+  });
+
+  it.each(LOCALES)('gives a lake class as a Waterinfo basis from its reference gauge (%s)', (locale) => {
+    const stations = stationsOf(['nl.rws.markermeer.midden']);
+    const series = stations.get('nl.rws.markermeer.midden')?.series[0]?.id ?? 0;
+    const basis = {
+      source: 'NL-4',
+      kind: 'provider_class',
+      measure: 'level',
+      ref: 'Normaal',
+      label: 'Normaal (-30 tot -10cm)',
+    };
+    const values = new Map([[series, value(series, 'normal', basis as Value['basis'])]]);
+    const row = first(chainRows([node(['nl.rws.markermeer.midden'])], ctx(locale, { stations, values })));
+    expect(row.state).toBe(stateWord('normal', locale));
+    expect(row.basis).toBe(`${basisKind({ kind: 'provider_class', source: 'NL-4' }, locale)}: Normaal (-30 tot -10cm)`);
+    expect(row.basis).toContain(m.basis_nl4({}, { locale }));
+    expect(row.section).toBe(false);
+  });
+
   it.each(LOCALES)('while played shows the hour state and its section, with no basis (%s)', (locale) => {
     const stations = stationsOf(['nl.rws.x', 'nl.rws.y']);
     const series = stations.get('nl.rws.x')?.series[0]?.id ?? 0;

@@ -2160,6 +2160,29 @@ Target scale (§4.7): `no-ref` (grey), `low`, `normal`, `elevated`, `high`, `ext
 
 **D18, signed by the owner on 2026-10-03:** this table as proposed, with the rows the P7a build flagged decided as built: NL-4 "Stormvloed" is `high` (RWS ranks it at order 2 with Hoogwater, below Extreem), not extreme; LU-4 HQ5, DE-1 Hochwassermarken I to III and GlW, and BE-3 `NIVCRU` are shown and never classify; CH-5 level 0 ("Keine Gefahrenstufe") is `no_ref`; the LHP operating state of Obernau is BY and of Kalkofen-neu RP; the LHP alert "2" (Vorwarnung, `elevated`) is drawn hatched in P10, with no colour stored. The table in force is `packages/core/src/crosswalk.ts`.
 
+<!-- D30-addendum:begin -->
+**Addendum D30 (P18b, 2026-10-22; proposed, owner sign-off pending).** The NL-4 display classes now decide on every tidal NL-1 series, the coast and the tidal delta rivers alike (D12 amended, owner decision O-1 of 2026-10-22). Statistical sets stay off tidal series. A lake series takes its class from the same table, in its own seasonal windows. These stay RWS Waterinfo display classes, never warnings. Official storm-surge warnings are a link to the national service (Rijkswaterstaat waterberichtgeving), never data, and no warning text is copied. The table has one row per NL-4 label stem that a tidal or lake NAP level series of NL-1 uses (public, primary), with the target the NL-4 rows of the table above give it (unchanged from D18).
+
+| NL-4 label stem | Target | Basis | Note |
+|---|---|---|---|
+| Extreem hoog | extreme | provider_class | Waterinfo display class, never a warning |
+| Extreem hoog water | extreme | provider_class | Waterinfo display class, never a warning |
+| Extreem hoogwater | extreme | provider_class | Waterinfo display class, never a warning |
+| Hoog water | high | provider_class | Waterinfo display class, never a warning |
+| Hoogwater | high | provider_class | Waterinfo display class, never a warning |
+| Hoogwater / Stormvloed | high | provider_class | Waterinfo display class, never a warning |
+| Laagwater | low | provider_class | Waterinfo display class, never a warning |
+| Licht verhoogd | elevated | provider_class | Waterinfo display class, never a warning; seasonal windows: Haringvliet_broedseizoen, Haringvliet_buitenbroedseizoen, VeerseMeerWinter, VeerseMeerZomer |
+| Normaal | normal | provider_class | Waterinfo display class, never a warning; seasonal windows: Haringvliet_broedseizoen, Haringvliet_buitenbroedseizoen, IJsselmeerWinter, IJsselmeerZomer, VeerseMeerWinter, VeerseMeerWinter2Zomer, VeerseMeerZomer, VeerseMeerZomer2Winter |
+| Normale waterstand | normal | provider_class | Waterinfo display class, never a warning; seasonal windows: Grevelingen_broedseizoen, Grevelingen_buitenbroedseizoen, IJsselmeerWinter, IJsselmeerZomer, VeerseMeerWinter, VeerseMeerWinter2Zomer, VeerseMeerZomer, VeerseMeerZomer2Winter |
+| Stormvloed | high | provider_class | Waterinfo display class, never a warning |
+| Verhoogd | elevated | provider_class | Waterinfo display class, never a warning |
+| Verhoogde waterstand | elevated | provider_class | Waterinfo display class, never a warning; seasonal windows: Grevelingen_broedseizoen, Grevelingen_buitenbroedseizoen, VeerseMeerWinter, VeerseMeerWinter2Zomer, VeerseMeerZomer, VeerseMeerZomer2Winter |
+| Verlaagd | low | provider_class | Waterinfo display class, never a warning; seasonal windows: IJsselmeerWinter, IJsselmeerZomer |
+| Verlaagde waterstand | low | provider_class | Waterinfo display class, never a warning; seasonal windows: Grevelingen_broedseizoen, Grevelingen_buitenbroedseizoen, IJsselmeerWinter, IJsselmeerZomer, VeerseMeerWinter, VeerseMeerWinter2Zomer, VeerseMeerZomer, VeerseMeerZomer2Winter |
+
+<!-- D30-addendum:end -->
+
 ---
 
 ## 5. Map stack facts
