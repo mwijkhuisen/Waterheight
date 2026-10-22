@@ -14,6 +14,7 @@ What P19a leaves (`PHASES.md` §54 "P19a as built").
 | KG-445 | design | **Sea and estuary polygons are not drawn:** coast is per station (D26); the basemap water shows the sea. | A reviewed decision to draw them | open |
 | KG-446 | perf | **The settled snapshot is 3.05× the P9 estimate:** 137,322 B plain (2026-10-19, 1,717 series) against about 45 KB; about 9 GB a year projected against the 5 GB static line (T9, 2026-10-22; `settledBytes` 973,317,100). P19a adds no snapshot field. | P20 owns the publisher budgets | open [U] |
 | KG-447 | owner | **A look on a phone and a desktop around one high tide** (Action D10). | [owner] after the deploy | open [U] |
+| KG-448 | a11y | **A lake's class is a colour on the map only:** its text (the reference gauge, the class, the spread) is in a popup that opens on a click, and P19a has no keyboard path to a lake (review round 1, CR-4). | P19b's lake panel | open |
 
 KG-439 stands: the static P9 forecast files carry no forecast surge; the future surge comes from the API.
 
