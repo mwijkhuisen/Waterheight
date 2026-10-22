@@ -10,12 +10,12 @@
 # Caddy 2.11.8 once its image is 7 days old; if none is by 2026-11-02, build Caddy from source like the three above.
 # #167 (owner, 2026-10-16) scans the third-party images of the compose files too (scripts/third-party-images.sh).
 # postgres moved to the 2026-10-07 rebuild of 18.6-trixie (OpenSSL and pcre2 fixed); its gosu 1.19 (go1.24.6, the
-# latest gosu) is accepted, since db and the restore drill start as 999:999 and never run it. cloudflared 2026.9.3's
-# x/net v0.58.0 and x/crypto v0.55.0 are accepted until the bump to 2026.10.1 (7 days old on 2026-10-22), which also
-# clears its stdlib go1.26.8 findings (the same rules as Caddy's); the libssl3t64 of its distroless base stays,
-# accepted, since cloudflared is a static Go binary that never loads it. GHSA-259r-337f-4rfw (klauspost/compress up to
-# v1.18.6, published 2026-10-20): restic, dbmate and go-pmtiles take v1.18.7 through GO_FIXES; cloudflared's v1.18.0
-# (every release up to 2026.10.3, so the 2026.10.1 bump keeps it) is accepted (owner, 2026-10-21, #192).
+# latest gosu) is accepted, since db and the restore drill start as 999:999 and never run it. cloudflared 2026.10.1
+# (#169: go1.27.2, x/net v0.61.0, x/crypto v0.58.0) cleared the x/net, x/crypto and stdlib go1.26.8 findings of
+# 2026.9.3, and their 7 rules are gone; the libssl3t64 of its distroless base stays, accepted, since cloudflared is a
+# static Go binary that never loads it. GHSA-259r-337f-4rfw (klauspost/compress up to v1.18.6, published 2026-10-20):
+# restic, dbmate and go-pmtiles take v1.18.7 through GO_FIXES; cloudflared's v1.18.0 (every release up to 2026.10.3)
+# is accepted (owner, 2026-10-21, #192).
 # Every rule names the vulnerability, the package, its version and type, so a new finding, or the same one in another
 # version, still fails the gate.
 #
@@ -49,7 +49,7 @@ ignore:
       name: golang.org/x/net
       version: v0.59.0
       type: go-module
-  # stdlib go1.26.8 (go-module) in web: caddy 2.11.7 (caddy:2.11.7-alpine); also in cloudflared 2026.9.3 (#167)
+  # stdlib go1.26.8 (go-module) in web: caddy 2.11.7 (caddy:2.11.7-alpine), until Caddy 2.11.8 or a source build (#131)
   - vulnerability: GO-2026-6603
     package:
       name: stdlib
@@ -104,43 +104,6 @@ ignore:
     package:
       name: stdlib
       version: go1.26.8
-      type: go-module
-  # golang.org/x/net v0.58.0 (go-module) in cloudflared: cloudflared 2026.9.3, until 2026.10.1 (#167)
-  - vulnerability: GO-2026-6603
-    package:
-      name: golang.org/x/net
-      version: v0.58.0
-      type: go-module
-  - vulnerability: GO-2026-6610
-    package:
-      name: golang.org/x/net
-      version: v0.58.0
-      type: go-module
-  - vulnerability: GO-2026-6611
-    package:
-      name: golang.org/x/net
-      version: v0.58.0
-      type: go-module
-  - vulnerability: GO-2026-6612
-    package:
-      name: golang.org/x/net
-      version: v0.58.0
-      type: go-module
-  - vulnerability: GO-2026-6617
-    package:
-      name: golang.org/x/net
-      version: v0.58.0
-      type: go-module
-  # golang.org/x/crypto v0.55.0 (go-module) in cloudflared: cloudflared 2026.9.3, until 2026.10.1 (#167)
-  - vulnerability: GO-2026-6354
-    package:
-      name: golang.org/x/crypto
-      version: v0.55.0
-      type: go-module
-  - vulnerability: GO-2026-6355
-    package:
-      name: golang.org/x/crypto
-      version: v0.55.0
       type: go-module
   # github.com/klauspost/compress v1.18.0 (go-module) in cloudflared: every release up to 2026.10.3 (#192)
   - vulnerability: GHSA-259r-337f-4rfw
