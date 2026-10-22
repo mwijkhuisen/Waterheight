@@ -59,12 +59,18 @@ jobs:
         run: scripts/healthz-smoke.sh
 
   integration:
-    name: integration
+    name: integration (${{ matrix.shard }}/3)
     runs-on: ubuntu-24.04
     # P9a's publisher tests (200-run properties, 20 SIGKILLed children) take the suite to about 12 minutes locally.
-    # P16b: every test database syncs the larger NL-1 registry (2,974 series, 2,311 NL-4 rows); the suite took 28
-    # minutes on the runner before the round-1 tests and was cut off at 30 after them.
-    timeout-minutes: 45
+    # P16b: every test database syncs the larger NL-1 registry (2,974 series, 2,311 NL-4 rows). The whole suite took
+    # 33.5 minutes on one runner (main, 39574e4; crash.int.test.ts alone 9.5), one file at a time because the roles are
+    # cluster-wide. Three runners, each with its own PostgreSQL, take a third of the files each (Vitest's --shard splits
+    # by a hash of the path, not by duration: about 12, 16 and 7 minutes from the per-file times of that run).
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     permissions:
       contents: read
     services:
@@ -80,6 +86,7 @@ jobs:
           --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 5s --health-retries 30
     env:
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/rws?sslmode=disable
+      SHARD: ${{ matrix.shard }}/3
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
@@ -96,7 +103,7 @@ jobs:
           scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
           echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
-      - run: pnpm test:integration
+      - run: pnpm test:integration --shard="$SHARD"
 
   dbmate:
     name: dbmate
@@ -285,8 +292,10 @@ jobs:
   hook:
     name: hook
     runs-on: ubuntu-24.04
-    # The install, pnpm check and the whole integration suite (about 17 minutes in CI since P9a's publisher tests).
-    timeout-minutes: 40
+    # The install, pnpm check and one integration file that builds a database through the hook's cluster (migrations,
+    # every role and view: proof of its PostgreSQL and DATABASE_URL). The whole suite runs in the integration job; running
+    # it here as well took 27 of this job's 28 minutes.
+    timeout-minutes: 20
     permissions:
       contents: read
     env:
@@ -311,14 +320,14 @@ jobs:
             exit 1
           fi
           grep -c . "$CLAUDE_ENV_FILE"
-      - name: pnpm check and test:integration in the hook's environment
+      - name: pnpm check and an integration file in the hook's environment
         run: |
           # shellcheck disable=SC1091
           source "$RUNNER_TEMP/claude.env"
           node --version
           pnpm --version
           pnpm check
-          pnpm test:integration
+          pnpm test:integration apps/server/test/db/audience.int.test.ts
 
   deploy:
     name: deploy
@@ -387,10 +396,27 @@ jobs:
   # P4b (issue #19): the real pages too, with Caddy proxying /api/v1/ to the e2e
   # api (apps/server/test/e2e/api.ts: a seeded throw-away database on the
   # service container, the real routes on a fixed clock) on the runner.
+  # One leg per browser engine: the 838 tests were about 65 test-minutes, 34 minutes on one runner's two workers (main,
+  # 39574e4), which software WebGL keeps CPU-bound. Every leg sets up the same api and Caddies (about 3 minutes); the
+  # Chromium leg also holds the Chromium-only projects, with Lighthouse and fps last and alone (LIGHTHOUSE_AFTER).
+  # test/e2e-pins.test.ts checks that every Playwright project is in exactly one leg.
   e2e:
-    name: e2e
+    name: e2e (${{ matrix.browser }})
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - browser: chromium
+            projects: chromium owner-chromium no-webgl2 cvd visual lighthouse fps
+            artifact: e2e-test-results
+          - browser: firefox
+            projects: firefox owner-firefox
+            artifact: e2e-test-results-firefox
+          - browser: webkit
+            projects: webkit owner-webkit
+            artifact: e2e-test-results-webkit
     permissions:
       contents: read
     services:
@@ -407,6 +433,7 @@ jobs:
       CADDY_IMAGE: caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
       PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/rws?sslmode=disable
+      E2E_PROJECTS: ${{ matrix.projects }}
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
@@ -523,34 +550,34 @@ jobs:
       # Headless Firefox finds no GL driver without an X display (FEATURE_FAILURE_WEBGL_EXHAUSTED_DRIVERS):
       # the image's own Xvfb gives it one, with Mesa's software renderer (ADR-0016). --init: xvfb-run waits for
       # Xvfb's ready signal, which a PID 1 never gets, so without an init process it hangs silently.
-      - name: Playwright (Chromium, Firefox, WebKit) in the pinned Playwright image
-        # P11a: about 160 more tests (the chain, the flow, the owner chain, fps) on top of the ~26 minutes before.
-        # P16b: 918 tests took 44.6 minutes on main (29084d1) and ran past 45 with the larger NL-1 registry (the table
-        # and the map hold 1,301 public stations): 60, the job 75.
-        timeout-minutes: 60
+      - name: Playwright (this leg's projects) in the pinned Playwright image
+        # The slowest leg's tests take about 13 minutes (the whole suite took 34 on one runner).
+        timeout-minutes: 30
         run: |
-          # P10a: every project (the owner one reaches the owner Caddy; WebKit does not resolve *.localhost itself).
+          # P10a: the owner projects reach the owner Caddy (WebKit does not resolve *.localhost itself).
           # The password reaches the container by name only (-e E2E_OWNER_PW takes it from the step's environment).
+          args=()
+          for p in $E2E_PROJECTS; do args+=(--project="$p"); done
           docker run --rm --init --network host --ipc=host \
             --add-host owner.localhost:127.0.0.1 \
             -e CI=true -e E2E_BASE_URL=https://localhost -e E2E_BASE_URL_LAUNCH=https://localhost:8444 \
             -e E2E_OWNER_URL=https://owner.localhost:8443 -e E2E_OWNER_PW \
             -v "$PWD:/work" -w /work/apps/web \
             "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
-            node_modules/.bin/playwright test -c e2e/playwright.config.ts
-      # CVD screenshots, Lighthouse reports and each failed test's context.
+            node_modules/.bin/playwright test -c e2e/playwright.config.ts "${args[@]}"
+      # CVD screenshots, Lighthouse reports and each failed test's context (the Chromium leg keeps the old name).
       - name: Upload the Playwright results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: e2e-test-results
+          name: ${{ matrix.artifact }}
           path: apps/web/test-results/
           if-no-files-found: ignore
           retention-days: 14
       # P11b (issue #26 B3): the baselines of the visual project. The first run has none: Playwright writes each one and
       # fails, so this step runs; the owner views every PNG before committing it (never a locally generated one).
       - name: Upload the visual baselines
-        if: failure()
+        if: failure() && matrix.browser == 'chromium'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: e2e-visual-baselines
