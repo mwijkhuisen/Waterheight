@@ -158,15 +158,15 @@ describe('web build', () => {
     for (const header of [
       'react@19.3.0 — MIT',
       'react-dom@19.3.0 — MIT',
-      'maplibre-gl@6.13.0 — BSD-3-Clause',
+      'maplibre-gl@6.14.0 — BSD-3-Clause',
       'pmtiles@4.5.0 — BSD-3-Clause',
-      'temporal-polyfill@1.0.5 — MIT',
+      'temporal-polyfill@1.0.6 — MIT',
       'echarts@6.1.0 — Apache-2.0',
       'zrender@6.1.0 — BSD-3-Clause',
       'tslib@2.3.0 — 0BSD',
-      '@tanstack/react-query@5.104.1 — MIT',
-      '@tanstack/query-core@5.104.1 — MIT',
-      'zod@4.6.5 — MIT',
+      '@tanstack/react-query@5.104.2 — MIT',
+      '@tanstack/query-core@5.104.2 — MIT',
+      'zod@4.6.7 — MIT',
     ])
       expect(text, header).toContain(`\n${header}\n`);
     expect(text).toContain('Permission is hereby granted'); // MIT

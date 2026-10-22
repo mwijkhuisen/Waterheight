@@ -62,14 +62,14 @@ describe('check-bom', () => {
 
   it('fails on a version range', () => {
     const dir = scratch();
-    edit(dir, 'packages/contracts/package.json', '"zod": "4.6.5"', '"zod": "^4.6.5"');
-    expect(checkBom(dir).join('\n')).toMatch(/zod@\^4\.6\.5: not an exact version/);
+    edit(dir, 'packages/contracts/package.json', '"zod": "4.6.7"', '"zod": "^4.6.7"');
+    expect(checkBom(dir).join('\n')).toMatch(/zod@\^4\.6\.7: not an exact version/);
   });
 
   it('fails when the bill of materials drifts from the pins', () => {
     const dir = scratch();
-    edit(dir, 'CLAUDE.md', '| vitest | npm | 5.0.3 |', '| vitest | npm | 5.0.4 |');
-    expect(checkBom(dir).join('\n')).toMatch(/vitest@5\.0\.3: the bill of materials says 5\.0\.4/);
+    edit(dir, 'CLAUDE.md', '| vitest | npm | 5.0.4 |', '| vitest | npm | 5.0.5 |');
+    expect(checkBom(dir).join('\n')).toMatch(/vitest@5\.0\.4: the bill of materials says 5\.0\.5/);
   });
 
   it('fails when a dependency has no row', () => {
