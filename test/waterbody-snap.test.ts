@@ -246,25 +246,32 @@ describe('the lakes of the P15 inventory (C2)', () => {
     }
   });
 
-  it('lists every body in reaches-<ver>.json with its public stations sorted and no D27 gauge (D-2)', SLOW, () => {
-    const file = reachesFile(placed, rivers, VERSION, osm);
-    expect(file.schema_version).toBe(2);
-    expect(file.waterbodies?.map((w) => w.id)).toEqual([...bodyBy.keys()].sort());
-    for (const w of file.waterbodies ?? []) {
-      const want = placed.stations
-        .filter((s) => s.public && s.waterbody === w.id)
-        .map((s) => s.id)
-        .sort();
-      expect(w.stations, w.id).toEqual(want);
-      expect(w.reference_station_id, w.id).toBeNull();
-    }
-    expect(file.mouths).toHaveLength(6);
-    expect(file.mouths).toEqual(
-      (rivers.mouths ?? [])
-        .map((m) => ({ id: m.id, river_id: m.river, waterbody_id: m.waterbody }))
-        .sort((a, b) => (a.id < b.id ? -1 : 1)),
-    );
-  });
+  it(
+    'lists every body in reaches-<ver>.json with its public stations sorted and its D27 reference gauge (O-3)',
+    SLOW,
+    () => {
+      const file = reachesFile(placed, rivers, VERSION, osm);
+      expect(file.schema_version).toBe(2);
+      expect(file.waterbodies?.map((w) => w.id)).toEqual([...bodyBy.keys()].sort());
+      for (const w of file.waterbodies ?? []) {
+        const want = placed.stations
+          .filter((s) => s.public && s.waterbody === w.id)
+          .map((s) => s.id)
+          .sort();
+        expect(w.stations, w.id).toEqual(want);
+        // the D27 reference (P18b) is the registry's own value, stored with the nl.rws. prefix, and one of the body's stations
+        const reference = bodyBy.get(w.id)?.reference_station ?? null;
+        expect(w.reference_station_id, w.id).toBe(reference);
+        if (reference !== null) expect(w.stations, `${w.id} lists its reference`).toContain(reference);
+      }
+      expect(file.mouths).toHaveLength(6);
+      expect(file.mouths).toEqual(
+        (rivers.mouths ?? [])
+          .map((m) => ({ id: m.id, river_id: m.river, waterbody_id: m.waterbody }))
+          .sort((a, b) => (a.id < b.id ? -1 : 1)),
+      );
+    },
+  );
 
   it('flags every reach of a tidal-zone river tidal in the reaches file (P17a)', SLOW, () => {
     const zone = new Set(rivers.rivers.filter((r) => r.tidal_zone).map((r) => r.id));
