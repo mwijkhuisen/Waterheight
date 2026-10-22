@@ -127,11 +127,11 @@ describe('check-bom', () => {
     edit(
       dir,
       'tools/geo/Dockerfile',
-      /^FROM node:26\.10\.0-trixie-slim@sha256:[0-9a-f]{64} AS build/m,
-      'FROM node:26.10.0-trixie-slim AS build',
+      /^FROM node:26\.11\.1-trixie-slim@sha256:[0-9a-f]{64} AS build/m,
+      'FROM node:26.11.1-trixie-slim AS build',
     );
     expect(checkBom(dir).join('\n')).toMatch(
-      /tools\/geo\/Dockerfile: base image node:26\.10\.0-trixie-slim has no installed image row/,
+      /tools\/geo\/Dockerfile: base image node:26\.11\.1-trixie-slim has no installed image row/,
     );
   });
 

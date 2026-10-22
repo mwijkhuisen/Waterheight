@@ -9,7 +9,7 @@
 # versions (each at least 7 days old). Back to the release binary once one clears
 # Grype. The Go stage from ARG GO_VERSION to ARG GO_FIXES is the same text as in
 # deploy/server/Dockerfile (test/check-bom.test.ts).
-FROM node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS restic
+FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS restic
 ARG GO_VERSION=1.27.2
 ADD --checksum=sha256:ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5 \
   https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz \
@@ -23,7 +23,7 @@ RUN apt-get update \
 # whatever the base image or a later layer sets; no toolchain download, no cgo.
 ENV PATH=/usr/local/go/bin:$PATH GOTOOLCHAIN=local CGO_ENABLED=0 GOFLAGS= \
   GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GOPRIVATE= GONOPROXY= GONOSUMDB= GOINSECURE=
-ARG GO_FIXES="golang.org/x/net@v0.60.0 golang.org/x/crypto@v0.57.0 golang.org/x/text@v0.42.0 google.golang.org/grpc@v1.83.2 go.opentelemetry.io/otel/sdk@v1.44.0"
+ARG GO_FIXES="golang.org/x/net@v0.60.0 golang.org/x/crypto@v0.57.0 golang.org/x/text@v0.42.0 google.golang.org/grpc@v1.83.2 go.opentelemetry.io/otel/sdk@v1.44.0 github.com/klauspost/compress@v1.18.7"
 ARG RESTIC_VERSION=0.19.1
 # The upstream release flags (helpers/build-release-binaries) without `selfupdate`:
 # the image never replaces its own binary.

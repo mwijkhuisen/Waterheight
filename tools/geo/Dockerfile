@@ -5,7 +5,7 @@
 # this image is never pushed, uploaded or released (ADR-0012), so nothing is distributed. libosmium (BSL-1.0) is
 # header-only. protozero, nlohmann-json, boost and the compression libraries come from Debian's signed apt
 # and are not version-pinned (risk register). The base is the BOM's node image, pinned by digest.
-FROM node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33 AS build
+FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS build
 ARG LIBOSMIUM_VERSION=2.23.1
 ARG LIBOSMIUM_SHA256=eb47d8163396c73870dbf27819dcadda0c56f0191935c4f8659d1e61b261552f
 ARG OSMIUM_VERSION=1.19.1
@@ -55,7 +55,7 @@ RUN /out/bin/osmium --version | grep -q "osmium version ${OSMIUM_VERSION}" \
 
 # Runtime: the binaries and their shared libraries only. 1.83.0 is the Boost that Debian trixie's
 # libboost-program-options-dev depends on (the check above fails the build if that ever moves).
-FROM node:26.10.0-trixie-slim@sha256:930557a230abacbc3f4fd9b8648abf8f4bee1e17cb72195dcdfb2f709bc85b33
+FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
     libboost-program-options1.83.0 libexpat1 libbz2-1.0 zlib1g liblz4-1 libsqlite3-0 libstdc++6 \

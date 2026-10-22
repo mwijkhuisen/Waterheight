@@ -13,7 +13,9 @@
 # latest gosu) is accepted, since db and the restore drill start as 999:999 and never run it. cloudflared 2026.9.3's
 # x/net v0.58.0 and x/crypto v0.55.0 are accepted until the bump to 2026.10.1 (7 days old on 2026-10-22), which also
 # clears its stdlib go1.26.8 findings (the same rules as Caddy's); the libssl3t64 of its distroless base stays,
-# accepted, since cloudflared is a static Go binary that never loads it.
+# accepted, since cloudflared is a static Go binary that never loads it. GHSA-259r-337f-4rfw (klauspost/compress up to
+# v1.18.6, published 2026-10-20): restic, dbmate and go-pmtiles take v1.18.7 through GO_FIXES; cloudflared's v1.18.0
+# (every release up to 2026.10.3, so the 2026.10.1 bump keeps it) is accepted (owner, 2026-10-21, #192).
 # Every rule names the vulnerability, the package, its version and type, so a new finding, or the same one in another
 # version, still fails the gate.
 #
@@ -139,6 +141,12 @@ ignore:
     package:
       name: golang.org/x/crypto
       version: v0.55.0
+      type: go-module
+  # github.com/klauspost/compress v1.18.0 (go-module) in cloudflared: every release up to 2026.10.3 (#192)
+  - vulnerability: GHSA-259r-337f-4rfw
+    package:
+      name: github.com/klauspost/compress
+      version: v1.18.0
       type: go-module
   # libssl3t64 3.5.7-1~deb13u2 (deb) in cloudflared: its distroless base, never loaded (CGO_ENABLED=0; #167).
   # Our server image has deb13u3; delete these once cloudflared's base moves past deb13u2.
