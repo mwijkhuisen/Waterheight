@@ -344,19 +344,34 @@ const WaterbodyRef = z
   .string()
   .max(80)
   .regex(/^[a-z]{2}\.[a-z0-9-]+\.[A-Za-z0-9._-]+$/);
+const BodySlug = z.string().regex(/^[a-z][a-z0-9-]{1,40}$/);
 const Waterbody = z.looseObject({
-  id: z.string().regex(/^[a-z][a-z0-9-]{1,40}$/),
+  id: BodySlug,
   kind: z.enum(WATERBODY_KINDS),
   name_nl: z.string().min(1).max(80),
   name_en: z.string().min(1).max(80),
   stations: z.array(WaterbodyRef).max(2_000),
   reference_station_id: WaterbodyRef.nullable(),
+  /**
+   * P19b (the downstream chain): the bodies this one flows into. Only the target is read, never the `via` evidence
+   * text; a bad entry is dropped, a body without the key has none.
+   */
+  outflows: lenient(z.looseObject({ to: BodySlug }), 20).catch([]),
 });
 const WaterbodiesFile = z.looseObject({ waterbodies: lenient(Waterbody, 500).catch([]) });
 export type WebWaterbody = z.infer<typeof Waterbody>;
 
 /** P19a: the water bodies (lenient: a bad row is dropped, never thrown). */
 export const waterbodiesOf = ({ file }: ReachesRead): WebWaterbody[] => WaterbodiesFile.parse(file).waterbodies;
+
+// P19b: the river mouths of the same file (schema 2): the water body each river ends in. Lenient like the bodies: a
+// bad row is dropped, a schema 1 file (no key) has none.
+const Mouth = z.looseObject({ id: BodySlug, river_id: z.string().max(60), waterbody_id: BodySlug });
+const MouthsFile = z.looseObject({ mouths: lenient(Mouth, 100).catch([]) });
+export type WebMouth = z.infer<typeof Mouth>;
+
+/** P19b: the river mouths (lenient: a bad row is dropped, never thrown). */
+export const mouthsOf = ({ file }: ReachesRead): WebMouth[] => MouthsFile.parse(file).mouths;
 
 export const loadReachTravel = async (f: Fetcher, signal?: AbortSignal, c: Contracts = PUBLIC_CONTRACTS) =>
   travelOf(await loadReachesFile(f, signal), c);

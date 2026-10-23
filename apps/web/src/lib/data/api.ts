@@ -18,6 +18,7 @@ import {
   loadStatusMode,
   loadStatusPage,
   loadWarnings,
+  mouthsOf,
   type ReachesRead,
   riversOf,
   travelOf,
@@ -151,6 +152,9 @@ export const useReachGraph = () => useReachesFile(graphOf);
 
 /** P19a: the water bodies of the same file (groups, lake levels, lake names); lenient, never an error. */
 export const useWaterbodies = () => useReachesFile(waterbodiesOf);
+
+/** P19b: the river mouths of the same file (the downstream chain's exits); lenient, never an error. */
+export const useMouths = () => useReachesFile(mouthsOf);
 
 /**
  * `?river=` once the river list has answered (plan C17): kept while it loads, dropped when the list failed or does

@@ -545,6 +545,7 @@ function Viewer({ locale }: { locale: Locale }) {
                 displayStart={range.start}
                 chartAt={settled ?? t}
                 stations={list}
+                allStations={sorted}
                 focus={focusPanel}
                 onClose={close}
                 onSelect={open}

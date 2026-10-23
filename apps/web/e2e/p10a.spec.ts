@@ -439,7 +439,8 @@ test('the German area name and the class of a gauge stay raw beside our translat
   // P10e: the station list is gone, so no option holds the hostile station name any more)
   const hosts = await textHosts(page, 'onerror=alert(1)');
   expect(hosts).toContain('dd');
-  expect(hosts.filter((h) => h !== 'dd' && h !== 'p')).toEqual([]);
+  // P19b: the Rhine gauge's downstream chain names the hostile station (prepare-tiles.ts: rhine.57 now ends at it), as a span.
+  expect(hosts.filter((h) => h !== 'dd' && h !== 'p' && h !== 'span')).toEqual([]);
   await expectInert(page, s);
   await finish(page, s);
 });

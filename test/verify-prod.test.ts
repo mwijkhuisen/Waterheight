@@ -82,6 +82,7 @@ import {
   checkReplay,
   checkRiversAttribution,
   checkRiversDownload,
+  checkRiversLayers,
   checkRiversManifest,
   checkRiversReaches,
   checkRiversTiles,
@@ -158,9 +159,12 @@ import {
   PMTILES_MAGIC,
   PROFILES,
   type Profile,
+  pmtilesLayerIds,
+  pmtilesMetadataSpan,
   pngSize,
   RERENDER_MAX_S,
   RIVERS_DOWNLOAD_RANGE,
+  RIVERS_LAYERS,
   RUNTIME_CONFIG_KEYS,
   reachIds,
   readApi,
@@ -838,6 +842,7 @@ describe('freshness, soak and capacity', () => {
       'map assets',
       'rivers manifest',
       'rivers tiles',
+      'rivers layers',
       'rivers reaches',
       'rivers download',
       'rivers attribution',
@@ -4388,8 +4393,113 @@ describe('verify-prod: the rivers (P6b)', () => {
     expect(checkOwnerLeak({ '/data/v1/rivers/reaches': body.replace('Rhine', OWNER_CANARY) }, terms).ok).toBe(false);
   });
 
-  it('the --dry-run list names the five checks once each', () => {
-    for (const name of ['rivers manifest', 'rivers tiles', 'rivers reaches', 'rivers download', 'rivers attribution'])
+  describe('rivers layers (P19b): the PMTiles header, then the metadata', () => {
+    const file = readFileSync(join(repoRoot, 'tools/geo/fixtures/rivers-fixture.pmtiles'));
+    const header = file.subarray(0, 127);
+    const mm = riversManifestDoc();
+    mm.current.tiles.bytes = file.length;
+    const path = `/tiles/${mm.current.tiles.file}`;
+    const sent = { ...expected, 'x-robots-tag': 'noindex' };
+    const span = pmtilesMetadataSpan(header, file.length);
+    if (typeof span === 'string') throw new Error(span);
+    const metaBytes = file.subarray(span.offset, span.offset + span.length);
+    const headPage = (over: Partial<Page> = {}, bytes: Buffer = header): Page => ({
+      status: 206,
+      headers: { ...sent, 'content-range': `bytes 0-126/${file.length}` },
+      body: bytes.toString('latin1'),
+      bytes,
+      ...over,
+    });
+    const metaPage = (over: Partial<Page> = {}, bytes: Buffer = metaBytes): Page => ({
+      status: 206,
+      headers: { ...sent, 'content-range': `bytes ${span.offset}-${span.offset + span.length - 1}/${file.length}` },
+      body: bytes.toString('latin1'),
+      bytes,
+      ...over,
+    });
+    const run = (head: Page | string = headPage(), meta: Page | string = metaPage()) =>
+      checkRiversLayers(mm, path, head, meta, expected, 'direct');
+    const gzJson = (doc: unknown) => gzipSync(Buffer.from(JSON.stringify(doc)));
+
+    it('reads the real fixture: offset 9329, length 3227, gzip, the four layers', () => {
+      expect(span).toEqual({ offset: 9329, length: 3227, compression: 2 });
+      expect(pmtilesLayerIds(metaBytes, 2)).toEqual(['canals', 'reach_bins', 'rivers', 'waterbodies']);
+      expect(RIVERS_LAYERS).toHaveLength(4);
+      expect(run()).toMatchObject({ check: 'rivers layers', ok: true });
+    });
+
+    it('refuses a bad magic, an oversize or empty length, offsets that do not fit and an unknown compression', () => {
+      const patch = (f: (b: Buffer) => void) => {
+        const b = Buffer.from(header);
+        f(b);
+        return b;
+      };
+      expect(pmtilesMetadataSpan(header.subarray(0, 100))).toMatch(/^header 100 bytes/);
+      expect(pmtilesMetadataSpan(patch((b) => b.write('NotTiles', 0, 'latin1')))).toBe('not a PMTiles v3 file');
+      expect(pmtilesMetadataSpan(patch((b) => b.writeBigUInt64LE(1024n * 1024n + 1n, 32)))).toMatch(/^metadata length/);
+      expect(pmtilesMetadataSpan(patch((b) => b.writeBigUInt64LE(0n, 32)))).toMatch(/^metadata length/);
+      expect(
+        pmtilesMetadataSpan(
+          patch((b) => b.writeBigUInt64LE(2n ** 63n, 24)),
+          file.length,
+        ),
+      ).toMatch(/does not fit/);
+      expect(pmtilesMetadataSpan(header, 9329 + 3226)).toMatch(/does not fit/);
+      expect(pmtilesMetadataSpan(patch((b) => b.writeUInt8(3, 97)))).toBe(
+        'internal compression 3, want 1 (none) or 2 (gzip)',
+      );
+      expect(pmtilesMetadataSpan(patch((b) => b.writeUInt8(1, 97)))).toMatchObject({ compression: 1 });
+      expect(
+        run(
+          headPage(
+            {},
+            patch((b) => b.writeUInt8(3, 97)),
+          ),
+        ).ok,
+      ).toBe(false);
+    });
+
+    it('refuses a missing layer, metadata that is not JSON and a metadata that is not gzip', () => {
+      const three = gzJson({ vector_layers: [{ id: 'rivers' }, { id: 'reach_bins' }, { id: 'waterbodies' }] });
+      const r = run(headPage(), metaPage({}, three));
+      expect(r.ok).toBe(false);
+      expect(r.detail).toContain('missing layers canals');
+      expect(pmtilesLayerIds(Buffer.from('plain'), 2)).toBe('metadata is not (gzipped) JSON of at most 8 MiB');
+      // SR-2: a small blob that expands past 8 MiB is refused, not inflated.
+      expect(pmtilesLayerIds(gzipSync(Buffer.alloc(9 * 1024 * 1024, 0x20)), 2)).toBe(
+        'metadata is not (gzipped) JSON of at most 8 MiB',
+      );
+      expect(pmtilesLayerIds(gzJson({}), 2)).toBe('metadata has no vector_layers');
+      expect(pmtilesLayerIds(Buffer.from('{"vector_layers":[{"id":"canals"}]}'), 1)).toEqual(['canals']);
+    });
+
+    it('refuses the wrong status, missing or extra headers, a wrong Content-Range and no answer', () => {
+      expect(run(headPage({ status: 200 })).ok).toBe(false);
+      expect(run(headPage(), metaPage({ status: 200 })).ok).toBe(false);
+      const { 'x-robots-tag': _noindex, ...noRobots } = sent;
+      expect(run(headPage({ headers: { ...noRobots, 'content-range': 'x' } })).detail).toContain('x-robots-tag');
+      expect(run(headPage(), metaPage({ headers: { ...sent, 'content-range': 'bytes 0-1/2' } })).detail).toContain(
+        'content-range',
+      );
+      expect(
+        run(headPage(), metaPage({ headers: { ...metaPage().headers, 'access-control-allow-origin': '*' } })).ok,
+      ).toBe(false);
+      expect(run('timeout').detail).toBe('timeout');
+      expect(run(headPage(), 'timeout').detail).toBe('timeout');
+      expect(checkRiversLayers(mm, path, undefined, undefined, expected).detail).toBe('not asked');
+      expect(checkRiversLayers(undefined, path, headPage(), metaPage(), expected).detail).toBe('no valid manifest');
+    });
+  });
+
+  it('the --dry-run list names the six checks once each', () => {
+    for (const name of [
+      'rivers manifest',
+      'rivers tiles',
+      'rivers layers',
+      'rivers reaches',
+      'rivers download',
+      'rivers attribution',
+    ])
       expect(
         CHECKS.filter((c) => c.startsWith(`${name}:`)),
         name,

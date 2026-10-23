@@ -2,11 +2,17 @@ import type { SeriesForecast, StationRecent } from '@rws/contracts';
 import { formatLocal } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
+import { SURGE_COLOURS } from '../legend/palette.ts';
 
 // The pure part of the station chart (P10a T6): points and one forecast run with its band (the references are in
 // thresholds.ts since P10d). Values arrive in canonical units; `conv` brings one to the native unit the page shows. Nothing here draws.
 
 export type Pt = [number, number | null];
+
+/** P19b: the tide on the chart. The astronomical line is dark; the surge band takes the map's PuOr (SURGE_COLOURS): [5] above 0, [1] below. */
+export const ASTRO_COLOUR = '#222222';
+export const SURGE_UP_COLOUR = SURGE_COLOURS[5];
+export const SURGE_DOWN_COLOUR = SURGE_COLOURS[1];
 type RecentSeries = StationRecent['series'][number];
 type RecentRun = NonNullable<RecentSeries['run']>;
 type AsofRun = NonNullable<SeriesForecast['run']>;

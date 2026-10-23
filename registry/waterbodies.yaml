@@ -27,6 +27,8 @@
 version: 1
 waterbodies:
   - id: ijsselmeer
+    # outflows (P19b): Wikidata Q4121 has no P403 or P201 (checked 2026-10-23), so the source is Rijkswaterstaat's
+    # Afsluitdijk page: the discharge sluices at Den Oever and Kornwerderzand let the lake out into the Waddenzee.
     kind: lake
     name_nl: "IJsselmeer"
     name_en: "IJsselmeer"
@@ -35,11 +37,13 @@ waterbodies:
     names:
       NL-1: ["IJsselmeer"]
     managed_level: true
-    outflows: []
+    outflows:
+      - {to: waddenzee, via: "discharge sluices in the Afsluitdijk (Rijkswaterstaat)"}
     reference_station: nl.rws.krabbersgat.ijsselmeer
     evidence:
       - https://www.wikidata.org/wiki/Q4121
       - https://www.openstreetmap.org/relation/945096
+      - https://www.rijkswaterstaat.nl/water/projectenoverzicht/afsluitdijk
   - id: markermeer
     # Wikidata P201 names Q119314, which this lookup did not resolve: no outflow written [U].
     kind: lake
