@@ -4,7 +4,7 @@ The owner signs this page before the public launch (PHASES §6.2 E4, issue #27 P
 
 How to read it: **[CI]** items are proven by an offline test, **[owner]** items need your access or judgement. Output that names owner sources or devices (`scripts/verify-owner.sh`, `wg show`) stays in your private notes: post only counts (review SR-5). Nothing in this page may hold an owner-audience value (invariant 11).
 
-Machine-checked by `test/launch-checklist.test.ts`: tables (a) and (c) below equal the registry, so they fail CI until they are updated in the same commit as a registry change (the DE-2 flip is one).
+Machine-checked by `test/launch-checklist.test.ts`: tables (a) and (c) below equal the registry, so they fail CI until they are updated in the same commit as a registry change (the DE-2 flip is one). Table (d) of section 8 equals the NL-1 specs of `registry/capture.yaml` in the same way.
 
 ## 1. Licences and attribution
 
@@ -122,3 +122,39 @@ Open boxes accepted: ______________________________________________
 I approve the public launch of this site.
 
 Owner: ______________________  Date: ____-__-__
+
+## 8. Roadmap 2 release addendum (E6)
+
+The owner signs this section before the roadmap 2 release is called live (PHASES §6.2 E6, issue #68, P20b). **It ships unsigned**, like the rest of this page; section 7 stays as it is and is the launch sign-off of E4. The release adds the Rijkswaterstaat tide and wide-network specs, the lake, coast and sea layers, the water-body tiles and the Method page's list of the uncovered water boards (D32). Water boards stay out: NL-5 and NL-7 to NL-26 are `off` sources with no capture spec until a board answers (P21, `registry/uncovered.yaml`). Output that names owner sources or devices stays in your private notes (review SR-5).
+
+### (d) New NL-1 specs: audience and channels
+
+NL-1 is `public`, licence `cc0`, with all four channels (table (a)); every spec of the source inherits that and none narrows it. `D/A/B/H` as in table (a). The cadence is in UTC (`registry/capture.yaml`; `docs/runbooks/tide.md` §1 has the crons and the request counts). The structure-internal locations of NL-1 are `off` rows of the station registry and appear in no spec.
+
+| Spec | Source | Cadence | Does | Audience | D/A/B/H | Licence |
+|---|---|---|---|---|---|---|
+| nl-1-obs-sea | NL-1 | every 10 min | measured H of the coast, Scheldt and delta gauges | public | DABH | cc0 |
+| nl-1-obs-wide | NL-1 | every 30 min | offshore, delta and river H and Q | public | DABH | cc0 |
+| nl-1-obs-slow | NL-1 | hourly | lakes and canals, H and Q | public | DABH | cc0 |
+| nl-1-obs-sea-catchup | NL-1 | one-shot | catch-up of the sea tier back to the data epoch, 00:00 to 05:00 UTC | public | DABH | cc0 |
+| nl-1-obs-wide-catchup | NL-1 | one-shot | catch-up of the wide tier, 00:00 to 05:00 UTC | public | DABH | cc0 |
+| nl-1-obs-slow-catchup | NL-1 | one-shot | catch-up of the slow tier, 00:00 to 05:00 UTC | public | DABH | cc0 |
+| nl-1-hwlw | NL-1 | daily | measured high and low water | public | DABH | cc0 |
+| nl-1-astro | NL-1 | monthly | astronomical tide, 400 days ahead | public | DABH | cc0 |
+| nl-1-hwlw-astro | NL-1 | monthly | astronomical high and low water and RWS's own type labels | public | DABH | cc0 |
+
+### Checks
+
+- [ ] [CI] [owner] Table (d) equals the NL-1 specs of `registry/capture.yaml` (`test/launch-checklist.test.ts`: every row exists with its source, audience, channels and licence equal NL-1's, and a new `nl-1-*` spec fails CI until it is in the table). I read table (d) against the NL-1 CC0 terms (catalogue §0.7) and found no channel wider than the licence.
+- [ ] [CI] [agent-prod] [owner] No structure-internal or `off` gauge is in a public file: the registry tests (`test/registry-nl1.test.ts`) pass, `scripts/verify-prod.sh <domain>` check `owner leak` is PASS with the 18 NL-1 `off` ids among its terms, and I looked once at `https://<domain>/data/v1/stations.json` and found none of them.
+- [ ] [CI] [owner] The Rijkswaterstaat budget is within D25: `apps/server/test/capture/budget.test.ts` holds 1,000 requests in any 60 minutes with the catch-ups, and C14 is answered or past its go/no-go date (`docs/permissions.md`, +10 working days after sent) with the fallback applied.
+- [ ] [CI] [owner] The owner channel is still clean: the canary tests pass (the owner canary appears in owner outputs only), `owner leak` is PASS, and `scripts/verify-owner.sh <domain>` on an owner device shows no FAIL. Post only the counts.
+- [ ] [CI] [agent-prod] [owner] The Method page lists the 21 uncovered water boards (D32): `test/web-method-uncovered.test.ts` passes, `scripts/verify-prod.sh <domain>` check `method uncovered` is PASS, and I read `/methode` and `/en/method` and found the list complete in both languages.
+- [ ] [agent-prod] `scripts/verify-prod.sh <domain> --edge cloudflare` passes every `ROADMAP2_CHECKS` entry (the `roadmap 2 (P20b):` block of `--dry-run`; `scripts/verify-prod.ts`). The live-data ones need production data: an interval after two days of runs, `astro horizon` after the first monthly run, `catch-up NL-1` after the catch-up; the CI gate (`deploy/tests/e2e/verify-gate.sh`) requires only the offline ones. [`tide`](runbooks/tide.md) §9 has the split.
+- [ ] [owner] A9 is done (the bucket and disk headroom of [`docs/capacity.md`](capacity.md)), and the k6 production burst ran in a quiet hour with its output attached to #68 (section 3).
+- [ ] [owner] **E7**: the notice to Rijkswaterstaat that the wider map is live is sent ([`e7-rws-roadmap-2-live`](legal/requests/e7-rws-roadmap-2-live.md)), after this section is signed; date: ____-__-__.
+- [ ] [owner] The open known gaps of the release (KG-472 to KG-475 and any other the PR lists) are accepted, or each is written below with its reason.
+
+Open boxes accepted: ______________________________________________
+
+Signed (owner, E6): ______________________  Date: ____-__-__
