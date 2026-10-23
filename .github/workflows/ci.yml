@@ -202,7 +202,7 @@ jobs:
       - name: Q1 and the API (/snapshot cold/warm, /series 14 d raw) on 3,000 series × 60 days, as rws_api, and the publisher (budgets B1 to B4) (hard gate)
         run: node scripts/bench-q1.ts --series 3000
 
-  # Owner decision 2026-10-23 ("gate 3,000, report 4,000", KG-462): the timing limits at 4,000 series are reported, B1 to B4 and every correctness check gate.
+  # Owner decisions 2026-10-23 ("gate 3,000, report 4,000", KG-462; after the round-1 review the Q1 median is reported too): the correctness checks and B1–B4 are asserted, the Q1, tide and API timing limits are reported.
   bench-4000:
     name: bench-4000
     runs-on: ubuntu-24.04
@@ -238,7 +238,7 @@ jobs:
           scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
           echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
-      - name: 'Q1 and the API and the publisher on 4,000 series × 60 days: Q1 and B1–B4 asserted, the tide and API timing limits reported (owner, P20a)'
+      - name: 'Q1 and the API and the publisher on 4,000 series × 60 days: the correctness checks and B1–B4 asserted, the Q1, tide and API timing limits reported (owner, P20a)'
         run: node scripts/bench-q1.ts --series 4000 --report-timings
 
   # Its own job (P8a, C8): the seed is 25 M forecast values, and an aggregate that did not need it would gate nothing.

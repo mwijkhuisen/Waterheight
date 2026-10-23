@@ -16,8 +16,8 @@ import { createTestDb } from '../apps/server/test/db/testdb.ts';
 import { BUCKET_MS as BUCKET_STEP_MS, dayOf, isSettled } from '../packages/contracts/src/index.ts';
 
 // The Q1 benchmark of issue #17: "all series at T" on the synthetic seed of
-// 4,000 series × 60 days × 15 min (23 M rows; P20a, issue #68: 3,000 until then, roughly twice the public series
-// of roadmap 2) must run in < 50 ms. It runs exactly as production does: a real rws_api login (read-only, 2 s
+// 4,000 series × 60 days × 15 min (23 M rows; the tidal 5 % are captured every 10 min, as NL-1 sea series are; P20a, issue
+// #68: 3,000 until then, roughly twice the public series of roadmap 2) must run in < 50 ms. It runs exactly as production does: a real rws_api login (read-only, 2 s
 // statement timeout), through the public at-T function of audience.ts (A§8 Q1).
 //
 // It then benchmarks the API on the same seed (issue #19): "/snapshot p95 is
@@ -36,9 +36,10 @@ import { BUCKET_MS as BUCKET_STEP_MS, dayOf, isSettled } from '../packages/contr
 //
 //   DATABASE_URL=<superuser of a throw-away PostgreSQL 18> node scripts/bench-q1.ts [--series N] [--days N] [--report-timings]
 //
-// --report-timings (CI job bench-4000, owner decision 2026-10-23, "gate 3,000, report 4,000"): the TIMING limits (the two tide
-// reads, the API p95s and the tidal /series) are printed as `bench-q1: REPORT: ...` and do not fail the run.
-// The Q1 median ("all series at T" under 50 ms), every correctness check and the publisher budgets B1 to B4 stay hard. Without the flag every limit fails the run, as before.
+// --report-timings (CI job bench-4000, owner decisions 2026-10-23, "gate 3,000, report 4,000" and, after the round-1 review, the Q1 median too):
+// the TIMING limits (the Q1 median, the two tide reads, the API p95s and the tidal /series) are printed as
+// `bench-q1: REPORT: ...` and do not fail the run. Every correctness check and the publisher budgets B1 to B4 stay hard.
+// Without the flag every limit fails the run, as before.
 
 function intFlag(name: string, fallback: number): number {
   const i = process.argv.indexOf(name);
@@ -337,15 +338,19 @@ async function publisherPhase(): Promise<boolean> {
         `publisher ${label}: ${z.plain} B plain, ${z.gz} B gzip, ${z.zst} B zstd${limit === undefined ? '' : ` (gzip budget ${limit} B)`}`,
       );
     line('B2 latest.json', latest, B2_LATEST_GZ_BYTES);
-    line(`B3 recent snapshot ${recentRel}`, recent, B3_SNAPSHOT_GZ_BYTES);
-    line(`B3 settled snapshot ${settledRel}`, settled, B3_SNAPSHOT_GZ_BYTES);
+    line(`B3 recent snapshot ${recentRel} (first written)`, recent);
+    line(`B3 settled snapshot ${settledRel} (first written)`, settled);
+    // B3 is the largest .gz over EVERY recent and settled snapshot file the cold cycle wrote, not the first.
+    const snapshots = written.filter((r) => r.startsWith('recent/') || r.startsWith('settled/'));
+    const gzOf = (rel: string) => statSync(join(root, 'v1', `${rel}.gz`)).size;
+    const biggest = snapshots.reduce((m, rel) => (gzOf(rel) > gzOf(m) ? rel : m), recentRel);
+    console.log(
+      `publisher B3 largest of ${snapshots.length} recent and settled snapshot files: ${biggest}, ${gzOf(biggest)} B gzip (gzip budget ${B3_SNAPSHOT_GZ_BYTES} B)`,
+    );
     if (latest.gz > B2_LATEST_GZ_BYTES)
       breach(`publisher B2: latest.json ${latest.gz} B gzip is over ${B2_LATEST_GZ_BYTES} B`);
-    for (const [rel, z] of [
-      [recentRel, recent],
-      [settledRel, settled],
-    ] as const)
-      if (z.gz > B3_SNAPSHOT_GZ_BYTES) breach(`publisher B3: ${rel} ${z.gz} B gzip is over ${B3_SNAPSHOT_GZ_BYTES} B`);
+    if (gzOf(biggest) > B3_SNAPSHOT_GZ_BYTES)
+      breach(`publisher B3: ${biggest} ${gzOf(biggest)} B gzip is over ${B3_SNAPSHOT_GZ_BYTES} B`);
     const year = 144 * (settled.plain + settled.gz + settled.zst) * 365;
     console.log(
       `publisher projection: settled snapshots a year = 144 × (${settled.plain} + ${settled.gz} + ${settled.zst}) B × 365 = ${(year / 1e9).toFixed(2)} GB, ${(year / STATIC_LINE_BYTES).toFixed(2)} × the A§11.4 static line of ${STATIC_LINE_BYTES / 1e9} GB (frames, stations and logs not counted)`,
@@ -438,21 +443,29 @@ try {
   await t.admin.query(
     `INSERT INTO series (station_id, source_id, quantity, value_kind, provider_key, native_unit, to_canonical, datum,
                          native_step, expected_step, staleness_limit, role)
-     SELECT 'nl.bench.' || g, 'NL-1', 'H', 'level', 'k' || g, 'cm', 1, 'NAP', '15 min', '15 min',
+     SELECT 'nl.bench.' || g, 'NL-1', 'H', 'level', 'k' || g, 'cm', 1, 'NAP',
+            CASE WHEN g <= $2 THEN interval '10 min' ELSE interval '15 min' END,
+            CASE WHEN g <= $2 THEN interval '10 min' ELSE interval '15 min' END,
             CASE WHEN g <= $2 THEN interval '1 hour' WHEN g % 3 = 0 THEN interval '25 hours' ELSE interval '45 min' END, 'primary'
      FROM generate_series(1, $1) g`,
     [SERIES, TIDAL],
   );
   await t.admin.query(`SELECT ensure_partitions(now() - make_interval(days => $1), now())`, [DAYS + 1]);
-  // Time-major, as the loader inserts: every series at each step.
-  await t.admin.query(
-    `INSERT INTO obs (series_id, ts, value, qc, batch_id)
-     SELECT s.id, ts, (random() * 1000)::real, 1, 1
-     FROM generate_series(date_bin('15 min', now(), timestamptz '2000-01-01 00:00:00+00') - make_interval(days => $1),
-                          date_bin('15 min', now(), timestamptz '2000-01-01 00:00:00+00'), interval '15 min') ts
-     CROSS JOIN series s`,
-    [DAYS],
-  );
+  // Time-major, as the loader inserts: every series at each step. The tidal series (the first TIDAL) are captured every
+  // 10 min, as the NL-1 sea series are, so that every one of their values has an astronomical row at exactly its ts
+  // (the snapshot's surge is value - astro at that instant; CR-4); the rest every 15 min.
+  for (const [step, tidal] of [
+    ['15 min', false],
+    ['10 min', true],
+  ] as const)
+    await t.admin.query(
+      `INSERT INTO obs (series_id, ts, value, qc, batch_id)
+       SELECT s.id, ts, (random() * 1000)::real, 1, 1
+       FROM generate_series(date_bin('${step}', now(), timestamptz '2000-01-01 00:00:00+00') - make_interval(days => $1),
+                            date_bin('${step}', now(), timestamptz '2000-01-01 00:00:00+00'), interval '${step}') ts
+       CROSS JOIN (SELECT id FROM series ORDER BY id ${tidal ? 'LIMIT $2' : 'OFFSET $2'}) s`,
+      [DAYS, TIDAL],
+    );
   // P18a: the astronomical curve every 10 min, and the astronomical and measured high and low waters 4 a day
   // (alternating, 6 h apart, the measured ones 7 min late), over the same days, for the tidal series.
   await t.admin.query(
@@ -621,8 +634,7 @@ try {
     failed = true;
   }
   if (median >= LIMIT_MS) {
-    console.error(`bench-q1: FAIL: median ${median.toFixed(1)} ms is not under ${LIMIT_MS} ms`);
-    failed = true;
+    if (timingBreach(`Q1 median ${median.toFixed(1)} ms is not under ${LIMIT_MS} ms`)) failed = true;
   }
 
   // The API on the same seed. The display window starts at the seed's first
@@ -702,15 +714,19 @@ try {
         if (timingBreach(`API ${label}: p95 ${p95.toFixed(1)} ms is not under ${limit} ms`)) failed = true;
       }
     };
+    const tidalIds = new Set(ids.slice(0, TIDAL));
     const snapshotProblem = (body: string) => {
-      const values: { state: string }[] = JSON.parse(body).values;
+      const values: { series: number; state: string; tide?: { surge: number | null } }[] = JSON.parse(body).values;
       if (values.length !== SERIES) return `${values.length} values, expected ${SERIES}`;
+      // CR-4: every tidal value carries its tide, with a surge (the tidal obs are on the astro grid).
+      const noSurge = values.filter((v) => tidalIds.has(v.series) && typeof v.tide?.surge !== 'number').length;
+      if (noSurge > 0) return `${noSurge} of ${TIDAL} tidal values have no tide.surge`;
       // The P7b seed must reach the classifier: some values carry a state.
       return values.some((v) => v.state !== 'no_ref') ? undefined : 'no value has a state';
     };
     const seriesProblem = (body: string) => {
       const s = JSON.parse(body);
-      const n = SPAN_DAYS * 96; // 15-minute steps, from and to on the grid
+      const n = SPAN_DAYS * (tidalIds.has(s.id) ? 144 : 96); // 10-minute (tidal) or 15-minute steps, from and to on the grid
       return s.points.length === n && !s.truncated ? undefined : `${s.points.length} points, expected ${n}`;
     };
 
@@ -756,6 +772,10 @@ try {
     console.log(
       `/snapshot body: ${withTide} bytes with tide, ${without} bytes without (${TIDAL} tidal series, +${withTide - without} bytes)`,
     );
+    if (withTide <= without) {
+      console.error('bench-q1: FAIL: the /snapshot body with tide rows is not larger than without them');
+      failed = true;
+    }
   } finally {
     await db.close();
   }
