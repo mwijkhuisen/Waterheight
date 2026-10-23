@@ -10,16 +10,16 @@ What P19b leaves (`PHASES.md` §54 "P19b as built"; ids renumber on merge).
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-449 | design | **The forecast surge is a number at t, with no curve** (owner O-3): the snapshot carries it for one instant; the static forecast files carry none (KG-439). | A decision to read a forecast surge series | open |
-| KG-450 | resilience | **A brownout drops the chart's tide and the high and low water table:** both come from raw `/series`, which is not requested in a brownout. | Accepted; a static tide source if wanted | accepted |
-| KG-451 | design | **The day's high and low water table is incomplete for a future day:** it holds the measured and astronomical extremes up to now + 10 min plus at most one next astronomical extreme per high/low from the snapshot (`pub_tide_at`), so a future day's later extremes are missing. | A range read of astronomical extremes | open |
-| KG-452 | content | **"Haringvliet sluices" reads "Haringvliet → Noordzee":** the reaches file has no structure names. | Structure names in the reaches file | open |
-| KG-453 | design | **The delta exits are a set, not a path:** the tidal zone has no flow direction (D31), so the chain lists the exits once. | Accepted by D31 | accepted |
-| KG-454 | design | **Downstream rows have no travel times** (only the order); the upstream chain has them. | A downstream travel-time model | open |
-| KG-455 | agent-prod | **The IJsselmeer → Waddenzee outflow reaches production after the next `geo.yml` release and `rws-rivers-refresh`;** until then the IJssel chain ends at the IJsselmeer. | [agent-prod] after the release | open |
-| KG-456 | owner | **The gauges of `registry/uncovered.yaml` are a proposal:** the picks rest on coordinates and station names (weak: HHNK, Rijnland, Delfland; Breda on the Mark is an assumption). | [owner] review of the file | open [U] |
-| KG-457 | owner | **The IJsselmeer outflow evidence** (the Rijkswaterstaat Afsluitdijk page, `https://www.rijkswaterstaat.nl/water/projectenoverzicht/afsluitdijk`) **was not fetched;** Wikidata (Q4121) gave no outflow. | [owner] check of the page | open [U] |
-| KG-458 | a11y | **A reference gauge hidden as stale (> 25 h) gives "no reference" and no classes** in the lake section, as in the map popup. | A decision to show a stale reference | open |
+| KG-452 | design | **The forecast surge is a number at t, with no curve** (owner O-3): the snapshot carries it for one instant; the static forecast files carry none (KG-439). | A decision to read a forecast surge series | open |
+| KG-453 | resilience | **A brownout drops the chart's tide and the high and low water table:** both come from raw `/series`, which is not requested in a brownout. | Accepted; a static tide source if wanted | accepted |
+| KG-454 | design | **The day's high and low water table is incomplete for a future day:** it holds the measured and astronomical extremes up to now + 10 min plus at most one next astronomical extreme per high/low from the snapshot (`pub_tide_at`), so a future day's later extremes are missing. | A range read of astronomical extremes | open |
+| KG-455 | content | **"Haringvliet sluices" reads "Haringvliet → Noordzee":** the reaches file has no structure names. | Structure names in the reaches file | open |
+| KG-456 | design | **The delta exits are a set, not a path:** the tidal zone has no flow direction (D31), so the chain lists the exits once. | Accepted by D31 | accepted |
+| KG-457 | design | **Downstream rows have no travel times** (only the order); the upstream chain has them. | A downstream travel-time model | open |
+| KG-458 | agent-prod | **The IJsselmeer → Waddenzee outflow reaches production after the next `geo.yml` release and `rws-rivers-refresh`;** until then the IJssel chain ends at the IJsselmeer. | [agent-prod] after the release | open |
+| KG-459 | owner | **The gauges of `registry/uncovered.yaml` are a proposal:** the picks rest on coordinates and station names (weak: HHNK, Rijnland, Delfland; Breda on the Mark is an assumption). | [owner] review of the file | open [U] |
+| KG-460 | owner | **The IJsselmeer outflow evidence** (the Rijkswaterstaat Afsluitdijk page, `https://www.rijkswaterstaat.nl/water/projectenoverzicht/afsluitdijk`) **was not fetched;** Wikidata (Q4121) gave no outflow. | [owner] check of the page | open [U] |
+| KG-461 | a11y | **A reference gauge hidden as stale (> 25 h) gives "no reference" and no classes** in the lake section, as in the map popup. | A decision to show a stale reference | open |
 
 ## P19a lakes, coast and sea layers (#67)
 
