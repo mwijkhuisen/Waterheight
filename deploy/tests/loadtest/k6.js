@@ -15,6 +15,13 @@
 //   flood       CI (flood drill). Visitor sessions, SESSIONS_PER_S (1) per process: meta, latest, tiles manifest,
 //               style assets (sprite, glyphs), ~30 PMTiles Range requests, 5 slider steps (API snapshot), 2 /series
 //               calls, with think time. p95 < 300 ms, errors < 0.1 %, lag (below).
+//   storm       CI (storm drill, P20a). A static burst while the API is stopped on purpose: a ramping arrival (STORM_SESSIONS_PER_S
+//               per process at the peak, default SESSIONS_PER_S = 1, as the flood scenario, so 6 sessions/s over six
+//               processes; a third of DURATION (6m) ramps up from a tenth of it, the rest holds) of static-only
+//               sessions: meta, latest, one recent and one settled file, one page shell, the tiles manifest, the style
+//               assets, 12 basemap and (when installed) 5 rivers PMTiles Range reads. No API call and no health sampler.
+//               Thresholds: p95 < 300 ms and http_req_failed < 0.1 % for the scenario; dropped iterations are reported
+//               only (a 4-vCPU runner shared with Playwright).
 //   saturation  CI. A crowd: each process sends SAT_RPS (126 r/s) from its range of 21 addresses (run-k6.sh), about
 //               6 r/s per address, inside the limiter, of cache-missing wide /series, /frames and snapshot calls to
 //               saturate the API; only the loader lag is judged (p95 < 120 s). With
@@ -35,6 +42,12 @@
 //               that the run drops iterations, which the summary reports and no threshold judges (the runner's
 //               distance, not the site's capacity).
 //
+// Page shells and the river overlay (P20a): every scenario but abusive, saturation and edge also reads a page of the
+// site (GET, Accept: text/html, 200; one of the 18 paths of apps/web/src/lib/routes.ts, / and /en/ most often) and
+// Range reads of the rivers PMTiles file named by /data/v1/rivers/manifest.json (current.tiles.file, served as
+// /tiles/<file>). A site without that manifest (404) simply has no rivers reads. normal adds both to its static mix
+// (page 4 %, rivers 3 %), flood to each session (a page, 5 rivers ranges), production to its mix (3 % each).
+//
 // Loader lag (normal, flood, saturation): a sampler reads /api/v1/health every HEALTH_EVERY_S (10 s) and REQUIRES a
 // non-null loader.lag_p95_s and a generated_at younger than 5 minutes: either missing is a failed check (health_ok),
 // never a skipped sample (a 503 `busy` under saturation is the one answer that is not a sample). The lag goes into the
@@ -45,13 +58,13 @@
 //
 // The summary goes to OUT_DIR/summary-<CLIENT>.{json,txt}. Environment: BASE (https://<domain>), CADDY_IP (the address
 // the domain resolves to), CLIENT, CLIENTS (6), OUT_DIR, SCENARIO, DURATION, STATIC_RPS, API_RPS, ABUSE_RPS, SAT_RPS,
-// SESSIONS_PER_S, PROD_RPS, HEALTH_EVERY_S, MAP_ASSETS (/assets/map/<commit7>, for flood and production), UA.
+// SESSIONS_PER_S, STORM_SESSIONS_PER_S, PROD_RPS, HEALTH_EVERY_S, MAP_ASSETS (/assets/map/<commit7>, for flood, storm and production), UA.
 
 import { sleep } from 'k6';
 import http from 'k6/http';
 import { Counter, Rate, Trend } from 'k6/metrics';
 
-const SCENARIOS = ['normal', 'abusive', 'flood', 'saturation', 'edge', 'production'];
+const SCENARIOS = ['normal', 'abusive', 'flood', 'storm', 'saturation', 'edge', 'production'];
 const SCENARIO = __ENV.SCENARIO || 'normal';
 if (!SCENARIOS.includes(SCENARIO)) throw new Error(`SCENARIO must be one of ${SCENARIOS.join(', ')}`);
 const BASE = __ENV.BASE;
@@ -63,6 +76,7 @@ const DEFAULT_DURATION = {
   normal: '15m',
   abusive: '2m',
   flood: '12m',
+  storm: '6m',
   saturation: '3m',
   edge: '2m',
   production: '15m',
@@ -77,6 +91,7 @@ const SAT_RPS = Number(__ENV.SAT_RPS || 126);
 const SAT_VUS = Number(__ENV.SAT_VUS || 0);
 const EDGE_RPS = Number(__ENV.EDGE_RPS || 2);
 const SESSIONS_PER_S = Number(__ENV.SESSIONS_PER_S || 1);
+const STORM_SESSIONS_PER_S = Number(__ENV.STORM_SESSIONS_PER_S || SESSIONS_PER_S);
 const PROD_RPS = Number(__ENV.PROD_RPS || 1000);
 const PROD_VUS = 26; // + 4 health VUs: under the 32 connections to 443 one address may hold (#132)
 const HEALTH_EVERY_S = Number(__ENV.HEALTH_EVERY_S || 10);
@@ -87,7 +102,18 @@ const clean = (n, what) => {
   if (!Number.isFinite(n) || n <= 0) throw new Error(`${what} must be a positive number`);
   return n;
 };
-for (const n of [STATIC_RPS, API_RPS, ABUSE_RPS, SAT_RPS, EDGE_RPS, SESSIONS_PER_S, PROD_RPS, HEALTH_EVERY_S, CLIENTS])
+for (const n of [
+  STATIC_RPS,
+  API_RPS,
+  ABUSE_RPS,
+  SAT_RPS,
+  EDGE_RPS,
+  SESSIONS_PER_S,
+  STORM_SESSIONS_PER_S,
+  PROD_RPS,
+  HEALTH_EVERY_S,
+  CLIENTS,
+])
   clean(n, 'a rate');
 if (!Number.isInteger(SAT_VUS) || SAT_VUS < 0 || SAT_VUS > 5000) throw new Error('SAT_VUS must be 0 to 5000');
 
@@ -112,6 +138,8 @@ const KINDS = [
   'tiles_manifest',
   'tile_range',
   'map_asset',
+  'page_shell',
+  'rivers_range',
   'abuse',
   'health',
 ];
@@ -183,7 +211,7 @@ if (SCENARIO === 'normal') {
     Math.ceil(API_RPS / CLIENTS) * 20,
   );
   scenarios.health = healthScenario('healthSample');
-  keepKinds(KINDS.slice(0, 9));
+  keepKinds([...KINDS.slice(0, 9), 'page_shell', 'rivers_range']);
   th('http_req_duration{scenario:static}', 'trend', ['p(95)<300']);
   th('http_req_duration{scenario:api}', 'trend', ['p(95)<300']);
   th('http_req_failed', 'rate', ['rate<0.001']);
@@ -204,6 +232,30 @@ if (SCENARIO === 'normal') {
   th('http_req_failed', 'rate', ['rate<0.001']);
   th('dropped_iterations', 'counter', ['count==0']);
   healthThresholds();
+} else if (SCENARIO === 'storm') {
+  // No API and no health sampler: the drill stops the API while this runs. A tenth-of-a-session grid, as arrival().
+  const peak = Math.max(1, Math.round(STORM_SESSIONS_PER_S * 10));
+  const ramp = Math.max(1, Math.round(DURATION_S / 3));
+  scenarios.storm = {
+    executor: 'ramping-arrival-rate',
+    exec: 'stormSession',
+    startRate: Math.max(1, Math.round(peak / 10)),
+    timeUnit: '10s',
+    stages: [
+      { duration: `${ramp}s`, target: peak },
+      { duration: `${Math.max(1, DURATION_S - ramp)}s`, target: peak },
+    ],
+    preAllocatedVUs: 30,
+    maxVUs: 200,
+  };
+  keepKinds(
+    KINDS.filter((k) =>
+      /^(static_(meta|latest|recent|settled)|tiles_manifest|tile_range|map_asset|page_shell|rivers_range)$/.test(k),
+    ),
+  );
+  th('http_req_duration{scenario:storm}', 'trend', ['p(95)<300']);
+  th('http_req_failed{scenario:storm}', 'rate', ['rate<0.001']);
+  // dropped_iterations is reported in the summary, not judged.
 } else if (SCENARIO === 'saturation') {
   // At most 2 x SAT_RPS requests in flight per process (about 1,500 in all): enough to saturate the API, which answers a
   // 503 `busy` once its permits are taken. Ten times as many (P12a, first run) filled the 256 MiB of Caddy with TLS
@@ -224,7 +276,16 @@ if (SCENARIO === 'normal') {
 } else {
   scenarios.static = arrival('prodMix', PROD_RPS, PROD_VUS, PROD_VUS);
   scenarios.health = healthScenario('prodHealth');
-  keepKinds(['static_meta', 'static_latest', 'static_recent', 'static_settled', 'tile_range', 'map_asset']);
+  keepKinds([
+    'static_meta',
+    'static_latest',
+    'static_recent',
+    'static_settled',
+    'tile_range',
+    'map_asset',
+    'page_shell',
+    'rivers_range',
+  ]);
   thresholds['http_req_duration{scenario:static}'] = ['p(95)<300'];
   thresholds.http_req_failed = ['rate<0.001', { threshold: 'rate<0.01', abortOnFail: true, delayAbortEval: '20s' }];
   thresholds.health_red = [{ threshold: 'rate==0', abortOnFail: true, delayAbortEval: '5s' }];
@@ -292,6 +353,25 @@ const existing = (paths) => {
   return found;
 };
 
+// The 18 page paths of apps/web/src/lib/routes.ts (9 NL, 9 EN); the two home pages weigh most.
+const PAGES = [
+  [20, '/'],
+  [15, '/en/'],
+  ...['/over', '/bronnen', '/methode', '/disclaimer', '/colofon', '/privacy', '/status', '/toegankelijkheid'].map(
+    (p) => [1, p],
+  ),
+  ...[
+    '/en/about',
+    '/en/sources',
+    '/en/method',
+    '/en/disclaimer',
+    '/en/colophon',
+    '/en/privacy',
+    '/en/status',
+    '/en/accessibility',
+  ].map((p) => [1, p]),
+];
+
 const get = (path, kind, params = {}) => {
   const res = http.get(`${BASE}${path}`, { headers: HEADERS, tags: { kind }, ...params });
   if (res.status === 429) status429.add(1);
@@ -353,18 +433,40 @@ function mapFiles() {
   return { tile: `/tiles/${file}`, tileBytes: bytes, assets };
 }
 
+/** The river overlay of the stack: null when /data/v1/rivers/manifest.json is absent (404) or names no usable file. */
+function riversFile() {
+  const res = http.get(`${BASE}/data/v1/rivers/manifest.json`, {
+    headers: HEADERS,
+    responseType: 'text',
+    responseCallback: http.expectedStatuses(200, 404),
+    tags: { kind: 'probe' },
+  });
+  if (res.status !== 200) return null;
+  const tiles = res.json()?.current?.tiles;
+  if (
+    typeof tiles?.file !== 'string' ||
+    !/^rivers-[0-9]{8}\.pmtiles$/.test(tiles.file) ||
+    !Number.isInteger(tiles.bytes) ||
+    tiles.bytes < 16_384
+  )
+    return null;
+  return { tile: `/tiles/${tiles.file}`, bytes: tiles.bytes };
+}
+
 /** Everything a request may name, from what the stack actually serves (files that exist, series with the api flag). */
 export function setup() {
   if (SCENARIO === 'edge') return {}; // the probe itself is the measurement: no setup request
   const meta = getJson('/data/v1/meta.json');
   const data = { now: Date.parse(meta.now), startedAt: Date.now(), displayStart: Date.parse(meta.displayStart) };
-  if (SCENARIO !== 'production' && SCENARIO !== 'edge') {
+  if (SCENARIO !== 'production' && SCENARIO !== 'edge' && SCENARIO !== 'storm') {
     const stations = getJson('/data/v1/stations.json');
     data.series = stations.stations.flatMap((s) => s.series.filter((x) => x.api).map((x) => x.id));
     if (data.series.length === 0) throw new Error('setup: no series with the api flag');
   }
-  if (SCENARIO === 'normal' || SCENARIO === 'production') Object.assign(data, staticFiles(meta));
-  if (SCENARIO === 'flood' || SCENARIO === 'production') Object.assign(data, mapFiles());
+  if (SCENARIO === 'normal' || SCENARIO === 'production' || SCENARIO === 'storm')
+    Object.assign(data, staticFiles(meta));
+  if (SCENARIO === 'flood' || SCENARIO === 'production' || SCENARIO === 'storm') Object.assign(data, mapFiles());
+  if (SCENARIO !== 'abusive' && SCENARIO !== 'saturation') data.rivers = riversFile();
   if (SCENARIO === 'production') {
     const health = http.get(`${BASE}/api/v1/health`, { headers: HEADERS, responseType: 'text' });
     data.healthAtStart = health.status === 200 ? health.json().status : 'unreadable';
@@ -380,11 +482,15 @@ const stackNow = (data) => data.now + (Date.now() - data.startedAt);
 // ---------------------------------------------------------------------------------------------- normal
 export function staticMix(data) {
   const kind = weighted([
-    [30, 'meta'],
-    [40, 'latest'],
-    [20, 'recent'],
-    [10, 'settled'],
+    [28, 'meta'],
+    [38, 'latest'],
+    [18, 'recent'],
+    [9, 'settled'],
+    [4, 'page'],
+    ...(data.rivers ? [[3, 'rivers']] : []),
   ]);
+  if (kind === 'page') return void pageShell();
+  if (kind === 'rivers') return void http.batch([tileRead(data, true, Math.random() < 0.2)]);
   const path =
     kind === 'meta'
       ? '/data/v1/meta.json'
@@ -538,35 +644,47 @@ export function edgeProbe() {
 }
 
 // ---------------------------------------------------------------------------------------------- flood
-const range = (data) => {
+const range = (data, bytes = data.tileBytes) => {
   // pmtiles.js asks for an explicit `bytes=first-last` (Caddy serves nothing else): the header first, then directory and tile reads.
   const len = pick([4096, 16_384, 65_536]);
-  const first = between(0, data.tileBytes - len);
+  const first = between(0, bytes - len);
   return { Range: `bytes=${first}-${first + len - 1}` };
 };
+/** One Range read: of the basemap file when `rivers` is false, else of the river overlay; `first` asks for the header. */
+const tileRead = (data, rivers, first) => [
+  'GET',
+  `${BASE}${rivers ? data.rivers.tile : data.tile}`,
+  null,
+  {
+    headers: first ? { Range: 'bytes=0-16383' } : range(data, rivers ? data.rivers.bytes : data.tileBytes),
+    responseCallback: http.expectedStatuses(206),
+    tags: { kind: rivers ? 'rivers_range' : 'tile_range' },
+  },
+];
+/** A visitor's rivers reads: the header, then four tile reads (none when the site has no river release). */
+const riversBatch = (data) => (data.rivers ? [0, 1, 2, 3, 4].map((i) => tileRead(data, true, i === 0)) : []);
+/** A page of the site, fetched as a browser navigates to it. */
+const pageShell = () =>
+  http.get(`${BASE}${weighted(PAGES)}`, {
+    headers: { ...HEADERS, Accept: 'text/html' },
+    tags: { kind: 'page_shell' },
+  });
 
 /** One visitor: first paint (static files, style assets, ~30 tile ranges), then 5 slider steps and 2 series with think time. */
 export function floodSession(data) {
   get('/data/v1/meta.json', 'static_meta');
   get('/data/v1/latest.json', 'static_latest');
+  pageShell();
   get('/tiles/manifest.json', 'tiles_manifest');
   http.batch(data.assets.map((p) => ['GET', `${BASE}${p}`, null, { headers: HEADERS, tags: { kind: 'map_asset' } }]));
-  const tile = (first) => [
-    'GET',
-    `${BASE}${data.tile}`,
-    null,
-    {
-      headers: first ? { Range: 'bytes=0-16383' } : range(data),
-      responseCallback: http.expectedStatuses(206),
-      tags: { kind: 'tile_range' },
-    },
-  ];
-  // 30 reads, six at a time as a browser's connections allow.
-  const reads = Array.from({ length: 30 }, (_, i) => tile(i === 0));
+  // 30 reads, six at a time as a browser's connections allow, then the river overlay's five.
+  const reads = Array.from({ length: 30 }, (_, i) => tileRead(data, false, i === 0));
   for (let i = 0; i < reads.length; i += 6) {
     http.batch(reads.slice(i, i + 6));
     sleep(0.1);
   }
+  const rivers = riversBatch(data);
+  if (rivers.length > 0) http.batch(rivers);
   const now = stackNow(data);
   for (let step = 0; step < 5; step++) {
     sleep(0.5 + Math.random());
@@ -579,6 +697,25 @@ export function floodSession(data) {
   sleep(1 + Math.random() * 2);
 }
 
+// ---------------------------------------------------------------------------------------------- storm
+/** One visitor in a storm, static files only: the first paint of flood without the API half. */
+export function stormSession(data) {
+  get('/data/v1/meta.json', 'static_meta');
+  get('/data/v1/latest.json', 'static_latest');
+  get(pick(data.recent), 'static_recent');
+  get(pick(data.settled), 'static_settled');
+  pageShell();
+  get('/tiles/manifest.json', 'tiles_manifest');
+  http.batch(data.assets.map((p) => ['GET', `${BASE}${p}`, null, { headers: HEADERS, tags: { kind: 'map_asset' } }]));
+  const reads = Array.from({ length: 12 }, (_, i) => tileRead(data, false, i === 0));
+  for (let i = 0; i < reads.length; i += 6) {
+    http.batch(reads.slice(i, i + 6));
+    sleep(0.1);
+  }
+  const rivers = riversBatch(data);
+  if (rivers.length > 0) http.batch(rivers);
+}
+
 // ---------------------------------------------------------------------------------------------- production
 export function prodMix(data) {
   const kind = weighted([
@@ -588,8 +725,17 @@ export function prodMix(data) {
     [10, 'settled'],
     [30, 'tile'],
     [10, 'asset'],
+    [3, 'page'],
+    ...(data.rivers ? [[3, 'rivers']] : []),
   ]);
-  if (kind === 'tile')
+  if (kind === 'page') pageShell();
+  else if (kind === 'rivers')
+    http.get(`${BASE}${data.rivers.tile}`, {
+      headers: { ...HEADERS, ...range(data, data.rivers.bytes) },
+      responseCallback: http.expectedStatuses(206),
+      tags: { kind: 'rivers_range' },
+    });
+  else if (kind === 'tile')
     http.get(`${BASE}${data.tile}`, {
       headers: { ...HEADERS, ...range(data) },
       responseCallback: http.expectedStatuses(206),
