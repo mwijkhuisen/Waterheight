@@ -39,7 +39,8 @@ import type { Waarnemingen } from './parse.ts';
 //    dropped as `out_of_range` on its own instant, and the rest of the list
 //    loads: RWS served 99999904 with quality 00 for K14 on 2026-10-22, which
 //    used to quarantine every 6-hour window that held it (#213). Only the
-//    observations: a forecast run with such a point is still set aside whole;
+//    observations: a forecast payload with such a point is still quarantined
+//    whole, every list in it (KG-462);
 //  - quality codes 00, 10, 20, 25, 30 and 40 (the ones Waterinfo shows) are
 //    kept and set no bit: what 25 means is unverified (catalogue §2.1, C7), so
 //    no meaning is invented. Any other code withholds its value (counted, so the
