@@ -29,10 +29,13 @@
 //                                                the pinned map assets, the rivers (P6b: the
 //                                                manifest, the overlay by Range, the reaches
 //                                                file, the ODbL download and its attribution
-//                                                in the page's script), and no
-//                                                owner source, spec, host, canary or
-//                                                private_basis in /status/* or any /api/v1
-//                                                body above
+//                                                in the page's script), the Method page's
+//                                                board chunk and the specs of capture.json
+//                                                (P20b), and no owner source, spec, host,
+//                                                canary, NL-1 off station or private_basis
+//                                                in /status/* or any /api/v1 body above
+//                                                (--dry-run ends with the roadmap 2 list:
+//                                                ROADMAP2_CHECKS)
 //   scripts/verify-prod.sh <domain> --soak       + the 72 h soak: >= 99% per source, the
 //                                                seed coverage, the byte baseline, the drill,
 //                                                every twin pair over 7 days (TWIN_IDS)
@@ -124,6 +127,7 @@ import {
   type TilesManifest,
   TilesManifestError,
 } from '../packages/core/src/tiles-manifest.ts';
+import { uncoveredBoards } from './gen-web-method.ts';
 import { CAP_BEGIN, CAP_END, withSection } from './lib/capacity-egress.ts';
 import { checkEdge } from './lib/verify-edge.ts';
 import { checkOwnerListener, networkIo } from './lib/verify-owner-listener.ts';
@@ -154,8 +158,10 @@ export const DE7_INTERVAL_MIN_S = 895;
 export const DE7_BYTES_MAX = 90_000_000;
 /**
  * P16a: the three NL-1 observation specs by cadence (every 10, 30 and 60 minutes), each never more often than its
- * cadence less 5 s of jitter. The daily and monthly specs get no rule: `min_interval_s` is the gap over 24 h, which
- * never holds two of their runs (the `freshness` check covers them).
+ * cadence less 5 s of jitter. P20b: the daily `nl-1-hwlw` too, once its second run is in the 24 h window of
+ * `min_interval_s`, with a 23 h floor instead of the cadence less 5 s: its rows run one after another with a 179 s
+ * pause, so its start drifts by up to about 80 s from one day to the next. The monthly specs never show two runs in
+ * 24 h (`astro horizon` covers them).
  */
 const NL1_WHY = 'requested more often than its schedule';
 /** The interval rules by check name: the source, the spec, the least gap in seconds, and why. */
@@ -175,6 +181,7 @@ export const INTERVAL_RULES = {
   'NL-1 nl-1-obs-sea': { source: 'NL-1', spec: 'nl-1-obs-sea', minS: 595, why: NL1_WHY },
   'NL-1 nl-1-obs-wide': { source: 'NL-1', spec: 'nl-1-obs-wide', minS: 1795, why: NL1_WHY },
   'NL-1 nl-1-obs-slow': { source: 'NL-1', spec: 'nl-1-obs-slow', minS: 3595, why: NL1_WHY },
+  'NL-1 nl-1-hwlw': { source: 'NL-1', spec: 'nl-1-hwlw', minS: 82_800, why: 'requested more often than once a day' },
 } as const;
 /**
  * The twin pairs of registry/twins.yaml (test/verify-prod.test.ts keeps the two lists equal): `--soak` asks for
@@ -428,6 +435,26 @@ export function checkCapture(status: CaptureStatus, now: Date): Result[] {
       ? pass('owner_specs', `fresh ${owner.fresh} = total ${owner.total}`)
       : miss('owner_specs', owner === undefined ? 'missing' : `fresh ${owner.fresh} of ${owner.total}`),
   ];
+}
+
+/**
+ * P20b: capture.json lists every public spec the registry schedules (a cadence: the one-shot catch-ups have none and
+ * are not listed), the roadmap 2 NL-1 specs among them. The web /status page lists sources, not specs, so this is
+ * where a spec capture dropped shows. A listed spec the registry does not know is only counted: a newer image against
+ * an older checkout is no fault.
+ */
+export function checkStatusSpecs(status: CaptureStatus | undefined, registry: Registry): Result {
+  const check = 'status specs';
+  if (status === undefined) return miss(check, 'no valid /status/capture.json');
+  if (status.specs.length === 0) return miss(check, 'capture.json lists no spec');
+  const want = registry.specs.filter((s) => s.audience === 'public' && s.cadence_s !== null).map((s) => s.id);
+  const listed = new Set(status.specs.map((s) => s.spec));
+  const missing = want.filter((id) => !listed.has(id));
+  const extra = [...listed].filter((id) => !want.includes(id)).length;
+  const detail =
+    `${want.length - missing.length} of the ${want.length} scheduled public specs of the registry listed` +
+    (extra === 0 ? '' : `, ${extra} more that the registry does not know`);
+  return missing.length === 0 ? pass(check, detail) : miss(check, `${detail}; missing: ${missing.join(', ')}`);
 }
 
 /** The 72 h soak (issue #16): per source >= 99% ok, seed coverage, the byte baseline, the drill. */
@@ -950,9 +977,23 @@ export function checkTwin(r: ApiRead<HealthSources>, now: Date, id = 'eijsden-gr
     : miss(check, problems.join('; '));
 }
 
-/** Every term that must not appear in a public body: owner sources, specs, hosts and both canaries in both renderings. */
-export function leakTerms(registry: Registry): string[] {
-  return [...new Set([...ownerTerms(registry), ...CANARY_RENDERINGS])].sort();
+/**
+ * P20b: the station ids of the NL-1 rows that are `audience: "off"` (the 18 structure-internal locations: lock
+ * chambers, sluice gates, pumps), which no public body may name. NL-1 only: CH-1's off rows have numeric ids that
+ * would match everywhere.
+ */
+export const nl1OffIds = (stations: readonly { id: string; source: string; audience: string }[]): string[] =>
+  [...new Set(stations.filter((st) => st.source === 'NL-1' && st.audience === 'off').map((st) => st.id))].sort();
+let registryOffIds: string[] | undefined;
+/** The registry's NL-1 off ids, read once per run (readRegistry takes about a second). */
+const offIdsOnce = () => (registryOffIds ??= nl1OffIds(readRegistry().stations));
+
+/**
+ * Every term that must not appear in a public body: owner sources, specs, hosts, both canaries in both renderings and
+ * (P20b) the NL-1 off station ids.
+ */
+export function leakTerms(registry: Registry, offIds: readonly string[] = offIdsOnce()): string[] {
+  return [...new Set([...ownerTerms(registry), ...CANARY_RENDERINGS, ...offIds])].sort();
 }
 
 /**
@@ -1337,15 +1378,15 @@ export function pmtilesMetadataSpan(
   return { offset: Number(offset), length: Number(length), compression };
 }
 
-/** The `vector_layers` ids of a PMTiles metadata blob (gunzipped when compression is 2). */
-export function pmtilesLayerIds(blob: Buffer, compression: number): string[] | string {
+/** A PMTiles metadata blob (gunzipped when compression is 2): its JSON text and its `vector_layers` ids. */
+export function pmtilesMetadata(blob: Buffer, compression: number): { json: string; layers: string[] } | string {
   try {
     // At most 8 MiB once gunzipped (review SR-2): a larger output throws and is reported below.
     const plain = compression === 2 ? gunzipSync(blob, { maxOutputLength: 8 * 1024 * 1024 }) : blob;
-    const json: unknown = JSON.parse(plain.toString('utf8'));
-    const layers = (json as { vector_layers?: unknown } | null)?.vector_layers;
+    const json = plain.toString('utf8');
+    const layers = (JSON.parse(json) as { vector_layers?: unknown } | null)?.vector_layers;
     if (!Array.isArray(layers)) return 'metadata has no vector_layers';
-    return layers.map((l) => String((l as { id?: unknown } | null)?.id));
+    return { json, layers: layers.map((l) => String((l as { id?: unknown } | null)?.id)) };
   } catch {
     return 'metadata is not (gzipped) JSON of at most 8 MiB';
   }
@@ -1353,7 +1394,8 @@ export function pmtilesLayerIds(blob: Buffer, compression: number): string[] | s
 
 /**
  * The tile file's layers (P19b): the 127-byte header says where the metadata is, the metadata lists the layers, and
- * both Range answers carry the site headers (`/tiles` stays noindex under the launch profile too).
+ * both Range answers carry the site headers (`/tiles` stays noindex under the launch profile too). P20b: the metadata
+ * JSON holds none of `terms` (the leak terms: the water-body layers are new; the tile blobs are not read).
  */
 export function checkRiversLayers(
   m: RiversManifest | undefined,
@@ -1362,6 +1404,7 @@ export function checkRiversLayers(
   meta: Page | string | undefined,
   expected: Readonly<Record<string, string>>,
   edge: Edge = 'direct',
+  terms: readonly string[] = [],
 ): Result {
   const check = 'rivers layers';
   if (m === undefined) return miss(check, 'no valid manifest');
@@ -1383,16 +1426,18 @@ export function checkRiversLayers(
     problems.push(`content-range ${show(meta.headers['content-range'])}, want ${range}`);
   if (meta.headers['content-encoding'] !== undefined)
     problems.push(`content-encoding ${show(meta.headers['content-encoding'])}`);
-  const ids = pmtilesLayerIds(meta.bytes ?? Buffer.from(meta.body, 'latin1'), span.compression);
-  if (typeof ids === 'string') problems.push(ids);
+  const md = pmtilesMetadata(meta.bytes ?? Buffer.from(meta.body, 'latin1'), span.compression);
+  if (typeof md === 'string') problems.push(md);
   else {
-    const absent = RIVERS_LAYERS.filter((l) => !ids.includes(l));
+    const absent = RIVERS_LAYERS.filter((l) => !md.layers.includes(l));
     if (absent.length > 0) problems.push(`missing layers ${absent.join(', ')}`);
+    const hits = leaks(md.json, terms);
+    if (hits.length > 0) problems.push(`owner term ${hits.join(', ')} in the metadata`);
   }
   return problems.length === 0
     ? pass(
         check,
-        `${path}: metadata ${span.length} bytes at ${span.offset}, layers ${RIVERS_LAYERS.join(', ')}, site headers on both 206s`,
+        `${path}: metadata ${span.length} bytes at ${span.offset}, layers ${RIVERS_LAYERS.join(', ')}, none of ${terms.length} owner terms in it, site headers on both 206s`,
       )
     : miss(check, problems.join('; '));
 }
@@ -1523,6 +1568,40 @@ export function checkRiversAttribution(script: Page | string | undefined, more: 
   return more.some((p) => p.status === 200 && p.body.includes('ODbL'))
     ? pass(check, "a chunk of the page's initial load names the ODbL")
     : miss(check, 'neither the entry script of the page nor its static imports name the ODbL');
+}
+
+/**
+ * The lazy chunk of the Method page's board list (D32): Vite names it after apps/web/src/features/pages/parts/
+ * UncoveredBoards.tsx, and the page's initial load names it (the preload list of the dynamic Method import).
+ */
+export const uncoveredChunk = (bodies: readonly string[]): string | undefined => {
+  const name = /(?<![\w-])UncoveredBoards-[\w-]+\.js/.exec(bodies.join('\n'))?.[0];
+  return name === undefined ? undefined : `/assets/${name}`;
+};
+
+/**
+ * P20b (D32): the Method page lists the Dutch water boards with no data on the map. The pages are SPA shells, so the
+ * names are in the lazy chunk (`uncoveredChunk`): 200, every board name of the registry (`boards`, raw UTF-8 as the
+ * bundle holds them) and none of `terms`.
+ */
+export function checkMethodUncovered(
+  chunk: Page | string | undefined,
+  boards: readonly string[],
+  terms: readonly string[],
+): Result {
+  const check = 'method uncovered';
+  if (chunk === undefined) return miss(check, "the page's initial load names no UncoveredBoards chunk");
+  if (typeof chunk === 'string') return miss(check, chunk);
+  if (chunk.status !== 200) return miss(check, `status ${chunk.status}`);
+  const problems: string[] = [];
+  if (boards.length === 0) problems.push('no board to look for');
+  const absent = boards.filter((b) => !chunk.body.includes(b));
+  if (absent.length > 0) problems.push(`${absent.length} of ${boards.length} boards missing: ${absent.join(', ')}`);
+  const hits = leaks(chunk.body, terms);
+  if (hits.length > 0) problems.push(`owner term ${hits.join(', ')}`);
+  return problems.length === 0
+    ? pass(check, `all ${boards.length} water boards of the registry, none of ${terms.length} owner terms`)
+    : miss(check, problems.join('; '));
 }
 
 // ---------------------------------------------------------------- data API (P4b)
@@ -2547,21 +2626,27 @@ const instantParam = (ms: number) => `${new Date(ms).toISOString().slice(0, 16)}
 
 /**
  * The requests of the api sweep, from the route table: every non-planned GET route of `ROUTES`, with the series ids
- * of `/api/v1/stations` (the first series of each source, at most SWEEP_MAX_SERIES) and the instants of the server's
- * own clock (`meta.now`): now, 6 hours and 3 days back, 6 hours ahead (a forecast-only snapshot), and a short raw span
- * of each series. A route this function does not know is `undefined` in its place, so a new route fails the check
- * until the sweep asks for it.
+ * of `/api/v1/stations` (the first series of each source, at most SWEEP_MAX_SERIES, then the `extra` ones) and the
+ * instants of the server's own clock (`meta.now`): now, 6 hours and 3 days back, 6 hours ahead (a forecast-only
+ * snapshot), and a short raw span of each series. A route this function does not know is `undefined` in its place, so
+ * a new route fails the check until the sweep asks for it.
  */
-export function sweepAsks(stations: Stations, serverNow: string): { asks: SweepAsk[]; unknown: string[] } | undefined {
+export function sweepAsks(
+  stations: Stations,
+  serverNow: string,
+  extra: readonly number[] = [],
+): { asks: SweepAsk[]; unknown: string[] } | undefined {
   const now = Date.parse(serverNow);
   if (Number.isNaN(now)) return undefined;
   const firstOf = new Map<string, number>();
   for (const st of stations.stations)
     for (const s of st.series) if (!firstOf.has(s.source)) firstOf.set(s.source, s.id);
-  const ids = [...firstOf.entries()]
+  const first = [...firstOf.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([, id]) => id)
     .slice(0, SWEEP_MAX_SERIES);
+  // P20b: and the `extra` series (tideSweepPicks: a roadmap 2 tidal and lake series; the tidal answers carry `tide`).
+  const ids = [...new Set([...first, ...extra])];
   const t = floorBucket(now);
   const asks: SweepAsk[] = [];
   const unknown: string[] = [];
@@ -2604,6 +2689,24 @@ export function sweepAsks(stations: Stations, serverNow: string): { asks: SweepA
     }
   }
   return { asks, unknown };
+}
+
+/**
+ * P20b: of each set of station ids (nl1TideSets: the coast, the lakes) the first station /api/v1/stations lists with an
+ * H series, and that series. The api sweep asks for the series, the static checks for the station's recent.json.
+ */
+export function tideSweepPicks(
+  stations: Stations,
+  sets: readonly (readonly string[])[],
+): { station: string; series: number }[] {
+  const byId = new Map(stations.stations.map((st) => [st.id, st]));
+  return sets.flatMap((ids) => {
+    for (const id of ids) {
+      const h = byId.get(id)?.series.find((s) => s.quantity === 'H');
+      if (h !== undefined) return [{ station: id, series: h.id }];
+    }
+    return [];
+  });
 }
 
 /** The statuses a sweep tolerates: 200, and the 404 an api-off series answers on the series routes. */
@@ -3330,6 +3433,7 @@ export const CHECKS = [
   'status capture.json / ops.json: 200, Cache-Control: no-store, the exact contract fields',
   'freshness: every public spec succeeded within 3 × cadence_s',
   'owner_specs: fresh = total',
+  'status specs: /status/capture.json lists every public spec of registry/capture.yaml that has a cadence (P20b: the roadmap 2 NL-1 specs among them; the one-shot catch-ups have no cadence and are not listed); a missing spec is named, one the registry does not know only counted (a newer image); no document or no spec is a FAIL',
   'health: GET /api/v1/health is 200 JSON with Cache-Control max-age=30, the Health contract document, status not down',
   'health params: ?x=1 on /api/v1/health and /api/v1/health/sources is 400 {"error":"unknown_parameter","attribution":[]}; /api/v1/ and /api/v1/x are the api\'s 404 {"error":"not_found","attribution":[]}',
   'health DE-1: /api/v1/health/sources is the contract document and lists DE-1 with status ok',
@@ -3349,6 +3453,7 @@ export const CHECKS = [
   `interval NL-1 nl-1-obs-sea: the min_interval_s of nl-1-obs-sea is >= 595 s (every 10 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
   `interval NL-1 nl-1-obs-wide: the min_interval_s of nl-1-obs-wide is >= 1795 s (every 30 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
   `interval NL-1 nl-1-obs-slow: the min_interval_s of nl-1-obs-slow is >= 3595 s (every 60 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
+  `interval NL-1 nl-1-hwlw: the min_interval_s of nl-1-hwlw is >= ${INTERVAL_RULES['NL-1 nl-1-hwlw'].minS} s (daily, P20b: a 23 h floor, not the cadence less 5 s, because its rows run one after another with a 179 s pause and its start drifts by up to about 80 s from one day to the next); no entry yet is a FAIL (the first one comes with the second daily run)`,
   `bytes DE-7: the days of /status/capture.json (today, partial, and the two before) each hold at most ${DE7_BYTES_MAX / 1e6} MB of zstd bytes stored for ${DE7_SPEC}; the spec missing from capture.json, or no bytes in any day, is a FAIL`,
   `owner sources: /api/v1/health/sources (the contract document, max-age=30) counts at least ${OWNER_SOURCES_MIN} owner sources (owner_sources.total, which the registry sync writes, captured or not) and lists no owner-audience source of registry/sources.yaml in sources[]; the detail holds counts only`,
   'owner health: /api/v1/health/sources has owner_sources.healthy = owner_sources.total (needs live owner capture; the detail holds counts only)',
@@ -3387,10 +3492,11 @@ export const CHECKS = [
   `map assets: GET ${MAP_ASSET_PATH} (a pinned glyph range of the web image) is 200 with Cache-Control exactly "${TILE_CACHE}"`,
   `rivers manifest: GET ${RIVERS_MANIFEST_PATH} is 200 with Cache-Control exactly "${MANIFEST_CACHE}" and a body the strict RiversManifest contract accepts`,
   `rivers tiles: GET /tiles/<the manifest's tiles file> with Range: ${TILE_HEADERS.range} is 206 with Content-Range bytes 0-15/<manifest bytes>, Cache-Control exactly "${TILE_CACHE}", no Content-Encoding and the PMTiles v3 magic first`,
-  `rivers layers: GET /tiles/<the manifest's tiles file> with Range: ${PMTILES_HEADER_RANGE} (the PMTiles v3 header), then the metadata it points to (at most ${PMTILES_METADATA_MAX} bytes, gunzipped): both 206 with the A§12.2 headers and X-Robots-Tag noindex, and vector_layers include ${RIVERS_LAYERS.join(', ')}`,
+  `rivers layers: GET /tiles/<the manifest's tiles file> with Range: ${PMTILES_HEADER_RANGE} (the PMTiles v3 header), then the metadata it points to (at most ${PMTILES_METADATA_MAX} bytes, gunzipped): both 206 with the A§12.2 headers and X-Robots-Tag noindex, vector_layers include ${RIVERS_LAYERS.join(', ')}, and (P20b) the metadata JSON holds no leak term of owner leak (the tile blobs are not read)`,
   `rivers reaches: GET /data/v1/rivers/<the manifest's reaches file> is 200 JSON with Cache-Control exactly "${TILE_CACHE}", the ReachesFile contract, checkReaches clean, the manifest's version, and every station of it a station of /api/v1/stations (the file's body is also in owner leak)`,
   `rivers download: HEAD /downloads/<the manifest's download file> is 200 application/gzip with no Content-Encoding, ${TILE_CACHE} and the manifest's length; a Range of ${RIVERS_DOWNLOAD_RANGE}, gunzipped (truncation tolerated), shows "attribution": "${OSM_ATTRIBUTION}" and "licence": "${ODBL_LICENCE}" before "features"`,
   'rivers attribution: the entry script that / references, or a chunk of its initial load (its static imports, two levels, at most 10 files), contains the string ODbL (the footer text, P6b)',
+  'method uncovered: the lazy chunk /assets/UncoveredBoards-<hash>.js that the initial load of / names (the files rivers attribution reads; the pages are SPA shells) is 200, holds the name of every water board of registry/uncovered.yaml (D32: the provider names scripts/gen-web-method.ts gives the Method page, raw UTF-8) and no owner source, spec, owner-only host, canary or NL-1 off station id (P20b)',
   `static meta: GET /data/v1/meta.json is 200 application/json with Cache-Control exactly "${STATIC_CACHE.live}", the StaticMeta contract, ${API_SOURCES.join(', ')} among the sources, and no owner term in the body`,
   `static latest: GET /data/v1/latest.json is 200 with "${STATIC_CACHE.live}", the LatestFile contract and the seriesHash of stations.json`,
   `static stations: GET /data/v1/stations.json is 200 with "${STATIC_CACHE.slow}" and the StaticStations contract`,
@@ -3399,16 +3505,16 @@ export const CHECKS = [
   `static settled: a sample of the newest settled day (version from meta.dayVersions, default 1) is 200 with "${STATIC_CACHE.immutable}" and the SnapshotFile contract; none yet (PASS) while version 0, before the display window or while the day is pending`,
   `static frames: frames/recent.json is 200 with "${STATIC_CACHE.slow}" and the FramesFile contract (v2), and the newest settled day's frames file (v1 or v2) with "${STATIC_CACHE.immutable}" (none yet for that part is a PASS)`,
   `static forecast: GET /data/v1/forecast/latest.json is 200 with "${STATIC_CACHE.slow}" and the StaticForecastLatest contract`,
-  `static series: the first station of stations.json has series/<id>/recent.json, 200 with "${STATIC_CACHE.slow}" and the StationRecent contract`,
+  `static series: the first station of stations.json has series/<id>/recent.json, 200 with "${STATIC_CACHE.slow}" and the StationRecent contract (P20b: the recent.json of the tidal and the lake station of the api sweep is fetched too, for owner leak)`,
   `static warnings: warnings/latest.geojson is 200 ${GEOJSON} with "${STATIC_CACHE.warnings}" and the WarningsFile contract; yesterday's dated file, when it exists, with "${STATIC_CACHE.immutable}"; warnings/today.json is 200 with "${STATIC_CACHE.live}", the contract and today's day`,
   `static status: GET /data/v1/status.json is 200 with "${STATIC_CACHE.status}", the public StatusFile contract (public sources, the two ownerSources counts) and no owner term`,
   'static precompressed: meta.json with Accept-Encoding zstd and with gzip: that Content-Encoding, Vary: Accept-Encoding and a decompressed body equal to the identity body',
   `static lag: health.loader.last_commit minus meta.latestFrom is at most ${STATIC_LAG_MAX_S} s (no loader commit yet is a PASS)`,
   `static rerender: status.publisher.lastDayRender.seconds is under ${RERENDER_MAX_S} s (C23; none rendered yet is a PASS)`,
   `runtime config: GET /runtime-config.json is 200 application/json, Cache-Control no-cache and JSON with exactly the keys ${RUNTIME_CONFIG_KEYS.join(', ')}: audience "public", contact an e-mail address, operator a non-empty text (at most 120 characters), cdn a text (at most 80; empty is no CDN), none of them holding { } # " \\ < > or a control character (the operator's name is personal data: a failure names the field, never its value; compose leaves RWS_OPERATOR_NAME empty until the owner sets it, and this FAILs until then)`,
-  `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body, the rivers manifest and the reaches file, and (P9a) every public /data/v1 file fetched by the static checks`,
+  `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}), NL-1 off station id (P20b: the structure-internal locations of registry/stations/nl-1.yaml) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body, the rivers manifest and the reaches file, and (P9a) every public /data/v1 file fetched by the static checks`,
   'owner ids: no owner-audience source ID of registry/sources.yaml as a whole word in a string value or object key of /api/v1/health or health/sources',
-  `api sweep: every non-planned GET route of the route table (meta, stations, snapshot at now, -6 h, -3 d and +6 h of /meta's now, series over a raw 3 h span and series forecast for the first series of each source, at most ${SWEEP_MAX_SERIES}, health, health/sources, openapi) fetched with Accept-Encoding ${SWEEP_ENCODINGS.join(', ')} (compressed bodies inflated): no owner or withheld canary rendering, nl.canary.owner, CANARY-OWNER, owner source ID, spec ID or owner-only host in any body, no 5xx; heavy routes at least ${SWEEP_PACE_MS} ms apart and one Retry-After honoured per 429 (all of a CI run's requests share one IP)`,
+  `api sweep: every non-planned GET route of the route table (meta, stations, snapshot at now, -6 h, -3 d and +6 h of /meta's now, series over a raw 3 h span and series forecast for the first series of each source, at most ${SWEEP_MAX_SERIES}, and (P20b) the first H series of the first listed NL-1 tier-1 tidal and lake station of the registry, health, health/sources, openapi) fetched with Accept-Encoding ${SWEEP_ENCODINGS.join(', ')} (compressed bodies inflated): no owner or withheld canary rendering, nl.canary.owner, CANARY-OWNER, owner source ID, spec ID, owner-only host or NL-1 off station id in any body, no 5xx; heavy routes at least ${SWEEP_PACE_MS} ms apart and one Retry-After honoured per 429 (all of a CI run's requests share one IP)`,
   `settled sweep: ${SWEEP_SETTLED_SNAPSHOTS} settled snapshots and frames files of up to ${SWEEP_SETTLED_FRAMES} days sampled deterministically from meta.dayVersions (absent day = version 1, 0 = skipped), each in ${SWEEP_ENCODINGS.join(', ')} and grepped as the api sweep (a 404 is a file not rendered yet: static settled judges that); N/A while no settled day is complete or none of the files is served`,
   `interval DE-6: (--interval, slow: ${DE6_SAMPLES} samples of /status/capture.json ${DE6_GAP_MS / 60_000} min apart, about 30 min) ${DE6_SPECS.join(' and ')} have a last_success at most ${DE6_MAX_AGE_S} s before that sample's generated_at in every sample (a missing spec or null last_success is a FAIL) and it advanced; without the flag the check is N/A (skipped)`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
@@ -3418,6 +3524,53 @@ export const CHECKS = [
   ),
   '--capacity: bytes/day per spec over >= 2 complete days (a spec that runs less than daily, or once, by its bytes a run x runs a year from its cron), the year-1 projection vs the disk (75% alert) and the bucket, the A§7.3 alert rules',
 ];
+
+/**
+ * P20b (issue #68): the roadmap 2 production checks. `live`: it needs live production data, so the CI deploy gate lets
+ * it FAIL (the `live` array of deploy/tests/e2e/verify-gate.sh, which gives each one's reason); otherwise it must PASS
+ * against the CI stack. `--dry-run` ends with this list; test/verify-gate.test.ts holds it and the gate equal.
+ */
+export const ROADMAP2_CHECKS: readonly { check: string; live: boolean }[] = [
+  ...[
+    'interval NL-1 nl-1-obs-sea',
+    'interval NL-1 nl-1-obs-wide',
+    'interval NL-1 nl-1-obs-slow',
+    'interval NL-1 nl-1-hwlw',
+    'fresh NL-1 coast',
+    'fresh NL-1 lakes',
+    'astro horizon',
+    'surge',
+    'catch-up NL-1',
+  ].map((check) => ({ check, live: true })),
+  // The water-body tiles, the capture specs, the new pages and the leak grep over the new files.
+  ...[
+    'rivers manifest',
+    'rivers tiles',
+    'rivers layers',
+    'rivers reaches',
+    'status specs',
+    'method uncovered',
+    'owner leak',
+  ].map((check) => ({ check, live: false })),
+];
+
+/**
+ * The lists of the deploy gate (deploy/tests/e2e/verify-gate.sh), for the tests that hold ROADMAP2_CHECKS and the gate
+ * equal: `live`, the checks that may FAIL in CI, each with the reason on its own line (undefined for the roadmap 1
+ * group, which shares one comment), and `required`, the checks that must PASS (`need '^PASS <name> '` and the
+ * `for check in` loop).
+ */
+export function gateLists(src: string): { live: Map<string, string | undefined>; required: string[] } {
+  const quoted = (s: string) => [...s.matchAll(/'([^']+)'/g)].map((m) => m[1] ?? '');
+  const live = new Map<string, string | undefined>();
+  for (const line of (/^live=\(\n([\s\S]*?)^\)$/m.exec(src)?.[1] ?? '').split('\n')) {
+    const hash = line.indexOf('#');
+    const reason = hash < 0 ? '' : line.slice(hash + 1).trim();
+    for (const name of quoted(hash < 0 ? line : line.slice(0, hash))) live.set(name, reason || undefined);
+  }
+  const needs = [...src.matchAll(/^need '\^PASS ([^'[\]\\]+) '$/gm)].map((m) => m[1] ?? '');
+  return { live, required: [...needs, ...quoted(/for check in ([^;]*?); do/s.exec(src)?.[1] ?? '')] };
+}
 
 function usage(): never {
   console.error(
@@ -3465,6 +3618,8 @@ async function main(argv: string[]): Promise<number> {
   }
   if (dry) {
     for (const c of CHECKS) console.log(c);
+    console.log('roadmap 2 (P20b):');
+    for (const r of ROADMAP2_CHECKS) console.log(`${r.check}: ${r.live ? 'live data' : 'required PASS offline'}`);
     return 0;
   }
   if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)) usage();
@@ -3524,6 +3679,7 @@ async function main(argv: string[]): Promise<number> {
       results.push(miss('http', (e as Error).message));
     }
     if (cap?.success) results.push(...checkCapture(cap.data, now), checkBytes(cap.data));
+    results.push(checkStatusSpecs(cap?.success ? cap.data : undefined, registry));
 
     // The P2a health API (A§9.2). Every request has a fixed path; a network error is a FAIL, never a crash.
     const api = (path: string) => tryGet(`https://${domain}${path}`, net);
@@ -3552,6 +3708,7 @@ async function main(argv: string[]): Promise<number> {
       checkInterval(sources.data, 'NL-1 nl-1-obs-sea'),
       checkInterval(sources.data, 'NL-1 nl-1-obs-wide'),
       checkInterval(sources.data, 'NL-1 nl-1-obs-slow'),
+      checkInterval(sources.data, 'NL-1 nl-1-hwlw'),
       checkOwnerSources(sources, ownerSourceIds(registry)),
       checkOwnerHealth(sources),
       checkOwnerIds(
@@ -3595,6 +3752,9 @@ async function main(argv: string[]): Promise<number> {
       checkBelgianSet(belgianIds(), stationsRead.data, snapReads.get('now')?.data, metaRead.data?.now),
     );
     const tide = nl1TideSets();
+    // P20b: a tidal and a lake station of the API, for the api sweep and the static grep below.
+    const tidePicks =
+      stationsRead.data === undefined ? [] : tideSweepPicks(stationsRead.data, [tide.coast, tide.lakes]);
     const nowSnap = snapReads.get('now')?.data;
     results.push(
       checkFreshSet('fresh NL-1 coast', tide.coast, stationsRead.data, nowSnap, metaRead.data?.now),
@@ -3638,6 +3798,26 @@ async function main(argv: string[]): Promise<number> {
       stationsRead.data === undefined ? undefined : new Set(stationsRead.data.stations.map((st) => st.id));
     const entry = entryScript(pageBody(site['/']));
     const expected = expectedHeaders(readFileSync(join(root, 'docs/plan/ARCHITECTURE.md'), 'utf8'), profile);
+    // The entry's static imports and theirs (two levels, at most 10 files): the page's initial load. rivers attribution
+    // and (P20b) method uncovered read it.
+    const first = entry === undefined ? undefined : await tile(entry);
+    const more: Page[] = [];
+    if (entry !== undefined) {
+      const seen = new Set([entry]);
+      let next = typeof first === 'object' ? staticImports(first.body) : [];
+      for (let level = 0; level < 2; level++) {
+        const batch = next.filter((f) => !seen.has(f)).slice(0, 10 - seen.size + 1);
+        next = [];
+        for (const f of batch) {
+          seen.add(f);
+          const page = await tile(f);
+          if (typeof page === 'string') continue;
+          more.push(page);
+          next.push(...staticImports(page.body));
+        }
+      }
+    }
+    const boardsChunk = uncoveredChunk([first, ...more].map(pageBody));
     results.push(
       checkRiversManifest(rivers),
       checkRiversTiles(
@@ -3645,7 +3825,9 @@ async function main(argv: string[]): Promise<number> {
         cur === undefined ? undefined : await tile(`/tiles/${cur.tiles.file}`, TILE_HEADERS),
       ),
       await (async () => {
-        if (cur === undefined) return checkRiversLayers(rivers.manifest, '', undefined, undefined, expected, edge);
+        const terms = leakTerms(registry);
+        if (cur === undefined)
+          return checkRiversLayers(rivers.manifest, '', undefined, undefined, expected, edge, terms);
         const path = `/tiles/${cur.tiles.file}`;
         const enc = { 'accept-encoding': TILE_HEADERS['accept-encoding'] };
         const head = await tile(path, { ...enc, range: PMTILES_HEADER_RANGE });
@@ -3655,7 +3837,7 @@ async function main(argv: string[]): Promise<number> {
           typeof span === 'string'
             ? undefined
             : await tile(path, { ...enc, range: `bytes=${span.offset}-${span.offset + span.length - 1}` });
-        return checkRiversLayers(rivers.manifest, path, head, meta, expected, edge);
+        return checkRiversLayers(rivers.manifest, path, head, meta, expected, edge, terms);
       })(),
       checkRiversReaches(rivers.manifest, reachesPage, stationIds),
       checkRiversDownload(
@@ -3667,26 +3849,12 @@ async function main(argv: string[]): Promise<number> {
           ? undefined
           : await tile(downloadPath, { ...RIVERS_DOWNLOAD_HEADERS, range: RIVERS_DOWNLOAD_RANGE }),
       ),
-      await (async () => {
-        if (entry === undefined) return checkRiversAttribution(undefined);
-        const first = await tile(entry);
-        // The entry's static imports and theirs (two levels, at most 10 files): the page's initial load.
-        const more: Page[] = [];
-        const seen = new Set([entry]);
-        let next = typeof first === 'string' ? [] : staticImports(first.body);
-        for (let level = 0; level < 2; level++) {
-          const now = next.filter((f) => !seen.has(f)).slice(0, 10 - seen.size + 1);
-          next = [];
-          for (const f of now) {
-            seen.add(f);
-            const page = await tile(f);
-            if (typeof page === 'string') continue;
-            more.push(page);
-            next.push(...staticImports(page.body));
-          }
-        }
-        return checkRiversAttribution(first, more);
-      })(),
+      checkRiversAttribution(first, more),
+      checkMethodUncovered(
+        boardsChunk === undefined ? undefined : await tile(boardsChunk),
+        uncoveredBoards(root).map((b) => b.board),
+        staticLeakTerms(registry),
+      ),
     );
 
     // P9a: the static publisher's files through Caddy. The terms are checked per file (readStatic) and in their own
@@ -3736,6 +3904,8 @@ async function main(argv: string[]): Promise<number> {
             undefined,
             terms,
           );
+    // P20b: the roadmap 2 tidal and lake station too, for the owner-leak grep of every static page below.
+    for (const p of tidePicks) await fetchStatic(`series/${p.station}/recent.json`);
     const sforecast = readStatic(
       await fetchStatic('forecast/latest.json'),
       StaticForecastLatest,
@@ -3781,7 +3951,13 @@ async function main(argv: string[]): Promise<number> {
     const sweep = sweepTerms(registry);
     const apiNow = metaRead.data?.now;
     const asked =
-      apiNow === undefined || stationsRead.data === undefined ? undefined : sweepAsks(stationsRead.data, apiNow);
+      apiNow === undefined || stationsRead.data === undefined
+        ? undefined
+        : sweepAsks(
+            stationsRead.data,
+            apiNow,
+            tidePicks.map((p) => p.series),
+          );
     const sweepIo: SweepIo = {
       get: (path, headers) => tryGet(`https://${domain}${path}`, net, headers),
       sleep: (ms) => new Promise((r) => setTimeout(r, ms)),

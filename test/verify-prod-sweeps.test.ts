@@ -27,6 +27,7 @@ import {
   staticLeakTerms,
   sweepAsks,
   sweepTerms,
+  tideSweepPicks,
 } from '../scripts/verify-prod.ts';
 
 // P9b: the api sweep and the settled sweep of verify-prod (issue #24 [agent-prod]). Pure functions over fake pages,
@@ -402,6 +403,57 @@ describe('stations.json schemaVersion 2 (C18)', () => {
       'not the contract document',
     ]);
     expect(readStatic(file(2), StaticStations, STATIC_CACHE.slow).problems).toEqual(['not the contract document']);
+  });
+});
+
+describe('the roadmap 2 series of the api sweep (P20b)', () => {
+  const seriesIds = (r: ReturnType<typeof sweepAsks>) =>
+    (r?.asks ?? []).flatMap((a) => /^\/api\/v1\/series\/(\d+)\?/.exec(a.path)?.[1] ?? []);
+
+  it('asks the extra series after the first of each source, each once, raw and forecast', () => {
+    expect(seriesIds(sweepAsks(stations(), NOW, [42, 7, 43]))).toEqual(['7', '9', '3', '42', '43']);
+    expect(seriesIds(sweepAsks(stations(), NOW))).toEqual(['7', '9', '3']);
+    const paths = (sweepAsks(stations(), NOW, [42])?.asks ?? []).map((a) => a.path);
+    expect(paths).toContain('/api/v1/series/42/forecast');
+    expect(paths).toContain('/api/v1/series/42?from=2026-11-20T09:30Z&to=2026-11-20T12:30Z&res=raw');
+  });
+
+  it('picks, per registry set, the first station the API lists with an H series, and that series', () => {
+    const h = (id: number, quantity: 'H' | 'Q' = 'H') => ({ id, source: 'NL-1', quantity }) as never;
+    const listed = {
+      stations: [
+        { id: 'nl.rws.q', series: [h(5, 'Q')] },
+        { id: 'nl.rws.coast', series: [h(6, 'Q'), h(7)] },
+        { id: 'nl.rws.lake', series: [h(8)] },
+      ],
+    } as never;
+    expect(
+      tideSweepPicks(listed, [
+        ['nl.rws.absent', 'nl.rws.q', 'nl.rws.coast'],
+        ['nl.rws.lake', 'nl.rws.coast'],
+      ]),
+    ).toEqual([
+      { station: 'nl.rws.coast', series: 7 },
+      { station: 'nl.rws.lake', series: 8 },
+    ]);
+    expect(tideSweepPicks(listed, [['nl.rws.absent', 'nl.rws.q'], []])).toEqual([]);
+  });
+
+  it('an off station id or the owner canary in the tide answer of an extra series fails the sweep', async () => {
+    const asked = sweepAsks(stations(), NOW, [42]);
+    for (const secret of ['nl.rws.zwartsluis.gemaal.pomp1', CANARIES.owner.text]) {
+      const out = await runApiSweep(
+        asked?.asks ?? [],
+        async (a, e) => served(a.path.startsWith('/api/v1/series/42?') ? `{"tide":{"astro":"${secret}"}}` : '{}', e),
+        terms,
+      );
+      expect(out.problems, secret).toEqual(
+        SWEEP_ENCODINGS.map(
+          (enc) => `/api/v1/series/42?from=2026-11-20T09:30Z&to=2026-11-20T12:30Z&res=raw (${enc}): found ${secret}`,
+        ),
+      );
+      expect(checkApiSweep(asked, out, terms.length).ok).toBe(false);
+    }
   });
 });
 
