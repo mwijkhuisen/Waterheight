@@ -8,9 +8,12 @@ import {
   expandTimebar,
   expectHovLayout,
   expectNoSeriousAxe,
+  featureState,
   finish,
   hovReady,
   hovRegion,
+  hovToggle,
+  jumpTo,
   mapReady,
   menuButton,
   modeSummary,
@@ -21,6 +24,7 @@ import {
   panelOf,
   param,
   pickStation,
+  renderedIds,
   searchBox,
   searchButton,
   settled,
@@ -508,6 +512,8 @@ test('a deep-linked station is in the part the drawer leaves free; the camera ke
   // In the middle of the free part.
   expect(x).toBeCloseTo(drawer.x / 2, -2);
   expect(overlaps(await box(page.locator('.maplibregl-popup-close-button')), drawer)).toBe(false);
+  // #205: the deep link still opens at z9, whatever the opening view.
+  expect(await page.evaluate(() => (window as unknown as W).__rws?.map?.getZoom())).toBe(9);
   expect(await page.evaluate(() => (window as unknown as W).__rws?.map?.getPadding())).toEqual({
     top: 0,
     right: 0,
@@ -822,5 +828,178 @@ test('axe: the map, the opened controls and the table view', async ({ page, cont
   await expectNoSeriousAxe(page, undefined, false);
   await openMenu(page);
   await expectNoSeriousAxe(page, undefined, false);
+  await finish(page, s);
+});
+
+// ---------------------------------------------------------------- #205: the calm opening view (Stage 0)
+// Far out only the tier-1 stations (tier 2 from z8, the selected one at every zoom), the Netherlands as the opening
+// view, zoom buttons. nl.e2e.tier2 is the seed's only tier-2 station near Lobith (apps/server/test/e2e/api.ts).
+
+const LOBITH: [number, number] = [6.1, 51.85];
+const EIJSDEN: [number, number] = [5.69, 50.78];
+const TIER2 = 'nl.e2e.tier2';
+const TIER2_AT: [number, number] = [6.15, 51.83];
+const OPENING = { west: 3.2, south: 50.2, east: 7.4, north: 53.6 };
+
+const camera = (page: Page) =>
+  page.evaluate(() => {
+    const map = (window as unknown as W).__rws?.map;
+    return { zoom: map?.getZoom(), center: map?.getCenter() };
+  });
+/** Page pixels of a point on the map. */
+const onPage = async (page: Page, at: [number, number]) => {
+  const canvas = await box(page.locator('canvas.maplibregl-canvas'));
+  const p = await page.evaluate((at) => (window as unknown as W).__rws?.map?.project(at), at);
+  if (p === undefined) throw new Error('no map');
+  return { x: canvas.x + p.x, y: canvas.y + p.y };
+};
+/** The controls over the top of the map: the mode and view disclosures, the flow toggle and "Langs de rivier". */
+const controlRow = (page: Page) => [
+  modeSummary(page),
+  viewSummary(page),
+  page.getByRole('button', { name: nl('flow_toggle'), exact: true }),
+  hovToggle(page),
+];
+const zoomGroup = (page: Page) => page.locator('.maplibregl-ctrl-top-right .maplibregl-ctrl-group');
+
+test('#205: far out only tier 1; the tier-2 station joins at z8', async ({ page, context, baseURL }) => {
+  const s = await start(page, context, baseURL, 'state');
+  await ready(page);
+  await jumpTo(page, LOBITH, 7);
+  await expect.poll(() => renderedIds(page, ['stations'])).toContain(HOSTILE);
+  expect(await renderedIds(page, ['stations'])).not.toContain(TIER2);
+  await jumpTo(page, LOBITH, 8);
+  await expect.poll(() => renderedIds(page, ['stations'])).toEqual(expect.arrayContaining([HOSTILE, TIER2]));
+  await finish(page, s);
+});
+
+test('#205: a tier-2 station chosen in the search at z7 is drawn under its popup and leaves when the panel closes', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await ready(page);
+  await jumpTo(page, LOBITH, 7);
+  await expect.poll(() => renderedIds(page, ['stations'])).toContain(HOSTILE);
+  expect(await renderedIds(page, ['stations'])).not.toContain(TIER2);
+  const view = await camera(page);
+  await pickStation(page, 'E2E tier two', /E2E tier two/);
+  await expect.poll(() => param(page, 's')).toBe(TIER2);
+  // Drawn, with the selection ring (feature-state `selected`), and its popup's tip on the drawn marker.
+  await expect.poll(() => renderedIds(page, ['stations'])).toContain(TIER2);
+  await expect.poll(() => featureState(page, TIER2)).toMatchObject({ selected: true });
+  const tip = await box(page.locator('.maplibregl-popup-tip'));
+  const at = await onPage(page, TIER2_AT);
+  expect(Math.abs(tip.x + tip.width / 2 - at.x)).toBeLessThan(3);
+  const under = await page.evaluate(
+    ([lon, lat]) => {
+      const map = (window as unknown as W).__rws?.map;
+      const p = map?.project([lon as number, lat as number]);
+      if (map === undefined || map === null || p === undefined) return [];
+      return map
+        .queryRenderedFeatures(
+          [
+            [p.x - 3, p.y - 3],
+            [p.x + 3, p.y + 3],
+          ],
+          { layers: ['stations'] },
+        )
+        .map((f) => String(f.id));
+    },
+    [TIER2_AT[0], TIER2_AT[1]] as const,
+  );
+  expect(under).toContain(TIER2);
+  // No camera move: the visitor's view is kept.
+  expect(await camera(page)).toEqual(view);
+  await panelOf(page)
+    .getByRole('button', { name: nl('panel_close') })
+    .click();
+  await expect.poll(() => param(page, 's')).toBeNull();
+  await expect.poll(() => renderedIds(page, ['stations'])).not.toContain(TIER2);
+  expect(await renderedIds(page, ['stations'])).toContain(HOSTILE);
+  await finish(page, s);
+});
+
+for (const [width, height] of [
+  [1440, 900],
+  [1280, 720],
+  [390, 844],
+] as const)
+  test(`#205: the opening view holds the Netherlands with Lobith and Eijsden clear of the timebar (${width}x${height})`, async ({
+    page,
+    context,
+    baseURL,
+  }) => {
+    const s = await start(page, context, baseURL, 'state');
+    await page.setViewportSize({ width, height });
+    await ready(page);
+    const b = await page.evaluate(() => {
+      const bounds = (window as unknown as W).__rws?.map?.getBounds();
+      return (
+        bounds && { west: bounds.getWest(), south: bounds.getSouth(), east: bounds.getEast(), north: bounds.getNorth() }
+      );
+    });
+    expect(b?.west).toBeLessThanOrEqual(OPENING.west + 1e-6);
+    expect(b?.south).toBeLessThanOrEqual(OPENING.south + 1e-6);
+    expect(b?.east).toBeGreaterThanOrEqual(OPENING.east - 1e-6);
+    expect(b?.north).toBeGreaterThanOrEqual(OPENING.north - 1e-6);
+    // And fitted to them, not merely around them (the old basin view at z5.3 held them too): tight on one axis.
+    const near = (a: number | undefined, x: number) => a !== undefined && Math.abs(a - x) < 0.01;
+    expect(
+      (near(b?.west, OPENING.west) && near(b?.east, OPENING.east)) ||
+        (near(b?.south, OPENING.south) && near(b?.north, OPENING.north)),
+      JSON.stringify(b),
+    ).toBe(true);
+    // In sight: on the canvas, and under neither the timebar, the control row, the legend nor the credits (a marker's
+    // radius of slack).
+    const canvas = await box(page.locator('canvas.maplibregl-canvas'));
+    const covers = [
+      timebarOf(page),
+      ...controlRow(page),
+      page.locator('summary', { hasText: nl('legend_heading') }),
+      attributionButton(page),
+    ];
+    for (const [name, point] of [
+      ['Lobith', LOBITH],
+      ['Eijsden', EIJSDEN],
+    ] as const) {
+      const at = await onPage(page, point);
+      const spot = { x: at.x - 8, y: at.y - 8, width: 16, height: 16 };
+      expect(at.x > canvas.x && at.x < canvas.x + canvas.width, `${name} x`).toBe(true);
+      expect(at.y > canvas.y && at.y < canvas.y + canvas.height, `${name} y`).toBe(true);
+      for (const cover of covers) expect(overlaps(spot, await box(cover)), `${name} under ${cover}`).toBe(false);
+    }
+    await finish(page, s);
+  });
+
+test('#205: the zoom buttons are named in NL and EN, clear of the control row and the drawer', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await ready(page);
+  expect([nl('map_zoom_in'), nl('map_zoom_out')]).toEqual(['Inzoomen', 'Uitzoomen']);
+  const zoomIn = page.getByRole('button', { name: nl('map_zoom_in'), exact: true });
+  await expect(zoomIn).toBeVisible();
+  await expect(page.getByRole('button', { name: nl('map_zoom_out'), exact: true })).toBeVisible();
+  // At 390 px the control row wraps beside the buttons, never under them.
+  const group = await box(zoomGroup(page));
+  for (const control of controlRow(page)) expect(overlaps(group, await box(control)), `${control}`).toBe(false);
+  const before = (await camera(page)).zoom ?? 0;
+  await zoomIn.click();
+  await expect.poll(async () => (await camera(page)).zoom).toBeCloseTo(before + 1, 5);
+  // From 48rem the drawer covers the right of the map: the buttons stand beside it.
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await pickStation(page, 'E2E DST', /E2E DST/);
+  await expect(panelOf(page)).toBeVisible();
+  expect(overlaps(await box(zoomGroup(page)), await box(panelOf(page)))).toBe(false);
+  await open(page, '/en/', 'Timeline');
+  await mapReady(page);
+  expect([msg('en', 'map_zoom_in'), msg('en', 'map_zoom_out')]).toEqual(['Zoom in', 'Zoom out']);
+  await expect(page.getByRole('button', { name: msg('en', 'map_zoom_in'), exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: msg('en', 'map_zoom_out'), exact: true })).toBeVisible();
   await finish(page, s);
 });

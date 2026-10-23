@@ -35,6 +35,12 @@ export interface HookMap {
   project(lngLat: [number, number]): { x: number; y: number };
   getZoom(): number;
   getPadding(): { top: number; right: number; bottom: number; left: number };
+  getCenter(): { lng: number; lat: number };
+  getBounds(): { getWest(): number; getSouth(): number; getEast(): number; getNorth(): number };
+  queryRenderedFeatures(
+    g?: [number, number] | [[number, number], [number, number]],
+    o?: { layers?: string[] },
+  ): { id?: string | number }[];
 }
 export interface HookChart {
   getOption():
@@ -245,6 +251,28 @@ export const featureState = (page: Page, id: string) =>
       return null;
     }
   }, id);
+
+/** Moves the map (the view is not in the URL); a spec polls what it then draws. */
+export async function jumpTo(page: Page, center: [number, number], zoom: number) {
+  await page.waitForFunction(() => (window as unknown as W).__rws?.map);
+  await page.evaluate(
+    ([c, z]) => (window as unknown as W).__rws?.map?.jumpTo({ center: c as [number, number], zoom: z as number }),
+    [center, zoom] as const,
+  );
+}
+
+/** The ids of the features that `layers` draw in the whole canvas now (empty while tiles load). */
+export const renderedIds = (page: Page, layers: string[]) =>
+  page.evaluate(
+    (layers) => [
+      ...new Set(
+        ((window as unknown as W).__rws?.map?.queryRenderedFeatures(undefined, { layers }) ?? []).map((f) =>
+          String(f.id),
+        ),
+      ),
+    ],
+    layers,
+  );
 
 /** The `area` of every warning feature the map holds at the current t (jumps over Basel so its tiles are loaded). */
 export async function warningAreas(page: Page): Promise<string[]> {
