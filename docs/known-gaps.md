@@ -21,6 +21,17 @@ What P19b leaves (`PHASES.md` §54 "P19b as built"; ids renumber on merge).
 | KG-460 | owner | **The IJsselmeer outflow evidence** (the Rijkswaterstaat Afsluitdijk page, `https://www.rijkswaterstaat.nl/water/projectenoverzicht/afsluitdijk`) **was not fetched;** Wikidata (Q4121) gave no outflow. | [owner] check of the page | open [U] |
 | KG-461 | a11y | **A reference gauge hidden as stale (> 25 h) gave "no reference" and no classes** in the lake section, while the map's lake popup still named it (review round 1, CR-2). Settled: the lake section reads every station, the stale ones too, as the popup does; a stale reference shows "geen klasse". | – | closed in review round 1 (CR-2) |
 
+## P20b, roadmap 2 release (#68)
+
+What P20b (PR "P20b: Roadmap 2 release", stacked on P20a #211) leaves (`PHASES.md` P20b reality). Merging it closes #68 while the boxes below are open.
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-472 | agent-prod | **The roadmap 2 production run is open:** `scripts/verify-prod.sh waterradar.io --edge cloudflare` must pass every `ROADMAP2_CHECKS` entry (the `roadmap 2 (P20b):` block of `--dry-run`). The CI `deploy` gate requires only the offline ones; the nine live ones (`interval NL-1 nl-1-obs-sea|-obs-wide|-obs-slow|nl-1-hwlw`, `fresh NL-1 coast|lakes`, `astro horizon`, `surge`, `catch-up NL-1`) need production data, and the 23 h floor of `interval NL-1 nl-1-hwlw` is untested against real latency drift. Also that the production build keeps the chunk name `UncoveredBoards-*.js` and the raw UTF-8 board names. It closes KG-360 and KG-373 once `waterradar.io` passes. | [agent-prod] after the deploy and the catch-up | open [U] |
+| KG-473 | owner | **E6, E7, A9 and the k6 burst:** the owner signs `docs/launch-checklist.md` §8 (E6), sends the notice to Rijkswaterstaat (`docs/legal/requests/e7-rws-roadmap-2-live.md`, E7), closes A9 (KG-466) and runs the k6 production burst (KG-465), and accepts KG-472 to KG-475. | [owner] #68 | open [U] |
+| KG-474 | security | **The PMTiles tile blobs are not grepped for owner terms, only the metadata:** `rivers layers` runs the leak grep over the archive's metadata JSON (layer ids, fields) and the tiles are built from public inputs only (T-GEO-9, T-GEO-10); a term inside a tile's vector data would not be seen. | Accepted: decoding the tiles needs a tile decoder dependency (invariant 5) for a layer that holds no station and no value | accepted |
+| KG-475 | test | **`method uncovered` depends on the chunk name `UncoveredBoards-*.js`:** the Method page is a Vite SPA shell, so the 21 board names are in a lazy chunk that the check finds in the bodies of the `rivers attribution` crawl. A bundler change that renames or inlines the chunk makes the check FAIL (and CI with it), not pass. The existence test of `apps/web/src/features/pages/parts/UncoveredBoards.tsx` pins the source file the name derives from. | Accepted; revisit if the bundler config changes | accepted |
+
 ## P20a, capacity and the storm-surge drill (#68)
 
 What P20a (PR #211) leaves (`PHASES.md` P20a reality). The bench numbers are in `docs/capacity.md` § Publisher.

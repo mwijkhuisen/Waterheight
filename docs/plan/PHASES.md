@@ -4312,6 +4312,34 @@ Found while building: the publisher's station files dominate a steady cycle; the
 
 Open [U]: KG-462 to KG-471.
 
+### P20b reality (2026-10-23)
+
+PR "P20b: Roadmap 2 release" (draft, "Closes #68"), stacked on P20a (#211) and origin/main. Reviewers: Sonnet high code and Sonnet high security (the owner overrode #68's Fable/Fable). Merging it closes #68 while the [agent-prod] and [owner] boxes are open (KG-472, KG-473).
+
+**Premises of the plan text that differed from the repository.**
+1. P20a (#211) was not merged at plan time: P20b is stacked on its head, with origin/main merged in.
+2. "The P12 amendment" does not exist as text (the nearest are sections 42 and 44).
+3. The allow-list is not in `ci.yml`: it is `deploy/tests/e2e/verify-gate.sh`, which the CI `deploy` job and `deploy/tests/e2e/run.sh` both call. It is now an array (`live`) with a reason per roadmap 2 entry, and `ROADMAP2_CHECKS` in `scripts/verify-prod.ts` is the one list that `test/verify-gate.test.ts` holds equal to it.
+4. The Method page's uncovered list (D32) has 21 boards: NL-5 and NL-7 to NL-26.
+5. The pages are Vite SPA shells: the HTML carries no board names, so `method uncovered` finds the lazy chunk `UncoveredBoards-<hash>.js` in the bodies the `rivers attribution` crawl fetches and checks the 21 names there.
+6. Roadmap 2 adds no `PAGE_ROUTES` and no Caddy route; the new files fit the existing matchers.
+7. The web `/status` page lists sources, not specs, and never reads `capture.json`, so the specs are judged by the new check `status specs`.
+8. `capture.json` lists only specs with a cadence: the three NL-1 catch-ups are absent, the monthly specs present.
+9. The daily `nl-1-hwlw` gets an interval check (`interval NL-1 nl-1-hwlw`, floor 82,800 s = 23 h, because its rows run 179 s apart and the start drifts by up to about 80 s a day); this reverses P16a's limit to sub-daily specs on purpose. The monthly specs show no interval in a 24 h window and stay with `astro horizon`.
+10. `rivers download` failed in the CI gate because of a fixture gap (`run.sh` wrote a FeatureCollection with no attribution), not for live data. The fixture is fixed, so `rivers manifest`, `rivers tiles`, `rivers layers`, `rivers reaches` and `rivers download` are all required PASS now.
+
+**Owner decisions (2026-10-23).** Stack on P20a. A new check `status specs`, with no web change. Sonnet high for both reviews. E6 ships unsigned as `docs/launch-checklist.md` section 8; E7 is a Dutch draft sent after E6.
+
+**Not done, on purpose.** A Caddy-matcher test per station id (no route changed); a field allow-list for the water-body tile layers (the metadata leak grep covers it; the tile blobs are not decoded, KG-474); a separate `off stations` check (the 18 NL-1 `off` ids sit in the leak terms instead); a relaxed floor for the three existing NL-1 intervals (they passed in production on 2026-10-17).
+
+**P20b criteria and evidence.**
+- [ ] [CI] `verify-prod --dry-run` lists every roadmap 2 check. Evidence: {{CI}} (the `roadmap 2 (P20b):` block of `scripts/verify-prod.sh --dry-run x`; the `EXPECTED` dry-run test).
+- [ ] [CI] The deploy job requires PASS for every check that needs no live data. Evidence: {{CI}} (`test/verify-gate.test.ts`; the `deploy` job log with `PASS rivers layers`, `PASS status specs`, `PASS method uncovered`, `PASS rivers download` and `verify-gate: ok`).
+- [ ] [agent-prod] `scripts/verify-prod.sh waterradar.io --edge cloudflare` passes every `ROADMAP2_CHECKS` entry (KG-472).
+- [ ] [owner] A9 done; the k6 burst run in a quiet hour, with its output attached; E6 signed (`docs/launch-checklist.md` section 8); E7 sent (KG-473).
+
+Open [U]: KG-472 to KG-475.
+
 ---
 
 ### P21 · Water boards, as permissions arrive
