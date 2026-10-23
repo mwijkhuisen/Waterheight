@@ -80,8 +80,8 @@ export async function createMap(
       locale: mapLocale(lang),
       ...options,
     });
-    // #205: zoom buttons, no compass, so nothing may rotate the map (there is no reset-north): `dragRotate` is off in the
-    // options, the touch twist and Shift+arrow here; their words are mapLocale's.
+    // #205: zoom buttons without a compass, so nothing may rotate the map (there is no reset-north): `dragRotate` is off
+    // in the options, the touch twist and Shift+arrow here. The buttons' words are mapLocale's.
     map.touchZoomRotate.disableRotation();
     map.keyboard.disableRotation();
     map.addControl(new NavigationControl({ showCompass: false }), 'top-right');

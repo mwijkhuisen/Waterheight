@@ -23,7 +23,7 @@ import { formatNumber } from '../station/value.ts';
 import styles from './map.module.css';
 import { badgeLine, changeLine, modeLines, surgeLine } from './popup.ts';
 import { hasReachBins, highlightRiver, RIVERS, RIVERS_HIGHLIGHT, showRivers } from './rivers.ts';
-import { SOURCE, setSelectedStation, setStationMode, showStations } from './stationLayer.ts';
+import { SOURCE, setSelectedStation, setStationMode, showStations, TIER2_MINZOOM } from './stationLayer.ts';
 import { useMapLibre } from './useMapLibre.ts';
 import { showWarnings, WARNINGS_FILL } from './warnings.ts';
 import type { WaterHandle } from './waterLayer.ts';
@@ -34,10 +34,10 @@ import type { WaterHandle } from './waterLayer.ts';
 
 // #205: the map opens on the Netherlands and its border gauges (owner 2026-10-22), the south edge at 50.2 so that
 // Eijsden stays clear of the collapsed timebar from about 1280x720 (owner 2026-10-23). MapLibre's `bounds` overrides the
-// center and zoom of createMap; no camera padding, which would outlive the first view. On a very tall window (3840x2160
-// CSS px) the fit would pass z8 and open with tier 2: `maxZoom` caps that first fit only.
+// center and zoom of createMap; no camera padding, which would outlive the first view. On a large window (3840x2160 CSS
+// px) the fit would pass z8 and open with tier 2: `maxZoom` caps that first fit only.
 const OPTIONS = {
-  fitBoundsOptions: { maxZoom: 7.9 },
+  fitBoundsOptions: { maxZoom: TIER2_MINZOOM - 0.1 },
   bounds: [
     [3.2, 50.2],
     [7.4, 53.6],

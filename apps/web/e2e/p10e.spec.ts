@@ -1001,6 +1001,8 @@ test('#205: the zoom buttons are named in NL and EN, clear of the control row an
   expect(await page.evaluate(() => (window as unknown as W).__rws?.map?.dragRotate.isEnabled())).toBe(false);
   await page.locator('canvas.maplibregl-canvas').focus();
   await page.keyboard.press('Shift+ArrowRight');
+  // The key starts a 300 ms ease at once: read the bearing when it ends, since a read mid-ease is 0 either way.
+  await expect.poll(() => page.evaluate(() => (window as unknown as W).__rws?.map?.isMoving())).toBe(false);
   expect(await page.evaluate(() => (window as unknown as W).__rws?.map?.getBearing())).toBe(0);
   // From 48rem the drawer covers the right of the map: the buttons stand beside it.
   await page.setViewportSize({ width: 1440, height: 900 });
