@@ -34,13 +34,15 @@ export interface HookMap {
   isMoving(): boolean;
   project(lngLat: [number, number]): { x: number; y: number };
   getZoom(): number;
+  getBearing(): number;
+  dragRotate: { isEnabled(): boolean };
   getPadding(): { top: number; right: number; bottom: number; left: number };
   getCenter(): { lng: number; lat: number };
   getBounds(): { getWest(): number; getSouth(): number; getEast(): number; getNorth(): number };
   queryRenderedFeatures(
     g?: [number, number] | [[number, number], [number, number]],
     o?: { layers?: string[] },
-  ): { id?: string | number }[];
+  ): { id?: string | number; properties?: Record<string, unknown> }[];
 }
 export interface HookChart {
   getOption():
@@ -252,11 +254,37 @@ export const featureState = (page: Page, id: string) =>
     }
   }, id);
 
-/** Moves the map (the view is not in the URL); a spec polls what it then draws. */
+/**
+ * Moves the map (the view is not in the URL); a spec polls what it then draws. The jump is made inside the wait for the
+ * hook's map, which is null for an instant whenever the station layers are rebuilt, so it is never skipped.
+ */
 export async function jumpTo(page: Page, center: [number, number], zoom: number) {
+  await page.waitForFunction(
+    ([c, z]) => {
+      const map = (window as unknown as W).__rws?.map;
+      if (!map) return false;
+      map.jumpTo({ center: c as [number, number], zoom: z as number });
+      return true;
+    },
+    [center, zoom] as const,
+  );
+}
+
+/**
+ * Moves the map and waits for the `idle` that follows, so a query reads the tiles of the new zoom and not the old view's
+ * (the `once` is registered before the jump, in one evaluate). Never with the flow animation on: an animating map does
+ * not go idle (P11a); use `jumpTo` there.
+ */
+export async function jumpToIdle(page: Page, center: [number, number], zoom: number) {
   await page.waitForFunction(() => (window as unknown as W).__rws?.map);
   await page.evaluate(
-    ([c, z]) => (window as unknown as W).__rws?.map?.jumpTo({ center: c as [number, number], zoom: z as number }),
+    ([c, z]) => {
+      const map = (window as unknown as W).__rws?.map;
+      if (!map) throw new Error('no map');
+      const idle = new Promise<void>((r) => map.once('idle', r));
+      map.jumpTo({ center: c as [number, number], zoom: z as number });
+      return idle;
+    },
     [center, zoom] as const,
   );
 }
@@ -267,7 +295,7 @@ export const renderedIds = (page: Page, layers: string[]) =>
     (layers) => [
       ...new Set(
         ((window as unknown as W).__rws?.map?.queryRenderedFeatures(undefined, { layers }) ?? []).map((f) =>
-          String(f.id),
+          String(f.id ?? f.properties?.id),
         ),
       ),
     ],

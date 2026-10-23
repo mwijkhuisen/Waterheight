@@ -14,6 +14,7 @@ import {
   hovRegion,
   hovToggle,
   jumpTo,
+  jumpToIdle,
   mapReady,
   menuButton,
   modeSummary,
@@ -836,7 +837,8 @@ test('axe: the map, the opened controls and the table view', async ({ page, cont
 // view, zoom buttons. nl.e2e.tier2 is the seed's only tier-2 station near Lobith (apps/server/test/e2e/api.ts).
 
 const LOBITH: [number, number] = [6.1, 51.85];
-const EIJSDEN: [number, number] = [5.69, 50.78];
+// The gauge nl.rws.eijsden.grens (registry/stations/nl-1.yaml).
+const EIJSDEN: [number, number] = [5.682, 50.758];
 const TIER2 = 'nl.e2e.tier2';
 const TIER2_AT: [number, number] = [6.15, 51.83];
 const OPENING = { west: 3.2, south: 50.2, east: 7.4, north: 53.6 };
@@ -865,7 +867,9 @@ const zoomGroup = (page: Page) => page.locator('.maplibregl-ctrl-top-right .mapl
 test('#205: far out only tier 1; the tier-2 station joins at z8', async ({ page, context, baseURL }) => {
   const s = await start(page, context, baseURL, 'state');
   await ready(page);
-  await jumpTo(page, LOBITH, 7);
+  // Idle first: right after the jump the canvas can still hold the opening view's z6 tile, which proves nothing about z7.
+  await jumpToIdle(page, LOBITH, 7);
+  expect(await camera(page)).toMatchObject({ zoom: 7 });
   await expect.poll(() => renderedIds(page, ['stations'])).toContain(HOSTILE);
   expect(await renderedIds(page, ['stations'])).not.toContain(TIER2);
   await jumpTo(page, LOBITH, 8);
@@ -880,7 +884,9 @@ test('#205: a tier-2 station chosen in the search at z7 is drawn under its popup
 }) => {
   const s = await start(page, context, baseURL, 'state');
   await ready(page);
-  await jumpTo(page, LOBITH, 7);
+  // Idle first: right after the jump the canvas can still hold the opening view's z6 tile, which proves nothing about z7.
+  await jumpToIdle(page, LOBITH, 7);
+  expect(await camera(page)).toMatchObject({ zoom: 7 });
   await expect.poll(() => renderedIds(page, ['stations'])).toContain(HOSTILE);
   expect(await renderedIds(page, ['stations'])).not.toContain(TIER2);
   const view = await camera(page);
@@ -991,6 +997,13 @@ test('#205: the zoom buttons are named in NL and EN, clear of the control row an
   const before = (await camera(page)).zoom ?? 0;
   await zoomIn.click();
   await expect.poll(async () => (await camera(page)).zoom).toBeCloseTo(before + 1, 5);
+  // No compass, and nothing else turns the map either: no drag, no touch twist, no Shift+arrow (there is no reset-north).
+  expect(await page.evaluate(() => (window as unknown as W).__rws?.map?.dragRotate.isEnabled())).toBe(false);
+  await page.locator('canvas.maplibregl-canvas').focus();
+  await page.keyboard.press('Shift+ArrowRight');
+  // The key starts a 300 ms ease at once: read the bearing when it ends, since a read mid-ease is 0 either way.
+  await expect.poll(() => page.evaluate(() => (window as unknown as W).__rws?.map?.isMoving())).toBe(false);
+  expect(await page.evaluate(() => (window as unknown as W).__rws?.map?.getBearing())).toBe(0);
   // From 48rem the drawer covers the right of the map: the buttons stand beside it.
   await page.setViewportSize({ width: 1440, height: 900 });
   await pickStation(page, 'E2E DST', /E2E DST/);
