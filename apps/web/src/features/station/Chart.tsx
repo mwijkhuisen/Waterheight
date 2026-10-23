@@ -16,6 +16,8 @@ interface Props {
   name: string;
   /** The unit with its zero ("cm NAP"). */
   unit: string;
+  /** P19b: the bare unit of a difference (the surge has no datum): "cm". */
+  deltaUnit: string;
   /** The axis, and the now and selected instants when it shows them (SeriesSection decides, for its legend too). */
   x: { min: number; max: number };
   now: number | undefined;
@@ -39,6 +41,7 @@ export function Chart({
   locale,
   name,
   unit,
+  deltaUnit,
   x,
   now,
   selected,
@@ -85,6 +88,12 @@ export function Chart({
       axisName: m.chart_axis_time({}, { locale }),
       showThresholds,
       points: data.points,
+      tide: data.tide,
+      tideTip: {
+        astro: (value) => m.tide_tip_astro({ value }, { locale }),
+        surge: (value) => m.tide_tip_surge({ value }, { locale }),
+        unit: deltaUnit,
+      },
       marks,
       observedName: m.chart_observed({}, { locale }),
       forecast:
@@ -94,7 +103,7 @@ export function Chart({
       x,
       format: (v) => formatNumber(v, locale),
     });
-  }, [chart, data, marks, showThresholds, now, selected, x, locale, name, unit, ownerSources]);
+  }, [chart, data, marks, showThresholds, now, selected, x, locale, name, unit, deltaUnit, ownerSources]);
 
   return <div ref={ref} className={styles.chart} role="img" aria-label={m.chart_label({ unit, days }, { locale })} />;
 }

@@ -33,6 +33,11 @@ export interface SeriesData {
   recentOnly: boolean;
   /** The series' unit conversion, canonical to native. */
   conv: (v: number) => number;
+  /**
+   * P19b: a tidal station's primary H series over the chart span (raw /series, no brownout): the astronomical tide and
+   * the derived surge, in the native unit; undefined without tide rows.
+   */
+  tide?: { astro: Pt[]; surge: Pt[] } | undefined;
 }
 
 interface Input {
@@ -44,9 +49,11 @@ interface Input {
   /** This series' entry of recent.json (undefined while it loads or when the file failed). */
   recent: RecentSeries | undefined;
   recentFailed: boolean;
+  /** P19b: this is the primary H series of a tidal station: its astronomical tide and surge are asked for the span. */
+  tidal?: boolean;
 }
 
-export function useSeriesData({ series, t, span, serverNow, recent, recentFailed }: Input): SeriesData {
+export function useSeriesData({ series, t, span, serverNow, recent, recentFailed, tidal = false }: Input): SeriesData {
   const api = series.api ?? true;
   const source = historySource(t, serverNow, api);
   // P12a: in a brownout the API refuses raw, so the history is asked hourly (the last value of each hour).
@@ -60,6 +67,10 @@ export function useSeriesData({ series, t, span, serverNow, recent, recentFailed
   const earlier = useSeries(series.id, span.from, firstRecent ?? span.from, gap && api, brownout);
   // The now bucket and after: the run of recent.json (the one forecast/latest.json shows). An earlier t asks the API
   // for the run as of that t, once the slider has stopped (review round 1: a held key sent one request per step).
+  // P19b (critic C1): the tide of the chart span, from the same raw /series (the API refuses raw in a brownout). When the
+  // obs ask the same span, react-query shares the one request.
+  const tideOn = tidal && api && !brownout;
+  const tideAnswer = useSeries(series.id, span.from, span.to, tideOn, brownout);
   const future = t >= floorBucket(serverNow);
   const settled = useDebounced(t, 150);
   const asof = useForecastAsOf(series.id, future || !api || settled !== t ? undefined : settled);
@@ -92,6 +103,19 @@ export function useSeriesData({ series, t, span, serverNow, recent, recentFailed
     const own = recent === undefined ? [] : observedPoints(recent.ts, recent.value, conv, span.from, span.to);
     return gap && api ? mergeHistory(raw(earlier.data), own) : own;
   }, [source, older.data, earlier.data, recent, gap, api, conv, span.from, span.to]);
+  const tide = useMemo(() => {
+    const d = tideAnswer.data;
+    if (!tideOn || d?.res !== 'raw' || d.tide === undefined) return undefined;
+    const line = (a: { ts: string; value: number }[]) =>
+      observedPoints(
+        a.map((p) => p.ts),
+        a.map((p) => p.value),
+        conv,
+        span.from,
+        span.to,
+      );
+    return { astro: line(d.tide.astro), surge: line(d.tide.surge) };
+  }, [tideOn, tideAnswer.data, conv, span.from, span.to]);
   const view = useMemo(
     () => (run === undefined ? undefined : forecastView(run, conv, future ? serverNow : t)),
     [run, conv, future, serverNow, t],
@@ -101,7 +125,7 @@ export function useSeriesData({ series, t, span, serverNow, recent, recentFailed
   const recentOnly = gap && !api;
   // One object per change, so the chart redraws only when its data did.
   return useMemo(
-    () => ({ points, run, view, failed, historyNone, recentOnly, conv }),
-    [points, run, view, failed, historyNone, recentOnly, conv],
+    () => ({ points, run, view, failed, historyNone, recentOnly, conv, tide }),
+    [points, run, view, failed, historyNone, recentOnly, conv, tide],
   );
 }
