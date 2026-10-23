@@ -76,7 +76,7 @@ export RWS_E2E=1
 domain=$RWS_E2E_DOMAIN
 server_image=${RWS_SERVER_IMAGE:-rws-server:ci}
 wait_s=${STORM_WAIT_S:-900}
-[[ $wait_s =~ ^[0-9]+$ ]] || fail "STORM_WAIT_S is not a number of seconds"
+[[ $wait_s =~ ^[1-9][0-9]{0,5}$ ]] || fail "STORM_WAIT_S is not a number of seconds (1 to 999999, no leading zero)"
 station=$(jq -r '.station.id' "$storm/expected.json")
 samples=/ci/storm-samples.tsv
 
@@ -183,22 +183,38 @@ series_from=$(date -u -d "@$((to_s - 86400))" +%Y-%m-%dT%H:%MZ)
 series_to=$(date -u -d "@$to_s" +%Y-%m-%dT%H:%MZ)
 # sweep_get <name> <path> <200 | 200,404>: the status code must be one of the list; the body is kept for the scan.
 sweep_get() {
+  # (sweep_code keeps the status code for the caller)
   local code
   code=$(ip netns exec "$RWS_E2E_CLIENT_NETNS" curl -sS --max-time 20 --cacert "$RWS_E2E_CA" \
     --resolve "$domain:443:$RWS_E2E_CADDY_IP" -o "$sweep/$1" -w '%{http_code}' "https://$domain$2") ||
     fail "$2: the request failed"
   [[ ,$3, == *",$code,"* ]] || fail "$2 answered $code (expected $3)"
+  sweep_code=$code
   swept+=("$2=$code")
 }
 swept=()
 sweep_get snapshot "/api/v1/snapshot?t=$storm_t" 200
-sweep_get series "/api/v1/series/$series_id?from=$series_from&to=$series_to&res=raw" 200
+sweep_get series "/api/v1/series/$series_id?from=$series_from&to=$series_to&res=raw" 200,503
+series_code=$sweep_code
 sweep_get health /api/v1/health 200
 sweep_get health-sources /api/v1/health/sources 200
 sweep_get data-status /data/v1/status.json 200
 sweep_get status-capture /status/capture.json 200,404
 sweep_get status-ops /status/ops.json 200,404
 sweep_get rivers-manifest /data/v1/rivers/manifest.json 200,404
+# A body that is empty proves nothing about the canaries: every fetched answer must hold something.
+for f in "$sweep"/*; do
+  [[ -s $f ]] || fail "the public answer ${f##*/} is empty"
+done
+# The raw series answers 503 in a brownout (the api's brownout mode); its body is still scanned below.
+if [[ $series_code == 200 ]]; then
+  jq -e '(.points | length) > 0 and (.tide.surge | length) > 0' "$sweep/series" >/dev/null ||
+    fail "the public answer series holds no points or no tide.surge"
+  series_note="the 24 h series of $station holds points and a surge"
+else
+  series_note="the series answered 503 (brownout), its points and surge were not judged"
+  proof "NOTE: /api/v1/series answered 503, the api was in brownout; its body was scanned for canaries only"
+fi
 # The snapshot at the storm bucket is the read that proves the sweep looked at the storm: Den Helder's surge is in it.
 jq -e --argjson sid "$series_id" --slurpfile e "$storm/expected.json" \
   '[.values[] | select(.series == $sid)][0].tide.surge == $e[0].tide.surge' "$sweep/snapshot" >/dev/null ||
@@ -211,7 +227,7 @@ while IFS= read -r rendering; do
   i=$((i + 1))
 done < <(jq -r '.canary[]' "$storm/expected.json")
 ((i == 4)) || fail "expected.json lists $i canary renderings, not 4"
-proof "public answers fetched from outside through Caddy at the storm (${swept[*]}): none holds any of the $i canary renderings of expected.json, and the snapshot at $storm_t holds $station at surge 250"
+proof "public answers fetched from outside through Caddy at the storm (${swept[*]}): none holds any of the $i canary renderings of expected.json, and the snapshot at $storm_t holds $station at surge 250; $series_note"
 endstep
 
 step "Degraded mode under the burst: the api stopped, the map still answers from files"
@@ -249,6 +265,12 @@ proof "the api container started again and is healthy"
 endstep
 
 step "The publisher kept up for the whole window"
+# The verdict needs at least 12 samples, 3 of them good ones after the replay settled (the minimums below, never lowered): with
+# Playwright last the step comes soon after the replay, so wait (bounded) for the sampler to have taken them; it keeps running.
+enough_samples() {
+  awk -F'\t' -v s="$settled_at" '{ n++ } $2 != "-" && $1 >= s { j++ } END { exit !(n >= 12 && j >= 3) }' "$samples"
+}
+wait_for "12 publisher samples, 3 of them after the replay settled" 240 enough_samples
 kill "$sampler_pid" 2>/dev/null || true
 sampler_pid=''
 n=0 missed=0 maxcyc=0 judged=0 degraded_n=0 old_n=0 oldest=0
@@ -270,10 +292,10 @@ echo "samples: $n, fetch failures: $missed, max cycleSeconds: $maxcyc, after the
 ((n >= 12)) || fail "only $n publisher samples (the window was shorter than two minutes)"
 ((missed * 5 <= n)) || fail "$missed of $n publisher samples failed to fetch"
 ((judged >= 3)) || fail "only $judged publisher samples after the replay settled"
-((maxcyc <= 60)) || fail "status.json publisher.cycleSeconds reached $maxcyc s (budget 60 s)"
+((maxcyc <= 60)) || fail "status.json publisher.cycleSeconds reached $maxcyc s (the cycle period of 60 s, CYCLE_MS)"
 ((degraded_n == 0)) || fail "meta.json said degraded in $degraded_n of $judged samples after the replay settled"
 ((old_n == 0)) || fail "latest.json's generatedAt was older than 120 s in $old_n of $judged samples (oldest ${oldest} s)"
-proof "publisher kept up: $n samples every 10 s from the replay on ($missed fetch failures), the largest publisher.cycleSeconds in status.json was $maxcyc s (budget 60 s); after the replay settled ($judged samples) meta.json never said degraded and latest.json's generatedAt was at most $oldest s old (limit 120 s)"
+proof "publisher kept up: $n samples every 10 s from the replay on ($missed fetch failures), the largest publisher.cycleSeconds in status.json was $maxcyc s (the cycle period of 60 s, CYCLE_MS); after the replay settled ($judged samples) meta.json never said degraded and latest.json's generatedAt was at most $oldest s old (limit 120 s)"
 endstep
 
 step "Playwright, last: the popup and the panel of Den Helder on the storm day, visual baseline (pinned image)"
