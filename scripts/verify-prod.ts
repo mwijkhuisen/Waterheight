@@ -1180,6 +1180,90 @@ export function checkRiversTiles(m: RiversManifest | undefined, page: Page | str
     : miss(check, problems.join('; '));
 }
 
+/** The layers a tile file must declare (P19b): the rivers overlay, the reach bins, the water bodies and the canals. */
+export const RIVERS_LAYERS = ['rivers', 'reach_bins', 'waterbodies', 'canals'] as const;
+/** The PMTiles v3 header is 127 bytes; the metadata (JSON, gzip inside) is read in a second Range, at most this long. */
+export const PMTILES_HEADER_RANGE = 'bytes=0-126';
+export const PMTILES_METADATA_MAX = 1024 * 1024;
+
+/** PMTiles v3 header: where the metadata sits (u64 LE offset @24, length @32) and its compression byte @97. */
+export function pmtilesMetadataSpan(
+  header: Buffer,
+  fileBytes?: number,
+): { offset: number; length: number; compression: number } | string {
+  if (header.length < 127) return `header ${header.length} bytes, want 127`;
+  if (header.subarray(0, 8).toString('latin1') !== PMTILES_MAGIC) return 'not a PMTiles v3 file';
+  const offset = header.readBigUInt64LE(24);
+  const length = header.readBigUInt64LE(32);
+  const compression = header.readUInt8(97);
+  if (length === 0n || length > BigInt(PMTILES_METADATA_MAX))
+    return `metadata length ${length}, want 1..${PMTILES_METADATA_MAX}`;
+  if (offset + length > BigInt(fileBytes ?? Number.MAX_SAFE_INTEGER))
+    return `metadata ${offset}+${length} does not fit the file`;
+  if (compression !== 1 && compression !== 2) return `internal compression ${compression}, want 1 (none) or 2 (gzip)`;
+  return { offset: Number(offset), length: Number(length), compression };
+}
+
+/** The `vector_layers` ids of a PMTiles metadata blob (gunzipped when compression is 2). */
+export function pmtilesLayerIds(blob: Buffer, compression: number): string[] | string {
+  try {
+    // At most 8 MiB once gunzipped (review SR-2): a larger output throws and is reported below.
+    const plain = compression === 2 ? gunzipSync(blob, { maxOutputLength: 8 * 1024 * 1024 }) : blob;
+    const json: unknown = JSON.parse(plain.toString('utf8'));
+    const layers = (json as { vector_layers?: unknown } | null)?.vector_layers;
+    if (!Array.isArray(layers)) return 'metadata has no vector_layers';
+    return layers.map((l) => String((l as { id?: unknown } | null)?.id));
+  } catch {
+    return 'metadata is not (gzipped) JSON of at most 8 MiB';
+  }
+}
+
+/**
+ * The tile file's layers (P19b): the 127-byte header says where the metadata is, the metadata lists the layers, and
+ * both Range answers carry the site headers (`/tiles` stays noindex under the launch profile too).
+ */
+export function checkRiversLayers(
+  m: RiversManifest | undefined,
+  path: string,
+  head: Page | string | undefined,
+  meta: Page | string | undefined,
+  expected: Readonly<Record<string, string>>,
+  edge: Edge = 'direct',
+): Result {
+  const check = 'rivers layers';
+  if (m === undefined) return miss(check, 'no valid manifest');
+  if (head === undefined || typeof head === 'string') return miss(check, head ?? 'not asked');
+  const span = pmtilesMetadataSpan(head.bytes ?? Buffer.from(head.body, 'latin1'), m.current.tiles.bytes);
+  if (typeof span === 'string') return miss(check, span);
+  if (meta === undefined || typeof meta === 'string') return miss(check, meta ?? 'not asked');
+  const want = { ...expected, 'x-robots-tag': 'noindex' };
+  const problems: string[] = [];
+  for (const [label, page] of [
+    ['header', head],
+    ['metadata', meta],
+  ] as const) {
+    const h = checkHeaders(path, page.status, page.headers, want, 206, edge);
+    if (!h.ok) problems.push(`${label} ${h.detail}`);
+  }
+  const range = `bytes ${span.offset}-${span.offset + span.length - 1}/${m.current.tiles.bytes}`;
+  if (meta.headers['content-range'] !== range)
+    problems.push(`content-range ${show(meta.headers['content-range'])}, want ${range}`);
+  if (meta.headers['content-encoding'] !== undefined)
+    problems.push(`content-encoding ${show(meta.headers['content-encoding'])}`);
+  const ids = pmtilesLayerIds(meta.bytes ?? Buffer.from(meta.body, 'latin1'), span.compression);
+  if (typeof ids === 'string') problems.push(ids);
+  else {
+    const absent = RIVERS_LAYERS.filter((l) => !ids.includes(l));
+    if (absent.length > 0) problems.push(`missing layers ${absent.join(', ')}`);
+  }
+  return problems.length === 0
+    ? pass(
+        check,
+        `${path}: metadata ${span.length} bytes at ${span.offset}, layers ${RIVERS_LAYERS.join(', ')}, site headers on both 206s`,
+      )
+    : miss(check, problems.join('; '));
+}
+
 /**
  * The reaches file of the current release: 200, immutable JSON, the `ReachesFile` contract with `checkReaches`
  * clean, the manifest's version, and every station of it a station of `/api/v1/stations` (a station the public API
@@ -3170,6 +3254,7 @@ export const CHECKS = [
   `map assets: GET ${MAP_ASSET_PATH} (a pinned glyph range of the web image) is 200 with Cache-Control exactly "${TILE_CACHE}"`,
   `rivers manifest: GET ${RIVERS_MANIFEST_PATH} is 200 with Cache-Control exactly "${MANIFEST_CACHE}" and a body the strict RiversManifest contract accepts`,
   `rivers tiles: GET /tiles/<the manifest's tiles file> with Range: ${TILE_HEADERS.range} is 206 with Content-Range bytes 0-15/<manifest bytes>, Cache-Control exactly "${TILE_CACHE}", no Content-Encoding and the PMTiles v3 magic first`,
+  `rivers layers: GET /tiles/<the manifest's tiles file> with Range: ${PMTILES_HEADER_RANGE} (the PMTiles v3 header), then the metadata it points to (at most ${PMTILES_METADATA_MAX} bytes, gunzipped): both 206 with the A§12.2 headers and X-Robots-Tag noindex, and vector_layers include ${RIVERS_LAYERS.join(', ')}`,
   `rivers reaches: GET /data/v1/rivers/<the manifest's reaches file> is 200 JSON with Cache-Control exactly "${TILE_CACHE}", the ReachesFile contract, checkReaches clean, the manifest's version, and every station of it a station of /api/v1/stations (the file's body is also in owner leak)`,
   `rivers download: HEAD /downloads/<the manifest's download file> is 200 application/gzip with no Content-Encoding, ${TILE_CACHE} and the manifest's length; a Range of ${RIVERS_DOWNLOAD_RANGE}, gunzipped (truncation tolerated), shows "attribution": "${OSM_ATTRIBUTION}" and "licence": "${ODBL_LICENCE}" before "features"`,
   'rivers attribution: the entry script that / references, or a chunk of its initial load (its static imports, two levels, at most 10 files), contains the string ODbL (the footer text, P6b)',
@@ -3416,12 +3501,26 @@ async function main(argv: string[]): Promise<number> {
     const stationIds =
       stationsRead.data === undefined ? undefined : new Set(stationsRead.data.stations.map((st) => st.id));
     const entry = entryScript(pageBody(site['/']));
+    const expected = expectedHeaders(readFileSync(join(root, 'docs/plan/ARCHITECTURE.md'), 'utf8'), profile);
     results.push(
       checkRiversManifest(rivers),
       checkRiversTiles(
         rivers.manifest,
         cur === undefined ? undefined : await tile(`/tiles/${cur.tiles.file}`, TILE_HEADERS),
       ),
+      await (async () => {
+        if (cur === undefined) return checkRiversLayers(rivers.manifest, '', undefined, undefined, expected, edge);
+        const path = `/tiles/${cur.tiles.file}`;
+        const enc = { 'accept-encoding': TILE_HEADERS['accept-encoding'] };
+        const head = await tile(path, { ...enc, range: PMTILES_HEADER_RANGE });
+        const span =
+          typeof head === 'string' ? '' : pmtilesMetadataSpan(head.bytes ?? Buffer.alloc(0), cur.tiles.bytes);
+        const meta =
+          typeof span === 'string'
+            ? undefined
+            : await tile(path, { ...enc, range: `bytes=${span.offset}-${span.offset + span.length - 1}` });
+        return checkRiversLayers(rivers.manifest, path, head, meta, expected, edge);
+      })(),
       checkRiversReaches(rivers.manifest, reachesPage, stationIds),
       checkRiversDownload(
         rivers.manifest,

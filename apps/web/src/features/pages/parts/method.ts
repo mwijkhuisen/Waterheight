@@ -1,9 +1,11 @@
 import { type Datum, type NapRelation, TO_NAP } from '@rws/core/datums';
 import type { ForecastCoverage } from '../../../lib/data/contracts.ts';
+import { pathOf } from '../../../lib/routes.ts';
 import { m } from '../../../paraglide/messages.js';
 import type { Locale } from '../../../paraglide/runtime.js';
 import { basisKind, stateWord } from '../../station/state.ts';
 import { METHOD_AGENCIES, METHOD_CLASSES, METHOD_REFERENCES, type MethodReference } from '../method.gen.ts';
+import { UNCOVERED_BOARDS } from '../uncovered.gen.ts';
 import { fractionText, intlLocale, listText } from './numbers.ts';
 
 // The Method page's logic (P10b), pure: the class crosswalk and reference roles of method.gen.ts (generated from the
@@ -171,3 +173,17 @@ export function reachRows(fc: ForecastCoverage, locale: Locale): ReachRowView[] 
     ],
   }));
 }
+
+export interface UncoveredRowView {
+  board: string;
+  rivers: string;
+  gauges: { id: string; name: string; href: string }[];
+}
+
+/** The water boards with no data on the map: rivers in the page's language, each gauge a link to the map (D32). */
+export const uncoveredRows = (locale: Locale): UncoveredRowView[] =>
+  UNCOVERED_BOARDS.map((b) => ({
+    board: b.board,
+    rivers: listText(b.rivers[locale], locale),
+    gauges: b.gauges.map((g) => ({ ...g, href: `${pathOf('home', locale)}?s=${encodeURIComponent(g.id)}` })),
+  }));

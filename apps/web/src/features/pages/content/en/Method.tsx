@@ -3,6 +3,7 @@ import { DatumTable } from '../../parts/DatumTable.tsx';
 import { ForecastCoverage } from '../../parts/ForecastCoverage.tsx';
 import { PageLink } from '../../parts/PageLink.tsx';
 import { TravelTimes } from '../../parts/TravelTimes.tsx';
+import { UncoveredBoards } from '../../parts/UncoveredBoards.tsx';
 
 export default function Method() {
   return (
@@ -98,6 +99,20 @@ export default function Method() {
       </p>
       <TravelTimes locale="en" />
 
+      <h2>Surge (derived)</h2>
+      <p>
+        At a tidal station the station panel shows the surge: the measured water level minus the astronomical tide, at
+        one instant and in one datum. The surge is derived by this site and is never an official class or warning. At
+        stations offshore the levels are relative to mean sea level (MSL).
+      </p>
+
+      <h2>Lakes</h2>
+      <p>
+        A lake has one named reference gauge, and the state of the lake is the state of that gauge. The spread between
+        the other gauges in the same water is information only and does not change the state. Wind can pile water up
+        against one shore (wind set-up), so gauges in the same lake can differ for hours.
+      </p>
+
       <h2>Rivers that are not covered</h2>
       <p>The first release lacks these rivers or river stretches:</p>
       <ul>
@@ -113,11 +128,13 @@ export default function Method() {
           Austria and Liechtenstein (Ill, Bregenzerach and Lake Constance at Bregenz): outside the first release. The
           Alpine Rhine and Lake Constance come from the data of the Swiss BAFU.
         </li>
-        <li>
-          Stretches managed by Dutch water boards: of these the site shows only what the German upstream gauges and
-          Rijkswaterstaat measure; data from the water boards themselves are on a waiting list.
-        </li>
       </ul>
+      <p>
+        Stretches managed by Dutch water boards: of these the site shows only what the German upstream gauges and
+        Rijkswaterstaat measure; data from the water boards themselves are on a waiting list. The table lists these
+        boards, their rivers and the nearest gauge on the map.
+      </p>
+      <UncoveredBoards locale="en" />
       <p>
         Which sources the site uses is listed on{' '}
         <PageLink id="sources" locale="en">

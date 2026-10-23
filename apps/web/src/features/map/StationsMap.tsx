@@ -458,6 +458,16 @@ export function StationsMap({
   const lakeLinesNow = useRef(lakeLines);
   lakeLinesNow.current = lakeLines;
   const lakeHost = useRef<HTMLElement | null>(null);
+  const lakeButton = useRef<HTMLElement | null>(null);
+  const lakeOpenLabel = m.lake_open({}, { locale });
+  // P19b (O-5, KG-448): the popup's button opens the reference gauge's panel, else the body's first gauge; a body with
+  // no station on the map gets no button. The panel's lake section then lists the other gauges.
+  const lakeOpenId = useMemo(() => {
+    if (lakeBody === undefined) return undefined;
+    const known = (id: string) => allStations.some((st) => st.id === id);
+    const ref = lakeBody.reference_station_id;
+    return ref !== null && known(ref) ? ref : lakeBody.stations.find(known);
+  }, [lakeBody, allStations]);
   const lakeAt = lake?.at;
   useEffect(() => {
     if (map === null || lakeAt === undefined || lakeName === undefined) return;
@@ -472,7 +482,17 @@ export function StationsMap({
         .setDOMContent(text)
         .addTo(map);
       lakeHost.current = text.parentElement;
-      showLines(lakeHost.current, lakeLinesNow.current);
+      lakeButton.current = null;
+      if (lakeOpenId !== undefined) {
+        // Our own text through textContent; a click opens the panel the way the marker does (App's `open` keeps the focus).
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = lakeOpenLabel;
+        button.addEventListener('click', () => select.current(lakeOpenId));
+        lakeHost.current?.append(button);
+        lakeButton.current = button;
+      }
+      showLines(lakeHost.current, lakeLinesNow.current, lakeButton.current);
       // As the station popup: only its own close button closes it for good (a removed map also fires 'close').
       popup
         .getElement()
@@ -483,11 +503,12 @@ export function StationsMap({
     return () => {
       removed = true;
       lakeHost.current = null;
+      lakeButton.current = null;
       remove?.();
     };
-  }, [map, lakeAt, lakeName]);
+  }, [map, lakeAt, lakeName, lakeOpenId, lakeOpenLabel]);
   useEffect(() => {
-    showLines(lakeHost.current, lakeLines);
+    showLines(lakeHost.current, lakeLines, lakeButton.current);
   }, [lakeLines]);
 
   // A new snapshot changes the lines only: the popup and its close button (and the keyboard focus on it) stay.
@@ -503,13 +524,13 @@ export function StationsMap({
   );
 }
 
-/** Replaces the popup's `p` lines, each a text node (the basis label is provider text too). */
-function showLines(host: HTMLElement | null, lines: readonly string[]): void {
+/** Replaces the popup's `p` lines, each a text node (the basis label is provider text too), before `last` if given. */
+function showLines(host: HTMLElement | null, lines: readonly string[], last: HTMLElement | null = null): void {
   if (host === null) return;
   for (const old of host.querySelectorAll(':scope > p')) old.remove();
   for (const line of lines) {
     const p = document.createElement('p');
     p.textContent = line;
-    host.append(p);
+    host.insertBefore(p, last);
   }
 }

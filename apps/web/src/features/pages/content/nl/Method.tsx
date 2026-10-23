@@ -3,6 +3,7 @@ import { DatumTable } from '../../parts/DatumTable.tsx';
 import { ForecastCoverage } from '../../parts/ForecastCoverage.tsx';
 import { PageLink } from '../../parts/PageLink.tsx';
 import { TravelTimes } from '../../parts/TravelTimes.tsx';
+import { UncoveredBoards } from '../../parts/UncoveredBoards.tsx';
 
 export default function Method() {
   return (
@@ -102,6 +103,20 @@ export default function Method() {
       </p>
       <TravelTimes locale="nl" />
 
+      <h2>Opzet (afgeleid)</h2>
+      <p>
+        Bij een getijstation toont het stationspaneel de opzet: de gemeten waterstand min het astronomisch getij, op één
+        tijdstip en in één referentievlak. De opzet wordt door deze site afgeleid en is nooit een officiële klasse of
+        waarschuwing. Bij stations op zee zijn de standen ten opzichte van het gemiddeld zeeniveau (MSL).
+      </p>
+
+      <h2>Meren</h2>
+      <p>
+        Een meer heeft één genoemd referentiepunt en de toestand van het meer is de toestand van dat meetpunt. Het
+        verschil met de andere meetpunten in hetzelfde water is alleen informatie en verandert de toestand niet. Wind
+        kan water tegen een oever opstuwen (windopzet), zodat meetpunten in hetzelfde meer uren kunnen verschillen.
+      </p>
+
       <h2>Rivieren die niet worden gedekt</h2>
       <p>In de eerste release ontbreken deze rivieren of rivierstukken:</p>
       <ul>
@@ -117,11 +132,13 @@ export default function Method() {
           Oostenrijk en Liechtenstein (Ill, Bregenzerach en het Bodenmeer bij Bregenz): buiten het bereik van de eerste
           release. De Alpenrijn en het Bodenmeer komen uit de gegevens van het Zwitserse BAFU.
         </li>
-        <li>
-          Trajecten die door Nederlandse waterschappen worden beheerd: daarvan toont de site alleen wat de Duitse
-          bovenstroomse meetpunten en Rijkswaterstaat meten; gegevens van de waterschappen zelf staan op een wachtlijst.
-        </li>
       </ul>
+      <p>
+        Trajecten die door Nederlandse waterschappen worden beheerd: daarvan toont de site alleen wat de Duitse
+        bovenstroomse meetpunten en Rijkswaterstaat meten; gegevens van de waterschappen zelf staan op een wachtlijst.
+        De tabel noemt deze waterschappen, hun rivieren en het dichtstbijzijnde meetpunt op de kaart.
+      </p>
+      <UncoveredBoards locale="nl" />
       <p>
         Welke bronnen de site gebruikt staat op{' '}
         <PageLink id="sources" locale="nl">

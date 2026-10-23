@@ -1,11 +1,12 @@
 import type { ApiStation } from '@rws/contracts';
 import { lazy, Suspense, useEffect, useId, useRef, useState } from 'react';
-import { chartSpan, useRecent, useSources } from '../../lib/data/api.ts';
+import { chartSpan, useMeta, useRecent, useSources, useWaterbodies } from '../../lib/data/api.ts';
 import type { Change } from '../../lib/data/change.ts';
 import type { PlayedValue } from '../../lib/data/frames.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import type { WarningsAt } from '../../lib/data/warnings.ts';
 import type { Lapse, StationState } from '../../lib/stationStates.ts';
+import { bodyOf } from '../../lib/water.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { Nearby } from './Nearby.tsx';
@@ -14,11 +15,16 @@ import styles from './station.module.css';
 
 // P11a: the upstream chain is a lazy chunk (its walk and texts load with the first panel, never with the page).
 const UpstreamChain = lazy(() => import('../flow/UpstreamChain.tsx').then((c) => ({ default: c.UpstreamChain })));
+// P19b: the tide and lake sections and the downstream chain likewise.
+const TideSection = lazy(() => import('./TideSection.tsx').then((c) => ({ default: c.TideSection })));
+const LakeSection = lazy(() => import('./LakeSection.tsx').then((c) => ({ default: c.LakeSection })));
+const DownstreamChain = lazy(() => import('../flow/DownstreamChain.tsx').then((c) => ({ default: c.DownstreamChain })));
 
 // The station panel (A§10 features/station), after the waterinfo layout (P10d, issue #96): a header with the name as
 // published (text) and a close button; the controls for all series (Grafiek or Tabel, the period, the thresholds);
 // per series its last measurement, chart or table, legends and facts; the nearest stations up and down the river;
-// the upstream chain (P11a).
+// the upstream chain (P11a). P19b: a tidal station's tide section after the series, a lake station's lake section, and
+// the downstream chain after the upstream one.
 // After now (P8b) a series shows its forecast at t instead. The state of the controls is the panel's own (no URL key)
 // and returns to its defaults when another station is opened.
 
@@ -32,6 +38,8 @@ interface Props {
   station: ApiStation;
   /** Every station of the page (the neighbours' names and values). */
   stations: readonly ApiStation[];
+  /** P19b: every station, the hidden (stale) ones too: the lake section finds its reference there, as the lake popup does. */
+  allStations: readonly ApiStation[];
   values: ReadonlyMap<number, Value>;
   /** P11a: the feature-state record of every station at t (the upstream chain's state words). */
   states: ReadonlyMap<string, StationState>;
@@ -68,6 +76,7 @@ export function StationPanel({
   locale,
   station,
   stations,
+  allStations,
   values,
   states,
   forecasts,
@@ -100,6 +109,12 @@ export function StationPanel({
   }, [focus]);
   const sourceIds = [...new Set(station.series.map((s) => s.source))];
   const o = { locale };
+  // P19b: the primary H series (lib/water.ts hSeries) carries the tide; the water body gives the lake section and the
+  // storm-surge link. In a brownout the API refuses raw: no tide request.
+  const brownout = useMeta().data?.brownout === true;
+  const body = bodyOf(station.id, useWaterbodies().data ?? []);
+  const h = station.series.find((s) => s.quantity === 'H');
+  const lake = body !== undefined && (body.kind === 'lake' || body.kind === 'closed_estuary') ? body : undefined;
 
   return (
     <aside className={styles.panel} aria-labelledby={`${id}-h`}>
@@ -186,6 +201,41 @@ export function StationPanel({
             played={played}
           />
         ))}
+        {station.flags.tidal === true && h !== undefined && (
+          <Suspense fallback={null}>
+            <TideSection
+              locale={locale}
+              station={station}
+              series={h}
+              value={values.get(h.id)}
+              forecast={forecasts?.get(h.id)}
+              t={t}
+              serverNow={serverNow}
+              displayStart={displayStart}
+              played={played}
+              brownout={brownout}
+              // stations.json's series carry `api` (the API's /stations does not: then the API is asked, as before).
+              api={(h as { api?: boolean }).api ?? true}
+              body={body}
+            />
+          </Suspense>
+        )}
+        {lake !== undefined && (
+          <Suspense fallback={null}>
+            <LakeSection
+              locale={locale}
+              station={station}
+              body={lake}
+              stations={allStations}
+              values={values}
+              forecasts={forecasts}
+              t={t}
+              live={live}
+              played={played}
+              onOpen={onSelect}
+            />
+          </Suspense>
+        )}
         <Nearby
           locale={locale}
           station={station}
@@ -204,6 +254,19 @@ export function StationPanel({
             ownerSources={ownerSources}
             played={played}
             onSelect={onSelect}
+          />
+        </Suspense>
+        <Suspense fallback={null}>
+          <DownstreamChain
+            locale={locale}
+            station={station}
+            stations={stations}
+            states={states}
+            values={values}
+            forecasts={forecasts}
+            ownerSources={ownerSources}
+            played={played}
+            onOpen={onSelect}
           />
         </Suspense>
         <p className={styles.note}>{m.not_comparable({}, o)}</p>

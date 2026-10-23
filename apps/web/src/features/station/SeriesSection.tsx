@@ -15,7 +15,7 @@ import { DhMark } from '../legend/DhMark.tsx';
 import { OwnerBadge } from '../owner/OwnerBadge.tsx';
 import { BasisLabel } from './BasisLabel.tsx';
 import { Chart, ownerTag } from './Chart.tsx';
-import { onAxis, runName, xRange } from './chartModel.ts';
+import { ASTRO_COLOUR, onAxis, runName, SURGE_DOWN_COLOUR, SURGE_UP_COLOUR, xRange } from './chartModel.ts';
 import { FORECAST_COLOUR, MEASURED_COLOUR } from './colours.ts';
 import { bandText, forecastValue, issueText } from './forecast.ts';
 import { creditLines, dhValue, trendGlyph } from './provenance.ts';
@@ -34,7 +34,7 @@ type Value = PlayedValue;
 interface Props {
   locale: Locale;
   /** The station's id keys the heading; `name` is its published name (chart text only). */
-  station: Pick<ApiStation, 'name'>;
+  station: Pick<ApiStation, 'name' | 'flags' | 'series'>;
   headingId: string;
   series: SeriesMeta & { api?: boolean };
   values: ReadonlyMap<number, Value>;
@@ -118,7 +118,9 @@ export function SeriesSection({
   const unit = unitLabel(series, locale);
   const o = { locale };
 
-  const data = useSeriesData({ series, t, span, serverNow, recent, recentFailed });
+  // P19b: the primary H series of a tidal station also asks for its tide (the chart's astro line and surge band).
+  const tidal = station.flags.tidal === true && station.series.find((s) => s.quantity === 'H')?.id === series.id;
+  const data = useSeriesData({ series, t, span, serverNow, recent, recentFailed, tidal });
   const [chartFailed, setChartFailed] = useState(false);
   const ownerLabels = useOwnerLabels();
   const marks = useMemo(
@@ -204,6 +206,7 @@ export function SeriesSection({
           locale={locale}
           name={station.name}
           unit={unit}
+          deltaUnit={series.nativeUnit}
           x={x}
           now={nowShown ? serverNow : undefined}
           selected={selectedMarked ? t : undefined}
@@ -241,6 +244,24 @@ export function SeriesSection({
             <li>
               <Swatch kind="band" colour={FORECAST_COLOUR} />
               {m.forecast_band_label({}, o)}
+            </li>
+          )}
+          {data.tide !== undefined && data.tide.astro.length > 0 && (
+            <li>
+              <Swatch kind="dashed" colour={ASTRO_COLOUR} />
+              {m.tide_legend_astro({}, o)}
+            </li>
+          )}
+          {data.tide?.surge.some(([, v]) => v !== null && v >= 0) === true && (
+            <li>
+              <Swatch kind="band" colour={SURGE_UP_COLOUR} />
+              {m.tide_legend_surge_up({}, o)}
+            </li>
+          )}
+          {data.tide?.surge.some(([, v]) => v !== null && v < 0) === true && (
+            <li>
+              <Swatch kind="band" colour={SURGE_DOWN_COLOUR} />
+              {m.tide_legend_surge_down({}, o)}
             </li>
           )}
           {nowShown && (

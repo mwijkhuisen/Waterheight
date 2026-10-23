@@ -37,6 +37,18 @@ const GROUP: Readonly<Record<WaterbodyKind, Group>> = {
 const isLake = (b: WaterBody) => GROUP[b.kind] === 'lakes';
 
 /**
+ * P19b: the water body a station lies in, by the order of groupsOf: a lake, then a closed estuary, an estuary, a sea;
+ * undefined for a river station. Here, not in the lazy tide chunk: StationPanel (eager) reads it.
+ */
+export function bodyOf<B extends { kind: string; stations: readonly string[] }>(
+  stationId: string,
+  bodies: readonly B[],
+): B | undefined {
+  const rank = (b: B) => KINDS.indexOf(b.kind as WaterbodyKind);
+  return bodies.filter((b) => b.stations.includes(stationId)).sort((a, b) => rank(a) - rank(b))[0];
+}
+
+/**
  * The group of every station in a water body: a lake or the closed Haringvliet → lakes, a sea or estuary → coast. A
  * station in no body is absent (rivers). A station listed in two bodies takes the first by WATERBODY_KINDS order.
  */

@@ -9,9 +9,10 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { testHook } from '../../lib/testHook.ts';
 import { formatLocal, formatShort } from '../../lib/time/time.ts';
 import type { Locale } from '../../paraglide/runtime.js';
-import type { ForecastView, Pt } from './chartModel.ts';
+import { ASTRO_COLOUR, type ForecastView, type Pt, SURGE_DOWN_COLOUR, SURGE_UP_COLOUR } from './chartModel.ts';
 import { MEASURED_COLOUR as COLOUR, FORECAST_COLOUR } from './colours.ts';
 import type { Marks } from './thresholds.ts';
+import { surgeBand } from './tide.ts';
 
 use([LineChart, GridComponent, TooltipComponent, MarkLineComponent, MarkAreaComponent, CanvasRenderer]);
 
@@ -33,6 +34,13 @@ export interface ChartData {
   format: (value: number) => string;
   /** One run (never blended with another): its series names come from Paraglide. */
   forecast?: { view: ForecastView; name: string; estimateName: string } | undefined;
+  /**
+   * P19b (a tidal station's primary H series, raw, up to now): the astronomical tide and the API's derived surge at
+   * each measured instant, [UTC ms, value in the native unit]. The surge band is built from these (tide.ts surgeBand).
+   */
+  tide?: { astro: Pt[]; surge: Pt[] } | undefined;
+  /** The tooltip's words for the tide (plain text, from Paraglide); `unit` is the bare unit of a surge ("cm"). */
+  tideTip?: { astro: (value: string) => string; surge: (value: string) => string; unit: string } | undefined;
   marks: Marks;
   /** The threshold lines and zones are drawn only when this is true. */
   showThresholds: boolean;
@@ -47,8 +55,38 @@ interface AxisParam {
   value?: unknown;
 }
 
-const SHOWN = new Set(['obs', 'median', 'estimate']);
+const SHOWN = new Set(['obs', 'median', 'estimate', 'astro', 'surge-up', 'surge-down']);
 const flat = { symbol: 'none', connectNulls: false, smooth: false } as const;
+// ECharts 6 stacks with 'samesign' by default: a spread over a negative base (a level below NAP) would be drawn from 0.
+// 'all' stacks every spread on its own base whatever the signs (P19b critic C2).
+const stacked = (name: string) => ({ stack: name, stackStrategy: 'all' }) as const;
+
+/** One stacked pair (an invisible base and a filled spread) of the surge band; the pair id says the sign. */
+const pair = (id: 'surge-up' | 'surge-down', colour: string, p: { base: Pt[]; spread: Pt[] }) =>
+  p.spread.some(([, v]) => v !== null)
+    ? [
+        {
+          ...flat,
+          ...stacked(id),
+          id: `${id}-base`,
+          type: 'line',
+          data: p.base,
+          lineStyle: { opacity: 0 },
+          silent: true,
+          z: 1,
+        },
+        {
+          ...flat,
+          ...stacked(id),
+          id,
+          type: 'line',
+          data: p.spread,
+          lineStyle: { opacity: 0 },
+          areaStyle: { color: colour, opacity: 0.45 },
+          z: 1,
+        },
+      ]
+    : [];
 
 export function createChart(el: HTMLElement) {
   const chart = init(el, undefined, { renderer: 'canvas' });
@@ -66,10 +104,37 @@ export function createChart(el: HTMLElement) {
           const v = p.value;
           if (!Array.isArray(v) || typeof v[0] !== 'number' || typeof v[1] !== 'number') continue;
           at = v[0];
-          lines.push(`${p.seriesName}: ${d.format(v[1])} ${d.unit}`);
+          const tip = d.tideTip;
+          if (p.seriesId === 'astro' && tip !== undefined) lines.push(tip.astro(`${d.format(v[1])} ${d.unit}`));
+          // The pair id gives the sign: the "down" spread holds −surge.
+          else if ((p.seriesId === 'surge-up' || p.seriesId === 'surge-down') && tip !== undefined) {
+            const s = (p.seriesId === 'surge-up' ? v[1] : -v[1]) + 0; // + 0: no "-0"
+            lines.push(tip.surge(`${s > 0 ? '+' : ''}${d.format(s)} ${tip.unit}`));
+          } else lines.push(`${p.seriesName}: ${d.format(v[1])} ${d.unit}`);
         }
         return at === undefined ? '' : [d.name, formatLocal(at, d.locale), ...lines].join('\n');
       };
+      const tide = d.tide;
+      const band = tide === undefined ? undefined : surgeBand(tide.astro, tide.surge);
+      const tideSeries =
+        tide === undefined || band === undefined
+          ? []
+          : [
+              ...(tide.astro.length === 0
+                ? []
+                : [
+                    {
+                      ...flat,
+                      id: 'astro',
+                      type: 'line',
+                      data: tide.astro,
+                      lineStyle: { type: 'dashed', color: ASTRO_COLOUR, width: 1.5 },
+                      itemStyle: { color: ASTRO_COLOUR },
+                    },
+                  ]),
+              ...pair('surge-up', SURGE_UP_COLOUR, band.up),
+              ...pair('surge-down', SURGE_DOWN_COLOUR, band.down),
+            ];
       const f = d.forecast;
       const forecastSeries =
         f === undefined
@@ -81,7 +146,7 @@ export function createChart(el: HTMLElement) {
                       ...flat,
                       id: 'band-lo',
                       type: 'line',
-                      stack: 'band',
+                      ...stacked('band'),
                       data: f.view.lower,
                       lineStyle: { opacity: 0 },
                       silent: true,
@@ -90,7 +155,7 @@ export function createChart(el: HTMLElement) {
                       ...flat,
                       id: 'band-spread',
                       type: 'line',
-                      stack: 'band',
+                      ...stacked('band'),
                       data: f.view.spread,
                       lineStyle: { opacity: 0 },
                       areaStyle: { color: FORECAST_COLOUR, opacity: 0.2 },
@@ -177,6 +242,7 @@ export function createChart(el: HTMLElement) {
                   : [],
               },
             },
+            ...tideSeries,
             ...forecastSeries,
           ],
         },

@@ -6,10 +6,10 @@ export default function About() {
     <>
       <h1>About this site</h1>
       <p>
-        This site shows, in near real time, the water levels, discharge, official forecasts and alert levels of the
-        rivers that flow into the Netherlands. The data come from open data sources in the Netherlands, Germany,
-        Belgium, France, Luxembourg and Switzerland and are shown on a self-hosted map. With the date and time selector
-        you look back in time and, where a source publishes a forecast, ahead as well.
+        Water levels of the Netherlands and the rivers that flow into it: this site shows them in near real time, with
+        discharge, official forecasts and alert levels. The data come from open data sources in the Netherlands,
+        Germany, Belgium, France, Luxembourg and Switzerland and are shown on a self-hosted map. With the date and time
+        selector you look back in time and, where a source publishes a forecast, ahead as well.
       </p>
       <p>The site is in beta: data may be missing or wrong.</p>
 
