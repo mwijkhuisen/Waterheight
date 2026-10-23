@@ -163,15 +163,15 @@ describe('check-bom', () => {
     const dir = scratch();
     edit(dir, 'deploy/compose.tunnel.yaml', '    image: cloudflare/cloudflared:', '    image: example/cloudflared:');
     expect(checkBom(dir).join('\n')).toMatch(
-      /deploy\/compose\.tunnel\.yaml: compose image example\/cloudflared:2026\.9\.3@sha256:[0-9a-f]{64} has no installed image row/,
+      /deploy\/compose\.tunnel\.yaml: compose image example\/cloudflared:[0-9.]+@sha256:[0-9a-f]{64} has no installed image row/,
     );
   });
 
   it('fails on a compose image without its digest', () => {
     const dir = scratch();
-    edit(dir, 'deploy/compose.tunnel.yaml', /(image: cloudflare\/cloudflared:2026\.9\.3)@sha256:[0-9a-f]{64}/, '$1');
+    edit(dir, 'deploy/compose.tunnel.yaml', /(image: cloudflare\/cloudflared:[0-9.]+)@sha256:[0-9a-f]{64}/, '$1');
     expect(checkBom(dir).join('\n')).toMatch(
-      /deploy\/compose\.tunnel\.yaml: compose image cloudflare\/cloudflared:2026\.9\.3 has no installed image row/,
+      /deploy\/compose\.tunnel\.yaml: compose image cloudflare\/cloudflared:[0-9.]+ has no installed image row/,
     );
   });
 
