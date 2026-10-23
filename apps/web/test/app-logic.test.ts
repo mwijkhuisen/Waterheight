@@ -115,8 +115,8 @@ describe('stationPoints', () => {
     ]);
     expect(points.type).toBe('FeatureCollection');
     expect(points.features.map((f) => f.properties)).toEqual([
-      { id: 'nl.rws.a', tidal: false, impounded: false, msl: false },
-      { id: 'nl.rws.b', tidal: false, impounded: false, msl: false },
+      { id: 'nl.rws.a', tidal: false, impounded: false, msl: false, tier: 1 },
+      { id: 'nl.rws.b', tidal: false, impounded: false, msl: false, tier: 1 },
     ]);
     expect(points.features.map((f) => f.geometry.coordinates)).toEqual([
       [6.1, 51.8],

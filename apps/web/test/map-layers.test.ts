@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { createExpression, validateStyleMin } from '@maplibre/maplibre-gl-style-spec';
 import { describe, expect, it } from 'vitest';
+import { BIN_MINZOOM } from '../src/features/flow/reaches/bins.ts';
 import { LAPSED_COLOUR, LAPSED_RADIUS, STATE_COLOUR } from '../src/features/legend/palette.ts';
 import { hatchAreaIcon, hatchIcon, triangleIcon } from '../src/features/map/icons.ts';
 import { badgeLine, changeLine, surgeLine } from '../src/features/map/popup.ts';
 import { riverFilter, riverUrl, showRivers } from '../src/features/map/rivers.ts';
-import { hollow, layerPaints, stationPoints } from '../src/features/map/stationLayer.ts';
+import { hollow, layerPaints, stationFilter, stationPoints, TIER2_MINZOOM } from '../src/features/map/stationLayer.ts';
 import { warningLayers, warningsGeoJson } from '../src/features/map/warnings.ts';
 import { addWater } from '../src/features/map/waterLayer.ts';
 import type { WarningsAt } from '../src/lib/data/warnings.ts';
@@ -55,11 +56,59 @@ describe('icons (drawn at run time)', () => {
 });
 
 describe('stationPoints', () => {
-  it('carries the two flags as booleans, null as false', () => {
+  it('carries the two flags as booleans, null as false, and the tier', () => {
     const st = (flags: { tidal: boolean | null; impounded: boolean | null }) =>
-      ({ id: 'a', lon: 1, lat: 2, flags, series: [] }) as never;
+      ({ id: 'a', lon: 1, lat: 2, tier: 2, flags, series: [] }) as never;
     const f = stationPoints([st({ tidal: true, impounded: null })]).features[0];
-    expect(f?.properties).toEqual({ id: 'a', tidal: true, impounded: false, msl: false });
+    expect(f?.properties).toEqual({ id: 'a', tidal: true, impounded: false, msl: false, tier: 2 });
+  });
+});
+
+describe('tier filter (#205)', () => {
+  const TIERED = [
+    'stations',
+    'stations-suspect',
+    'stations-owner',
+    'stations-trend-up',
+    'stations-trend-down',
+    'stations-surge-up',
+    'stations-surge-down',
+    'stations-tidal',
+    'stations-msl',
+  ];
+  const shows = (layer: string, zoom: number, props: Record<string, unknown>, selected?: string) =>
+    evaluate(stationFilter(layer, selected), 'boolean', {}, zoom, { id: 'b', tidal: true, msl: true, ...props });
+  it('is a valid filter on every thinned layer', () => {
+    const layers = TIERED.map((id) =>
+      id === 'stations' || id === 'stations-suspect' || id === 'stations-owner'
+        ? { id, type: 'circle', source: 's', filter: stationFilter(id, 'x') }
+        : { id, type: 'symbol', source: 's', filter: stationFilter(id, 'x'), layout: { 'icon-image': 'tri-up' } },
+    );
+    const style = {
+      version: 8,
+      sources: { s: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } } },
+      layers,
+    };
+    expect(validateStyleMin(style as never)).toEqual([]);
+  });
+  it('shows tier 2 from z8 only, tier 1 at every zoom, and the selected station at every zoom', () => {
+    for (const layer of TIERED) {
+      expect(shows(layer, 7, { tier: 2 }), layer).toBe(false);
+      expect(shows(layer, 7.99, { tier: 2 }), layer).toBe(false);
+      expect(shows(layer, 8, { tier: 2 }), layer).toBe(true);
+      expect(shows(layer, 3, { tier: 1 }), layer).toBe(true);
+      expect(shows(layer, 7, { tier: 2 }, 'b'), layer).toBe(true);
+      expect(shows(layer, 7, { tier: 2 }, 'c'), layer).toBe(false);
+    }
+  });
+  it('keeps the own filter of the hatch and the MSL label', () => {
+    expect(shows('stations-tidal', 8, { tier: 1, tidal: false })).toBe(false);
+    expect(shows('stations-msl', 8, { tier: 1, msl: false })).toBe(false);
+    // The platforms are tier 2 (owner 2026-10-23): their MSL word waits until z8 with them.
+    expect(shows('stations-msl', 7, { tier: 2 })).toBe(false);
+  });
+  it('switches at the zoom where the reaches switch to their bins', () => {
+    expect(TIER2_MINZOOM).toBe(BIN_MINZOOM);
   });
 });
 
@@ -176,8 +225,14 @@ describe('attribution (C9)', () => {
   });
 });
 
-// The expression evaluator of the style spec, for a paint or filter that reads feature-state.
-function evaluate(expr: unknown, type: 'boolean' | 'color' | 'number', state: Record<string, unknown>, zoom = 8) {
+// The expression evaluator of the style spec, for a paint that reads feature-state or a filter that reads properties.
+function evaluate(
+  expr: unknown,
+  type: 'boolean' | 'color' | 'number',
+  state: Record<string, unknown>,
+  zoom = 8,
+  properties: Record<string, unknown> = {},
+) {
   const r = createExpression(
     expr as never,
     {
@@ -187,7 +242,7 @@ function evaluate(expr: unknown, type: 'boolean' | 'color' | 'number', state: Re
     } as never,
   );
   if (r.result !== 'success') throw new Error('bad expression');
-  return r.value.evaluate({ zoom } as never, { properties: {} } as never, state);
+  return r.value.evaluate({ zoom } as never, { properties } as never, state);
 }
 
 describe('coast stations in state mode (P19a T2)', () => {
