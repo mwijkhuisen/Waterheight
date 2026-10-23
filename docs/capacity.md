@@ -2,12 +2,95 @@
 
 Two parts. The year-1 disk and bucket projection is written by `scripts/verify-prod.sh <domain> --capacity --out docs/capacity.md` from production capture data (issue #16) and is not committed until a run has two complete UTC days. The egress budget below belongs to P12a (issue #27); `--capacity` rewrites everything around it and keeps the block between the markers.
 
+<!-- capacity:begin -->
+## Capacity projection (year 1; `scripts/verify-prod.sh --capacity`, P20a)
+
+Measured from 2 complete UTC days of production capture (2026-10-21 to 2026-10-22), from the `days[]` block of `/status/capture.json` (generated 2026-10-23T14:04:30.003Z): zstd bytes stored after sha256 deduplication, per spec (issue #16). The partial day is left out. A spec that runs less than daily (monthly, weekly) or once (a catch-up, `cron: null`) is not averaged over the window: its row is the bytes of the day it ran times its runs a year from its cron (a one-shot counts once, and its bytes are those of the window). **Not in the window, so not measured and left out: `ch-3-40d`, `de-7-pegeldaten`, `de-8-hydro`, `fr-3-obs`, `fr-5-stations`, `nl-1-astro`, `nl-1-hwlw-astro`, `nl-1-obs-sea-catchup`, `nl-1-obs-slow-catchup`, `nl-1-obs-wide-catchup`, `nl-4-page`, `nl-4-xlsx`.**
+Owner-audience specs are not in the public status file and are **not included**; add them with `--owner-bytes-per-day` (docs/runbooks/owner-checks.md).
+
+### Per spec
+
+| Source | Spec | Retention | Basis | Runs a year | Bytes/run | Bytes/day | Year-1 raw on disk (GB) | A§7.3 alert at 2x the median (B/day) |
+|---|---|---|---|---:|---:|---:|---:|---|
+| CH-1 | ch-1-lindas | obs | daily or faster, mean of the days | – | – | 1525619 | 0.137 | 3051238 PASS |
+| CH-2 | ch-2-pq | obs | daily or faster, mean of the days | – | – | 3275201 | 0.295 | 6550402 PASS |
+| CH-3 | ch-3-40d | obs | one-shot, once | 1 | not in the window | 0 | 0.000 | – |
+| CH-4 | ch-4-forecast | forever | daily or faster, mean of the days | – | – | 2530198 | 0.924 | 5060396 PASS |
+| CH-4 | ch-4-forecast-lake | forever | daily or faster, mean of the days | – | – | 579623 | 0.212 | 1159246 PASS |
+| CH-4 | ch-4-stations | forever | daily or faster, mean of the days | – | – | 4373 | 0.002 | 8746 PASS |
+| CH-5 | ch-5-warn | forever | daily or faster, mean of the days | – | – | 144042 | 0.053 | 288084 PASS |
+| DE-1 | de-1-basin | obs | daily or faster, mean of the days | – | – | 1381577 | 0.124 | 2763154 PASS |
+| DE-1 | de-1-meta | forever | daily or faster, mean of the days | – | – | 66612 | 0.024 | 133224 PASS |
+| DE-1 | de-1-series | obs | daily or faster, mean of the days | – | – | 299288 | 0.027 | 598575 PASS |
+| DE-6 | de-6-alerts | forever | daily or faster, mean of the days | – | – | 56711 | 0.021 | 113421 PASS |
+| DE-6 | de-6-stations | forever | daily or faster, mean of the days | – | – | 3841610 | 1.402 | 7683220 PASS |
+| DE-7 | de-7-messwerte | obs | daily or faster, mean of the days | – | – | 6793593 | 0.611 | 13587186 PASS |
+| DE-7 | de-7-pegeldaten | forever | per run x runs a year | 52 | not in the window | 0 | 0.000 | – |
+| DE-8 | de-8-hydro | forever | per run x runs a year | 52 | not in the window | 0 | 0.000 | – |
+| DE-8 | de-8-stations | forever | daily or faster, mean of the days | – | – | 0 | 0.000 | – |
+| FR-1 | fr-1-obs | obs | daily or faster, mean of the days | – | – | 5362206 | 0.483 | 10724411 PASS |
+| FR-1 | fr-1-ref | forever | daily or faster, mean of the days | – | – | 3627 | 0.001 | 7253 PASS |
+| FR-3 | fr-3-obs | obs | one-shot, once | 1 | not in the window | 0 | 0.000 | – |
+| FR-3 | fr-3-twin | obs | daily or faster, mean of the days | – | – | 104928 | 0.009 | 209855 PASS |
+| FR-4 | fr-4 | forever | daily or faster, mean of the days | – | – | 46339 | 0.017 | 92677 PASS |
+| FR-5 | fr-5-ref | forever | daily or faster, mean of the days | – | – | 59400 | 0.022 | 118799 PASS |
+| FR-5 | fr-5-sections | forever | daily or faster, mean of the days | – | – | 40589 | 0.015 | 81178 PASS |
+| FR-5 | fr-5-stations | forever | per run x runs a year | 52 | not in the window | 0 | 0.000 | – |
+| FR-5 | fr-5-vigilance | forever | daily or faster, mean of the days | – | – | 2031296 | 0.741 | 4062592 PASS |
+| LU-1 | lu-1-csv | obs | daily or faster, mean of the days | – | – | 1373220 | 0.124 | 2746440 PASS |
+| LU-5 | lu-5-cap | forever | daily or faster, mean of the days | – | – | 9151 | 0.003 | 18301 PASS |
+| LU-6 | lu-6-geo | forever | daily or faster, mean of the days | – | – | 3002 | 0.001 | 6004 PASS |
+| NL-1 | nl-1-astro | forever | per run x runs a year | 12 | not in the window | 0 | 0.000 | – |
+| NL-1 | nl-1-catalogue | forever | daily or faster, mean of the days | – | – | 267221 | 0.098 | 534441 PASS |
+| NL-1 | nl-1-fc-1h | forever | daily or faster, mean of the days | – | – | 1129150 | 0.412 | 2258300 PASS |
+| NL-1 | nl-1-fc-3h-0 | forever | daily or faster, mean of the days | – | – | 720580 | 0.263 | 1441160 PASS |
+| NL-1 | nl-1-fc-3h-1 | forever | daily or faster, mean of the days | – | – | 780327 | 0.285 | 1560653 PASS |
+| NL-1 | nl-1-fc-3h-2 | forever | daily or faster, mean of the days | – | – | 807331 | 0.295 | 1614662 PASS |
+| NL-1 | nl-1-hwlw | obs | daily or faster, mean of the days | – | – | 0 | 0.000 | – |
+| NL-1 | nl-1-hwlw-astro | forever | per run x runs a year | 12 | not in the window | 0 | 0.000 | – |
+| NL-1 | nl-1-obs-key | obs | daily or faster, mean of the days | – | – | 2540754 | 0.229 | 5081507 PASS |
+| NL-1 | nl-1-obs-other | obs | daily or faster, mean of the days | – | – | 2305385 | 0.207 | 4610769 PASS |
+| NL-1 | nl-1-obs-sea | obs | daily or faster, mean of the days | – | – | 3034827 | 0.273 | 6069654 PASS |
+| NL-1 | nl-1-obs-sea-catchup | obs | one-shot, once | 1 | not in the window | 0 | 0.000 | – |
+| NL-1 | nl-1-obs-slow | obs | daily or faster, mean of the days | – | – | 3843948 | 0.346 | 7687895 PASS |
+| NL-1 | nl-1-obs-slow-catchup | obs | one-shot, once | 1 | not in the window | 0 | 0.000 | – |
+| NL-1 | nl-1-obs-twin | obs | daily or faster, mean of the days | – | – | 102562 | 0.009 | 205124 PASS |
+| NL-1 | nl-1-obs-wide | obs | daily or faster, mean of the days | – | – | 3657313 | 0.329 | 7314626 PASS |
+| NL-1 | nl-1-obs-wide-catchup | obs | one-shot, once | 1 | not in the window | 0 | 0.000 | – |
+| NL-2 | nl-2-wfs | obs | daily or faster, mean of the days | – | – | 1762274 | 0.159 | 3524548 PASS |
+| NL-4 | nl-4-page | forever | per run x runs a year | 52 | not in the window | 0 | 0.000 | – |
+| NL-4 | nl-4-xlsx | forever | per run x runs a year | 52 | not in the window | 0 | 0.000 | – |
+
+### Alert rules (A§7.3)
+
+| Rule | Result |
+|---|---|
+| No spec above 2x its measured median on a complete day | PASS |
+| The public total at most 1 GB a day (largest complete day: 54096349 B) | PASS |
+
+### Year-1 projection
+
+| Item | GB | Basis |
+|---|---:|---|
+| Raw archive, obs classes (90-day window at its steady state) | 3.4 | measured |
+| Raw archive, forever classes (365 days) | 4.8 | measured |
+| Database, observations (2108 public series rows, 317783 samples a day, 102.1 B a row, 365 days) | 11.8 | **computed** from the registry's expected steps: ops.json carries no database size, so no trend is measured; an upper bound, as not every row delivers. 102.1 B a row was measured in P14b |
+| Database, rollups and forecasts | 5 | A§11.4 estimate |
+| Database, backfill history (NL-1 12.35 and P14b 2.44) | 14.8 | A§11.4, computed upper bound, not measured |
+| Static files, images, logs | 5 | A§11.4 line, **replace** by the publisher bench figure (`--static-gb-year`, `scripts/bench-q1.ts` publisher phase) |
+| Basemap, current and previous (A§11.4) | 9 | constant |
+| **Total on the ≥ 200 GB disk** | **53.8** | 27% of the disk; the disk alert fires at 75% (150 GB): PASS |
+| Off-site bucket need: every raw object for 12 months (restic keeps 12 monthly snapshots) | 18.4 | against the bucket size **OWNER: A9** |
+
+Measured now: settled/ and frames/ hold 0.92 GB (`/data/v1/status.json` publisher.settledBytes, a point reading, not a growth rate); /srv/rws is 4% full (`/status/ops.json` disk_pct).
+<!-- capacity:end -->
+
 <!-- egress:begin -->
 ## Egress budget (P12a, issue #27; decision D20)
 
 Generated from `docs/capacity-egress.json` by `node scripts/lib/capacity-egress.ts`; edit the JSON and re-run it, not this block (`scripts/verify-prod.sh --capacity` keeps it).
 
-Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 5 timebar steps, 1 day of playback), measured by `apps/web/e2e/egress.spec.ts` as bytes on the wire (headers and body, compressed, as transferred), at 2026-10-10T20:14:11.902Z. Compose stack: the tiles are a Lobith fixture and the data a synthetic seed, so this is a regression guard, not a production forecast of the bytes.
+Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 5 timebar steps, 1 day of playback, a zoom onto a lake, the method page), measured by `apps/web/e2e/egress.spec.ts` as bytes on the wire (headers and body, compressed, as transferred), at 2026-10-10T20:14:11.902Z. Compose stack: the tiles are a Lobith fixture and the data a synthetic seed, so this is a regression guard, not a production forecast of the bytes.
 
 | Class | Requests | Bytes (MB) |
 |---|---:|---:|

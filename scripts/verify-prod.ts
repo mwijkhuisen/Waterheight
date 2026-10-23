@@ -37,8 +37,10 @@
 //                                                seed coverage, the byte baseline, the drill,
 //                                                every twin pair over 7 days (TWIN_IDS)
 //   scripts/verify-prod.sh <domain> --interval   + interval DE-6: 3 samples of capture.json 15 min apart (about 30 min)
-//   scripts/verify-prod.sh <domain> --capacity [--owner-bytes-per-day N] [--out FILE]
-//                                                docs/capacity.md from >= 2 complete days
+//   scripts/verify-prod.sh <domain> --capacity [--owner-bytes-per-day N] [--static-gb-year N] [--out FILE]
+//                                                the year-1 projection (>= 2 complete days) printed, or with --out written
+//                                                as the capacity block of docs/capacity.md (3 public GETs: capture.json,
+//                                                ops.json, /data/v1/status.json)
 //   scripts/verify-prod.sh <domain> --profile prelaunch|launch   (P12b; default prelaunch, until the launch flip) what the
 //                                                public site is expected to be: prelaunch is noindex everywhere with no
 //                                                robots.txt or sitemap, launch has no noindex on the pages (it stays on /api,
@@ -65,7 +67,7 @@ import { connect as tlsConnect } from 'node:tls';
 import { gunzipSync, constants as zlibConstants, zstdDecompressSync } from 'node:zlib';
 import { parse as parseYaml } from 'yaml';
 import { ROUTES } from '../apps/server/src/api/channels.ts';
-import { loadRegistry, REGISTRY_DIR, type Registry, readSeed } from '../apps/server/src/capture/specs.ts';
+import { durationMs, loadRegistry, REGISTRY_DIR, type Registry, readSeed } from '../apps/server/src/capture/specs.ts';
 import { CaptureStatus } from '../apps/server/src/capture/status.ts';
 import { DATA_EPOCH } from '../apps/server/src/load/dirty.ts';
 import { readRegistry } from '../apps/server/src/load/registry-sync.ts';
@@ -119,7 +121,7 @@ import {
   type TilesManifest,
   TilesManifestError,
 } from '../packages/core/src/tiles-manifest.ts';
-import { keepEgressBlock } from './lib/capacity-egress.ts';
+import { CAP_BEGIN, CAP_END, withSection } from './lib/capacity-egress.ts';
 import { checkEdge } from './lib/verify-edge.ts';
 import { checkOwnerListener, networkIo } from './lib/verify-owner-listener.ts';
 
@@ -208,8 +210,14 @@ export const SEED_MIN: Record<string, { days?: number; files?: number }> = {
   'lu-5-cap': { files: 833 },
   'lu-1-csv': { days: 4 },
 };
-/** A§11.4: the database, basemap and static estimates that no capture measurement replaces. */
-export const OTHER_GB = { database: 28, basemap: 9, static: 5 };
+/**
+ * A§11.4: the estimates that no capture measurement replaces. `rollups`: rollups and forecasts in the database (about
+ * 5 GB); `backfill`: the computed upper bound of the backfilled history (NL-1 12.35 GB and P14b 2.44 GB, not measured);
+ * `static`: the static-files line, replaced by the publisher bench figure through `--static-gb-year`.
+ */
+export const OTHER_GB = { rollups: 5, backfill: 14.8, basemap: 9, static: 5 };
+/** The measured cost of one observation row in the database (P14b, the kill -9 test; A§11.4). */
+export const DB_ROW_BYTES = 102.1;
 export const DISK_GB = 200;
 
 export type Result = { check: string; ok: boolean | 'n/a'; detail: string };
@@ -471,76 +479,194 @@ export function soak(status: CaptureStatus, ops: OpsStatus): { results: Result[]
 }
 
 const GB = 1e9;
-/** Writes docs/capacity.md; the marked egress block of the file already there (P12a, capacity-egress.ts) is kept. */
+/**
+ * Writes the capacity projection into docs/capacity.md as its own marked block (P20a): the egress block, the
+ * narrative sections and the intro of the file already there stay byte for byte; a file without the block gets it
+ * appended.
+ */
 export function writeCapacity(file: string, markdown: string): void {
-  let existing: string | null = null;
+  let existing = '';
   try {
     existing = readFileSync(file, 'utf8');
   } catch {
     // no file yet
   }
-  writeFileSync(file, keepEgressBlock(existing, markdown));
+  const block = `${CAP_BEGIN}\n${markdown.trimEnd()}\n${CAP_END}`;
+  writeFileSync(file, existing === '' ? `${block}\n` : withSection(existing, block, CAP_BEGIN, CAP_END));
 }
-/** docs/capacity.md from >= 2 complete UTC days of days[] (issue #16 criterion; gap item 16). */
+
+/**
+ * Runs a year of a UTC cron (5 fields, or 6 with leading seconds, as registry/capture.yaml writes them): numbers, lists,
+ * ranges, steps and `*`. Day-of-month and day-of-week both restricted match either, like croner. Counted over the
+ * calendar year `year`; `scripts/` cannot import croner (a dependency of apps/server only), and the specs this is for
+ * (monthly and weekly) use nothing else.
+ */
+export function runsPerYear(cron: string, year = 2027): number {
+  const f = cron.trim().split(/\s+/);
+  if (f.length !== 5 && f.length !== 6) throw new Error(`bad cron ${cron}`);
+  const [sec, min, hour, dom, mon, dow] = (f.length === 5 ? ['0', ...f] : f) as [
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+  ];
+  const values = (field: string, lo: number, hi: number): Set<number> => {
+    const out = new Set<number>();
+    for (const part of field.split(',')) {
+      const [range = '', step] = part.split('/');
+      const [x, y] = range.split('-');
+      const a = range === '*' ? lo : Number(x);
+      const b = range === '*' || (y === undefined && step !== undefined) ? hi : Number(y ?? x);
+      const st = step === undefined ? 1 : Number(step);
+      if (![a, b, st].every(Number.isInteger) || st < 1 || a < lo || b > hi || a > b)
+        throw new Error(`bad cron ${cron}`);
+      for (let v = a; v <= b; v += st) out.add(v);
+    }
+    return out;
+  };
+  const perDay = values(sec, 0, 59).size * values(min, 0, 59).size * values(hour, 0, 23).size;
+  const doms = values(dom, 1, 31);
+  const mons = values(mon, 1, 12);
+  const dows = new Set([...values(dow, 0, 7)].map((d) => d % 7));
+  let days = 0;
+  for (let t = Date.UTC(year, 0, 1); new Date(t).getUTCFullYear() === year; t += DAY_MS) {
+    const d = new Date(t);
+    const byDom = doms.has(d.getUTCDate());
+    const byDow = dows.has(d.getUTCDay());
+    const both = dom !== '*' && dow !== '*';
+    if (mons.has(d.getUTCMonth() + 1) && (both ? byDom || byDow : byDom && byDow)) days += 1;
+  }
+  return days * perDay;
+}
+
+const mean = (xs: readonly number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
+const median = (xs: readonly number[]): number => {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length === 0 ? 0 : s.length % 2 === 1 ? (s[m] as number) : ((s[m - 1] as number) + (s[m] as number)) / 2;
+};
+
+/** What `--capacity` reads besides capture.json (all optional: a missing reading is said so in the block, never invented). */
+export type CapacityInputs = {
+  /** The registry's station rows (audience and expected_step): the public series count and their samples a day. */
+  stations?: readonly { audience: string; expected_step: string }[];
+  /** `/data/v1/status.json` publisher.settledBytes: the bytes of settled/ and frames/ now. */
+  settledBytes?: number | null;
+  /** `/status/ops.json` disk_pct: how full /srv/rws is now. */
+  diskPct?: number | null;
+  /** `--static-gb-year`: the year-1 static files, from the publisher bench (W1); else the A§11.4 line. */
+  staticGbYear?: number | null;
+};
+
+/** docs/capacity.md's projection block from >= 2 complete UTC days of days[] (issue #16 criterion; gap item 16; P20a). */
 export function capacity(
   status: CaptureStatus,
   registry: Registry,
   today: string,
   ownerBytesPerDay: number | null,
+  inputs: CapacityInputs = {},
 ): { ok: boolean; markdown: string } {
   const complete = [...new Set(status.days.map((d) => d.date))].filter((d) => d < today).sort();
   if (complete.length < 2)
     return { ok: false, markdown: `only ${complete.length} complete UTC day(s) in days[]; need 2` };
-  const perSpec = new Map<string, number>();
+  // Bytes per spec and complete UTC day (days[] has one row per source and day; the partial day is left out).
+  const perDay = new Map<string, number[]>();
+  const dayTotal = complete.map(() => 0);
   for (const d of status.days) {
-    if (!complete.includes(d.date)) continue;
-    for (const [spec, bytes] of Object.entries(d.bytes)) perSpec.set(spec, (perSpec.get(spec) ?? 0) + bytes);
+    const i = complete.indexOf(d.date);
+    if (i < 0) continue;
+    for (const [spec, bytes] of Object.entries(d.bytes)) {
+      const row = perDay.get(spec) ?? complete.map(() => 0);
+      row[i] = (row[i] as number) + bytes;
+      perDay.set(spec, row);
+    }
   }
   const rows: string[] = [];
-  let disk = 0;
+  const warn: string[] = [];
+  const unmeasured: string[] = [];
+  let obsDisk = 0;
+  let foreverDisk = 0;
   let bucket = 0;
   for (const s of registry.specs.filter((x) => x.audience === 'public').sort((a, b) => a.id.localeCompare(b.id))) {
-    const daily = (perSpec.get(s.id) ?? 0) / complete.length;
-    const kept = s.retention === 'forever' ? 365 : 90;
-    disk += daily * kept;
-    bucket += daily * 365;
+    const days = perDay.get(s.id) ?? complete.map(() => 0);
+    days.forEach((b, i) => {
+      dayTotal[i] = (dayTotal[i] as number) + b;
+    });
+    const nonzero = days.filter((b) => b > 0);
+    // A spec that runs less than daily (monthly, weekly) or once (cron null: a catch-up) is never averaged over the
+    // window: its bytes are those of the day(s) it ran, times its runs a year.
+    const daily = s.cadence_s !== null && s.cadence_s <= 86_400;
+    const runs = s.cron === null ? 1 : runsPerYear(s.cron);
+    const perRun = nonzero.length === 0 ? null : s.cron === null ? nonzero.reduce((a, b) => a + b, 0) : mean(nonzero);
+    if (!daily && perRun === null) unmeasured.push(s.id);
+    const yearBytes = daily ? (days.reduce((a, b) => a + b, 0) / complete.length) * 365 : (perRun ?? 0) * runs;
+    const kept = s.retention === 'forever' ? 1 : s.cron === null ? 1 : 90 / 365;
+    if (s.retention === 'forever') foreverDisk += yearBytes * kept;
+    else obsDisk += yearBytes * kept;
+    bucket += yearBytes;
+    const med = median(days);
+    const bad = daily && med > 0 && Math.max(...days) > 2 * med;
+    if (bad) warn.push(s.id);
     rows.push(
-      `| ${s.source} | ${s.id} | ${s.retention} | ${Math.round(daily)} | ${((daily * kept) / GB).toFixed(3)} |`,
+      `| ${s.source} | ${s.id} | ${s.retention} | ${daily ? 'daily or faster, mean of the days' : s.cron === null ? 'one-shot, once' : 'per run x runs a year'} | ${daily ? '–' : runs} | ${daily ? '–' : perRun === null ? 'not in the window' : Math.round(perRun)} | ${Math.round(yearBytes / 365)} | ${((yearBytes * kept) / GB).toFixed(3)} | ${daily && med > 0 ? `${Math.round(2 * med)} ${bad ? 'WARN' : 'PASS'}` : '–'} |`,
     );
   }
   if (ownerBytesPerDay !== null) {
-    disk += ownerBytesPerDay * 365;
+    foreverDisk += ownerBytesPerDay * 365;
     bucket += ownerBytesPerDay * 365;
     rows.push(
-      `| owner (aggregate) | – | forever (upper bound) | ${Math.round(ownerBytesPerDay)} | ${((ownerBytesPerDay * 365) / GB).toFixed(3)} |`,
+      `| owner (aggregate) | – | forever (upper bound) | aggregate | – | – | ${Math.round(ownerBytesPerDay)} | ${((ownerBytesPerDay * 365) / GB).toFixed(3)} | – |`,
     );
   }
-  const other = OTHER_GB.database + OTHER_GB.basemap + OTHER_GB.static;
-  const total = disk / GB + other;
+  const disk = obsDisk + foreverDisk;
+  // The database: no size or trend is published (ops.json has disk_pct only), so the observation rows are computed.
+  const series = (inputs.stations ?? []).filter((x) => x.audience === 'public');
+  const rowsPerDay = series.reduce((n, x) => n + 86_400_000 / durationMs(x.expected_step), 0);
+  const dbObs = (rowsPerDay * 365 * DB_ROW_BYTES) / GB;
+  const staticGb = inputs.staticGbYear ?? OTHER_GB.static;
+  const total = disk / GB + dbObs + OTHER_GB.rollups + OTHER_GB.backfill + staticGb + OTHER_GB.basemap;
+  const peak = Math.max(...dayTotal);
+  const gb = (n: number) => (n / GB).toFixed(1);
   const md = [
-    '# Capacity (year 1)',
+    '## Capacity projection (year 1; `scripts/verify-prod.sh --capacity`, P20a)',
     '',
-    `Measured from ${complete.length} complete UTC days of production capture (${complete[0]} to ${complete.at(-1)}), from the \`days[]\` block of \`/status/capture.json\`: zstd bytes stored after sha256 deduplication, per spec (\`scripts/verify-prod.sh --capacity\`, issue #16).`,
+    `Measured from ${complete.length} complete UTC days of production capture (${complete[0]} to ${complete.at(-1)}), from the \`days[]\` block of \`/status/capture.json\` (generated ${status.generated_at}): zstd bytes stored after sha256 deduplication, per spec (issue #16). The partial day is left out. A spec that runs less than daily (monthly, weekly) or once (a catch-up, \`cron: null\`) is not averaged over the window: its row is the bytes of the day it ran times its runs a year from its cron (a one-shot counts once, and its bytes are those of the window).${unmeasured.length === 0 ? '' : ` **Not in the window, so not measured and left out: ${unmeasured.map((x) => `\`${x}\``).join(', ')}.**`}`,
     ownerBytesPerDay === null
       ? 'Owner-audience specs are not in the public status file and are **not included**; add them with `--owner-bytes-per-day` (docs/runbooks/owner-checks.md).'
       : 'Owner-audience specs are included as one aggregate from the owner status file, counted as kept forever (an upper bound).',
     '',
-    '## Per spec',
+    '### Per spec',
     '',
-    '| Source | Spec | Retention | Bytes/day | Year-1 raw on disk (GB) |',
-    '|---|---|---|---:|---:|',
+    '| Source | Spec | Retention | Basis | Runs a year | Bytes/run | Bytes/day | Year-1 raw on disk (GB) | A§7.3 alert at 2x the median (B/day) |',
+    '|---|---|---|---|---:|---:|---:|---:|---|',
     ...rows,
     '',
-    '## Year-1 projection',
+    '### Alert rules (A§7.3)',
     '',
-    '| Item | GB |',
-    '|---|---:|',
-    `| Raw archive on disk (obs: 90-day window; forever: 365 days) | ${(disk / GB).toFixed(1)} |`,
-    `| Database (A§11.4 estimate, replaced in P2) | ${OTHER_GB.database} |`,
-    `| Basemap, current and previous (A§11.4) | ${OTHER_GB.basemap} |`,
-    `| Static files, images, logs (A§11.4) | ${OTHER_GB.static} |`,
-    `| **Total on the ≥ ${DISK_GB} GB disk** | **${total.toFixed(1)}** (${((100 * total) / DISK_GB).toFixed(0)}%; the disk alert fires at 75%) |`,
-    `| Off-site bucket: every raw object for 12 months (restic keeps 12 monthly snapshots) | ${(bucket / GB).toFixed(1)} |`,
+    '| Rule | Result |',
+    '|---|---|',
+    `| No spec above 2x its measured median on a complete day | ${warn.length === 0 ? 'PASS' : `WARN: ${warn.map((x) => `\`${x}\``).join(', ')}`} |`,
+    `| The public total at most 1 GB a day (largest complete day: ${peak} B) | ${peak <= GB ? 'PASS' : 'WARN'} |`,
+    '',
+    '### Year-1 projection',
+    '',
+    '| Item | GB | Basis |',
+    '|---|---:|---|',
+    `| Raw archive, obs classes (90-day window at its steady state) | ${gb(obsDisk)} | measured |`,
+    `| Raw archive, forever classes (365 days) | ${gb(foreverDisk)} | measured |`,
+    `| Database, observations (${series.length} public series rows, ${Math.round(rowsPerDay)} samples a day, ${DB_ROW_BYTES} B a row, 365 days) | ${dbObs.toFixed(1)} | **computed** from the registry's expected steps: ops.json carries no database size, so no trend is measured; an upper bound, as not every row delivers. ${DB_ROW_BYTES} B a row was measured in P14b |`,
+    `| Database, rollups and forecasts | ${OTHER_GB.rollups} | A§11.4 estimate |`,
+    `| Database, backfill history (NL-1 12.35 and P14b 2.44) | ${OTHER_GB.backfill} | A§11.4, computed upper bound, not measured |`,
+    inputs.staticGbYear == null
+      ? `| Static files, images, logs | ${OTHER_GB.static} | A§11.4 line, **replace** by the publisher bench figure (\`--static-gb-year\`, \`scripts/bench-q1.ts\` publisher phase) |`
+      : `| Static files, images, logs | ${staticGb} | \`--static-gb-year\`, the publisher bench figure |`,
+    `| Basemap, current and previous (A§11.4) | ${OTHER_GB.basemap} | constant |`,
+    `| **Total on the ≥ ${DISK_GB} GB disk** | **${total.toFixed(1)}** | ${((100 * total) / DISK_GB).toFixed(0)}% of the disk; the disk alert fires at 75% (${(0.75 * DISK_GB).toFixed(0)} GB): ${total <= 0.75 * DISK_GB ? 'PASS' : 'WARN'} |`,
+    `| Off-site bucket need: every raw object for 12 months (restic keeps 12 monthly snapshots) | ${gb(bucket)} | against the bucket size **OWNER: A9** |`,
+    '',
+    `Measured now: ${inputs.settledBytes == null ? 'the bytes of settled/ and frames/ were not read' : `settled/ and frames/ hold ${(inputs.settledBytes / GB).toFixed(2)} GB (\`/data/v1/status.json\` publisher.settledBytes, a point reading, not a growth rate)`}; ${inputs.diskPct == null ? 'the disk use was not read' : `/srv/rws is ${inputs.diskPct}% full (\`/status/ops.json\` disk_pct)`}.`,
     '',
   ].join('\n');
   return { ok: true, markdown: md };
@@ -3198,12 +3324,12 @@ export const CHECKS = [
     (id) =>
       `twin ${id}: (--soak) listed in /api/v1/health/sources (a pair with no check yet is a FAIL); latest check under ${TWIN_MAX_AGE_MS / 3_600_000} h old, ok, with aligned timestamps and a lag of 0; no failed check in 7 days; >= ${TWIN_MIN_CHECKS_7D} of the 168 hourly checks`,
   ),
-  '--capacity: bytes/day per spec over >= 2 complete days, the year-1 projection vs the disk and the bucket',
+  '--capacity: bytes/day per spec over >= 2 complete days (a spec that runs less than daily, or once, by its bytes a run x runs a year from its cron), the year-1 projection vs the disk (75% alert) and the bucket, the A§7.3 alert rules',
 ];
 
 function usage(): never {
   console.error(
-    'usage: scripts/verify-prod.sh <domain> [--profile prelaunch|launch] [--site | --soak | --capacity [--owner-bytes-per-day N] [--out FILE]] [--interval] [--edge direct|cloudflare] [--dry-run]',
+    'usage: scripts/verify-prod.sh <domain> [--profile prelaunch|launch] [--site | --soak | --capacity [--owner-bytes-per-day N] [--static-gb-year N] [--out FILE]] [--interval] [--edge direct|cloudflare] [--dry-run]',
   );
   process.exit(64);
 }
@@ -3220,6 +3346,7 @@ async function main(argv: string[]): Promise<number> {
   let interval = false;
   let out: string | undefined;
   let ownerBytes: number | null = null;
+  let staticGbYear: number | null = null;
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     const next = () => argv[++i] ?? usage();
@@ -3238,6 +3365,7 @@ async function main(argv: string[]): Promise<number> {
     else if (a === '--interval') interval = true;
     else if (a === '--out') out = next();
     else if (a === '--owner-bytes-per-day') ownerBytes = Number(next());
+    else if (a === '--static-gb-year') staticGbYear = Number(next());
     else if (a === '--resolve') net.resolve = next();
     else if (a === '--ca') net.ca = readFileSync(next());
     else if (a !== undefined && !a.startsWith('-') && domain === '') domain = a;
@@ -3250,6 +3378,7 @@ async function main(argv: string[]): Promise<number> {
   if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)) usage();
   if (net.resolve !== undefined && isIP(net.resolve) === 0) usage();
   if (ownerBytes !== null && !(ownerBytes >= 0)) usage();
+  if (staticGbYear !== null && !(staticGbYear >= 0)) usage();
 
   const registry = loadRegistry();
   const now = new Date();
@@ -3625,7 +3754,15 @@ async function main(argv: string[]): Promise<number> {
     const twinSources = readApi(await tryGet(`https://${domain}${HEALTH_PATHS[1]}`, net), HealthSourcesAnswer);
     for (const id of TWIN_IDS) results.push(checkTwin(twinSources, now, id));
   } else if (cap?.success) {
-    const c = capacity(cap.data, registry, now.toISOString().slice(0, 10), ownerBytes);
+    // P20a: the measured settled bytes of the publisher (one more public GET); a read that fails is said in the block.
+    const st = await tryGet(`https://${domain}/data/v1/status.json`, net);
+    const stDoc = typeof st === 'object' && st.status === 200 ? StatusFile.safeParse(parseJson(st.body)) : undefined;
+    const c = capacity(cap.data, registry, now.toISOString().slice(0, 10), ownerBytes, {
+      stations: readRegistry().stations,
+      settledBytes: stDoc?.success ? stDoc.data.publisher.settledBytes : null,
+      diskPct: opsDoc?.success ? opsDoc.data.disk_pct : null,
+      staticGbYear,
+    });
     if (out !== undefined && c.ok) writeCapacity(out, c.markdown);
     else console.log(c.markdown);
     results.push(c.ok ? pass('capacity', out ?? 'printed') : miss('capacity', c.markdown));

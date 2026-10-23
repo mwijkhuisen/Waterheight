@@ -14,6 +14,9 @@ export const GROWTH_LIMIT = 1.2;
 const CLASS_FLOOR = 51_200;
 export const BEGIN = '<!-- egress:begin -->';
 export const END = '<!-- egress:end -->';
+/** The year-1 capacity projection that `verify-prod.sh --capacity --out` writes (P20a): its own block, beside the egress one. */
+export const CAP_BEGIN = '<!-- capacity:begin -->';
+export const CAP_END = '<!-- capacity:end -->';
 
 export interface Profile {
   version: 1;
@@ -164,7 +167,7 @@ export function renderSection(b: Baseline): string {
     '',
     `Generated from \`docs/capacity-egress.json\` by \`node scripts/lib/capacity-egress.ts\`; edit the JSON and re-run it, not this block (\`scripts/verify-prod.sh --capacity\` keeps it).${b.provisional ? ' **The profile is provisional** (a local estimate; the first CI run of `egress.spec.ts` replaces it).' : ''}`,
     '',
-    `Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 5 timebar steps, 1 day of playback), measured by \`apps/web/e2e/egress.spec.ts\` as bytes on the wire (headers and body, compressed, as transferred), at ${b.measured_at}. ${b.note}`,
+    `Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 5 timebar steps, 1 day of playback, a zoom onto a lake, the method page), measured by \`apps/web/e2e/egress.spec.ts\` as bytes on the wire (headers and body, compressed, as transferred), at ${b.measured_at}. ${b.note}`,
     '',
     '| Class | Requests | Bytes (MB) |',
     '|---|---:|---:|',
@@ -201,24 +204,15 @@ export function renderSection(b: Baseline): string {
   ].join('\n');
 }
 
-const span = (s: string) => {
-  const a = s.indexOf(BEGIN);
-  const z = s.indexOf(END);
-  return a >= 0 && z > a ? ([a, z + END.length] as const) : null;
+const span = (s: string, begin: string, end: string) => {
+  const a = s.indexOf(begin);
+  const z = s.indexOf(end);
+  return a >= 0 && z > a ? ([a, z + end.length] as const) : null;
 };
 
-/** `fresh` (a regenerated docs/capacity.md) with the marked block of `existing` carried over (appended when `fresh` has no markers). */
-export function keepEgressBlock(existing: string | null, fresh: string): string {
-  const old = existing === null ? null : span(existing);
-  if (existing === null || old === null) return fresh;
-  const block = existing.slice(old[0], old[1]);
-  const at = span(fresh);
-  return at === null ? `${fresh.trimEnd()}\n\n${block}\n` : fresh.slice(0, at[0]) + block + fresh.slice(at[1]);
-}
-
-/** A capacity.md text with its marked block replaced by `section` (appended when it has none). */
-export function withSection(doc: string, section: string): string {
-  const at = span(doc);
+/** A capacity.md text with its block between `begin` and `end` (the egress markers by default) replaced by `section` (appended when it has none); everything else stays byte for byte. */
+export function withSection(doc: string, section: string, begin = BEGIN, end = END): string {
+  const at = span(doc, begin, end);
   return at === null ? `${doc.trimEnd()}\n\n${section}\n` : doc.slice(0, at[0]) + section + doc.slice(at[1]);
 }
 

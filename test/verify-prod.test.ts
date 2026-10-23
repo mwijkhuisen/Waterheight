@@ -169,6 +169,7 @@ import {
   readStatic,
   readTilesManifest,
   recentCandidates,
+  runsPerYear,
   SNAPSHOT_ASKS,
   type SnapshotAsk,
   STATIC_CACHE,
@@ -658,10 +659,110 @@ describe('freshness, soak and capacity', () => {
     const c = capacity(twoDays, registry, '2026-10-02', 5e6);
     expect(c.ok).toBe(true);
     expect(c.markdown).toContain('from 2 complete UTC days of production capture (2026-09-30 to 2026-10-01)');
-    expect(c.markdown).toMatch(/\| NL-1 \| nl-1-obs-key \| obs \| 2000000 \| 0\.180 \|/);
-    expect(c.markdown).toMatch(/\| NL-1 \| nl-1-fc-1h \| forever \| 1000000 \| 0\.365 \|/);
+    expect(c.markdown).toMatch(
+      /\| NL-1 \| nl-1-obs-key \| obs \| daily or faster, mean of the days \| – \| – \| 2000000 \| 0\.180 \| 4000000 PASS \|/,
+    );
+    expect(c.markdown).toMatch(
+      /\| NL-1 \| nl-1-fc-1h \| forever \| daily or faster, mean of the days \| – \| – \| 1000000 \| 0\.365 \| 2000000 PASS \|/,
+    );
     expect(c.markdown).toContain('| owner (aggregate) |');
     expect(c.markdown).not.toMatch(/BE-3|LU-2|lu-3-percentile/);
+  });
+
+  describe('capacity, P20a', () => {
+    // Complete days 2026-10-01 to 2026-10-03; 2026-10-04 is today and partial (its bytes must not count).
+    const days = ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'];
+    const build = (
+      bytes: Record<string, number[]>,
+      inputs: Parameters<typeof capacity>[4] = {},
+      today = '2026-10-04',
+    ) => {
+      const { pub } = statusCycle();
+      const status = {
+        ...pub,
+        days: days.map((date, i) => ({
+          ...day(date, 'NL-1', 1, {}),
+          bytes: Object.fromEntries(Object.entries(bytes).map(([spec, b]) => [spec, b[i] ?? 0])),
+        })),
+      };
+      return capacity(status, registry, today, null, inputs);
+    };
+    const row = (md: string, spec: string) => md.split('\n').find((l) => l.includes(`| ${spec} |`)) ?? '';
+
+    it('a monthly spec is its bytes a run x 12 runs, a catch-up counts once, a spec outside the window is not measured', () => {
+      const c = build({
+        'nl-1-obs-key': [1e8, 3e8, 2e8, 9e12],
+        'nl-1-astro': [0, 35e6, 0, 0],
+        'nl-1-obs-sea-catchup': [2e6, 3e6, 0, 0],
+      });
+      expect(c.ok).toBe(true);
+      // Monthly (cron 30 0 20 1 * *): 35 MB a run x 12 runs, forever: 0.420 GB, and not the 3-day mean (35 MB / 3).
+      expect(row(c.markdown, 'nl-1-astro')).toBe(
+        '| NL-1 | nl-1-astro | forever | per run x runs a year | 12 | 35000000 | 1150685 | 0.420 | – |',
+      );
+      // One-shot (cron null): the window's 5 MB once, not x 365 and not x 90 days.
+      expect(row(c.markdown, 'nl-1-obs-sea-catchup')).toBe(
+        '| NL-1 | nl-1-obs-sea-catchup | obs | one-shot, once | 1 | 5000000 | 13699 | 0.005 | – |',
+      );
+      // The partial day (9e12) is left out: the mean of the three complete days is 2e8, 90 days on disk = 18 GB.
+      expect(row(c.markdown, 'nl-1-obs-key')).toContain('| 200000000 | 18.000 | 400000000 PASS |');
+      // Weekly nl-4-page ran in none of the days: said, and not counted as 0 bytes measured.
+      expect(row(c.markdown, 'nl-4-page')).toContain(
+        '| per run x runs a year | 52 | not in the window | 0 | 0.000 | – |',
+      );
+      expect(c.markdown).toMatch(/Not in the window, so not measured and left out: [^.]*`nl-4-page`/);
+    });
+
+    it('the A§7.3 rules: a spec above 2x its median and a total above 1 GB a day are WARN', () => {
+      const calm = build({ 'nl-1-fc-1h': [1e6, 1e6, 1e6, 0] });
+      expect(calm.markdown).toContain('| No spec above 2x its measured median on a complete day | PASS |');
+      expect(calm.markdown).toContain('(largest complete day: 1000000 B) | PASS |');
+      const loud = build({ 'nl-1-fc-1h': [1e6, 1e6, 9e6, 0], 'nl-1-obs-key': [0, 0, 1.2e9, 0] });
+      expect(loud.markdown).toContain('| No spec above 2x its measured median on a complete day | WARN: `nl-1-fc-1h`');
+      expect(loud.markdown).toContain('(largest complete day: 1209000000 B) | WARN |');
+      expect(row(loud.markdown, 'nl-1-fc-1h')).toContain('| 2000000 WARN |');
+    });
+
+    it('the database is computed from the registry steps and labelled so; the static line is the A§11.4 one unless given', () => {
+      const stations = [
+        { audience: 'public', expected_step: 'PT10M' },
+        { audience: 'public', expected_step: 'PT10M' },
+        { audience: 'public', expected_step: 'PT1H' },
+        { audience: 'owner', expected_step: 'PT10M' },
+      ];
+      const c = build({ 'nl-1-fc-1h': [1e6, 1e6, 1e6, 0] }, { stations, settledBytes: 1.5e9, diskPct: 31 });
+      // 144 + 144 + 24 = 312 samples a day x 365 x 102.1 B = 0.0116 GB: the row says computed and why.
+      expect(c.markdown).toMatch(
+        /\| Database, observations \(3 public series rows, 312 samples a day, 102\.1 B a row, 365 days\) \| 0\.0 \| \*\*computed\*\* /,
+      );
+      expect(c.markdown).toContain(
+        '| Static files, images, logs | 5 | A§11.4 line, **replace** by the publisher bench figure',
+      );
+      expect(c.markdown).toContain('settled/ and frames/ hold 1.50 GB');
+      expect(c.markdown).toContain('/srv/rws is 31% full');
+      expect(c.markdown).toContain('against the bucket size **OWNER: A9**');
+      expect(c.markdown).toMatch(
+        /\| \*\*Total on the ≥ 200 GB disk\*\* \| \*\*\d+\.\d\*\* \| \d+% of the disk; the disk alert fires at 75% \(150 GB\): PASS \|/,
+      );
+      const given = build({ 'nl-1-fc-1h': [1e6, 1e6, 1e6, 0] }, { staticGbYear: 9 });
+      expect(given.markdown).toContain(
+        '| Static files, images, logs | 9 | `--static-gb-year`, the publisher bench figure |',
+      );
+      expect(build({}, {}).markdown).toContain('the bytes of settled/ and frames/ were not read');
+    });
+
+    it('runsPerYear counts a UTC cron in a calendar year (5 or 6 fields)', () => {
+      expect(runsPerYear('30 0 20 1 * *')).toBe(12);
+      expect(runsPerYear('30 30 4 2 * *')).toBe(12);
+      expect(runsPerYear('30 0 0 * * *')).toBe(365);
+      expect(runsPerYear('5 4 * * 1')).toBe(52);
+      expect(runsPerYear('40 2 * * 0')).toBe(runsPerYear('40 2 * * 7'));
+      expect(runsPerYear('20,50 * * * *')).toBe(2 * 24 * 365);
+      expect(runsPerYear('45 0-21/3 * * *')).toBe(8 * 365);
+      expect(runsPerYear('*/5 * * * *')).toBe(288 * 365);
+      expect(() => runsPerYear('61 * * * *')).toThrow('bad cron');
+      expect(() => runsPerYear('* * *')).toThrow('bad cron');
+    });
   });
 
   it('verify-prod.sh --dry-run lists the checks without touching the network', () => {
