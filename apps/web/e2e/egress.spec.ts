@@ -4,11 +4,13 @@ import { fileURLToPath } from 'node:url';
 import { expect, type Page, test } from '@playwright/test';
 import { buildProfile, compare, type Inputs, parseBaseline } from '../../../scripts/lib/capacity-egress.ts';
 import { instrument } from './clean.ts';
-import { searchBox, searchButton, slider } from './helpers.ts';
+import { pickStation, searchBox, searchButton, slider } from './helpers.ts';
 
 // P12a (issue #27, criterion 6): the egress profile. One cold-cache visit to the map (a fresh context: no HTTP cache,
 // no service worker): open the map, zoom, pan, open 2 station panels, 5 timebar steps and 1 day of playback, then (P20a)
-// a deep link onto a lake gauge zoomed into the lake (the water-body tiles) and the method page. Every
+// a search for a lake gauge and a zoom into the lake (the water-body tiles). The session has a single page load because
+// every navigation would re-count the hashed assets that a real visitor's HTTP cache serves (request.sizes() cannot tell
+// a cache hit from a transfer); the page shells are covered by k6 (deploy/tests/loadtest/k6.js), not by this profile. Every
 // finished request is measured with request.sizes() (headers and body as transferred, i.e. compressed bytes on the
 // wire) and summed per class (scripts/lib/capacity-egress.ts). The profile goes to EGRESS_OUT (default
 // test-results/egress-profile.json) and is compared with the committed docs/capacity-egress.json: more than 1.2 x the
@@ -111,23 +113,17 @@ test('one cold-cache map session stays within 1.2 x the committed egress baselin
   // Playback really ran (a Play that did nothing would understate the profile).
   expect((await clock(page)) - start).toBeGreaterThanOrEqual(3_600_000);
 
-  // P20a: a lake. The deep link opens the map on the IJsselmeer's Krabbersgat gauge at zoom 9 (water layers are on by
-  // default and the compose rivers tiles carry `waterbodies` to zoom 12); three more wheel steps zoom into the lake.
-  // The production build has no test hook, so the mouse does it, over the part the station drawer leaves free (from
-  // 48rem the drawer covers the right 26rem; StationsMap.tsx centres the station in the rest).
-  await page.goto('/?s=nl.rws.krabbersgat.ijsselmeer');
-  await expect(canvas).toBeVisible();
+  // P20a: a lake. Reached in-page, as a visitor would: the station search moves the map to the IJsselmeer's Krabbersgat
+  // gauge (water layers are on by default and the compose rivers tiles carry `waterbodies` to zoom 12); three wheel
+  // steps zoom into the lake. The production build has no test hook, so the DOM and the mouse do it; the wheel goes over
+  // the part the station drawer leaves free (from 48rem the drawer covers the right 26rem; StationsMap.tsx centres the
+  // station in the rest).
+  await pickStation(page, 'Krabbersgat', /Krabbersgat, IJsselmeer/);
   await expect(page.locator('aside')).toBeVisible();
   await page.waitForLoadState('networkidle');
-  const lake = (await canvas.boundingBox()) ?? box;
   const drawer = (page.viewportSize()?.width ?? 0) >= 768 ? 26 * 16 : 0;
-  await page.mouse.move(lake.x + (lake.width - drawer) / 2, lake.y + lake.height / 2);
+  await page.mouse.move(box.x + (box.width - drawer) / 2, box.y + box.height / 2);
   for (let n = 0; n < 3; n++) await page.mouse.wheel(0, -300);
-  await page.waitForLoadState('networkidle');
-
-  // P20a: an information page (the method page: HTML, the shared assets from the HTTP cache, no map).
-  await page.goto('/methode');
-  await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible();
   await page.waitForLoadState('networkidle');
 
   // Invariant 7: every request of the session is same-origin (instrument() aborts and logs any other).

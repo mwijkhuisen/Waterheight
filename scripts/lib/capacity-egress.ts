@@ -167,7 +167,7 @@ export function renderSection(b: Baseline): string {
     '',
     `Generated from \`docs/capacity-egress.json\` by \`node scripts/lib/capacity-egress.ts\`; edit the JSON and re-run it, not this block (\`scripts/verify-prod.sh --capacity\` keeps it).${b.provisional ? ' **The profile is provisional** (a local estimate; the first CI run of `egress.spec.ts` replaces it).' : ''}`,
     '',
-    `Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 5 timebar steps, 1 day of playback, a zoom onto a lake, the method page), measured by \`apps/web/e2e/egress.spec.ts\` as bytes on the wire (headers and body, compressed, as transferred), at ${b.measured_at}. ${b.note}`,
+    `Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 5 timebar steps, 1 day of playback, a search for a lake gauge and a zoom onto the lake), measured by \`apps/web/e2e/egress.spec.ts\` as bytes on the wire (headers and body, compressed, as transferred), at ${b.measured_at}. ${b.note}`,
     '',
     '| Class | Requests | Bytes (MB) |',
     '|---|---:|---:|',
