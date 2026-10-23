@@ -34,7 +34,11 @@ import { BUCKET_MS as BUCKET_STEP_MS, dayOf, isSettled } from '../packages/contr
 // The seed mixes as production does: about 5 % of the series are tidal, and the fixed counts (NL-4 pairs, day-of-year
 // series, warning areas) grow with the series, from their values at 3,000.
 //
-//   DATABASE_URL=<superuser of a throw-away PostgreSQL 18> node scripts/bench-q1.ts [--series N] [--days N]
+//   DATABASE_URL=<superuser of a throw-away PostgreSQL 18> node scripts/bench-q1.ts [--series N] [--days N] [--report-timings]
+//
+// --report-timings (CI job bench-4000, owner decision 2026-10-23, "gate 3,000, report 4,000"): the TIMING limits (the two tide
+// reads, the API p95s and the tidal /series) are printed as `bench-q1: REPORT: ...` and do not fail the run.
+// The Q1 median ("all series at T" under 50 ms), every correctness check and the publisher budgets B1 to B4 stay hard. Without the flag every limit fails the run, as before.
 
 function intFlag(name: string, fallback: number): number {
   const i = process.argv.indexOf(name);
@@ -42,7 +46,9 @@ function intFlag(name: string, fallback: number): number {
   const raw = process.argv[i + 1] ?? '';
   const n = Number(raw);
   if (!/^[0-9]+$/.test(raw) || !Number.isSafeInteger(n) || n < 1) {
-    console.error('usage: node scripts/bench-q1.ts [--series N] [--days N]  (integers >= 1; defaults 4000 and 60)');
+    console.error(
+      'usage: node scripts/bench-q1.ts [--series N] [--days N] [--report-timings]  (integers >= 1; defaults 4000 and 60)',
+    );
     process.exit(2);
   }
   return n;
@@ -50,16 +56,36 @@ function intFlag(name: string, fallback: number): number {
 const args = process.argv.slice(2);
 for (const [i, a] of args.entries()) {
   // A flag, or the value right after one; anything else (the retired positional form) is a usage error.
-  if (a !== '--series' && a !== '--days' && args[i - 1] !== '--series' && args[i - 1] !== '--days') {
-    console.error('usage: node scripts/bench-q1.ts [--series N] [--days N]  (integers >= 1; defaults 4000 and 60)');
+  if (
+    a !== '--series' &&
+    a !== '--days' &&
+    a !== '--report-timings' &&
+    args[i - 1] !== '--series' &&
+    args[i - 1] !== '--days'
+  ) {
+    console.error(
+      'usage: node scripts/bench-q1.ts [--series N] [--days N] [--report-timings]  (integers >= 1; defaults 4000 and 60)',
+    );
     process.exit(2);
   }
 }
+const REPORT_TIMINGS = args.includes('--report-timings');
+let reported = 0;
 const SERIES = intFlag('--series', 4000);
 const DAYS = intFlag('--days', 60);
 const LIMIT_MS = 50;
 const RUNS = 30;
 const TIDE_MS = 20;
+/** A breached timing limit: a failure, or with --report-timings only a REPORT line (same text). */
+function timingBreach(msg: string): boolean {
+  if (!REPORT_TIMINGS) {
+    console.error(`bench-q1: FAIL: ${msg}`);
+    return true;
+  }
+  console.error(`bench-q1: REPORT: ${msg}`);
+  reported++;
+  return false;
+}
 const TIDAL = Math.round(SERIES * 0.05); // P18a: stations flagged tidal, staleness 1 h (the registry's); production has 4.9 %
 // The fixed counts of the 3,000-series seed, scaled with the series (rounded).
 const scaled = (n: number) => Math.round((n * SERIES) / 3000);
@@ -532,8 +558,7 @@ try {
     `${TIDE_AT.public} "tide rows at T": ${tideRows} rows over ${TIDAL} tidal series; median ${tideMedian.toFixed(1)} ms, p95 ${(tideTimes[Math.ceil(tideTimes.length * 0.95) - 1] as number).toFixed(1)} ms, max ${(tideTimes.at(-1) as number).toFixed(1)} ms over ${RUNS} runs (limit ${TIDE_MS} ms)`,
   );
   if (tideMedian >= TIDE_MS) {
-    console.error(`bench-q1: FAIL: tide median ${tideMedian.toFixed(1)} ms is not under ${TIDE_MS} ms`);
-    failed = true;
+    if (timingBreach(`tide median ${tideMedian.toFixed(1)} ms is not under ${TIDE_MS} ms`)) failed = true;
   }
   // P18b: the same function at a future instant (now + 24 h), the extra read of the future snapshot (readFutureSnapshot).
   const ahead = (i: number) => new Date(Date.now() + 24 * 3_600_000 + i * 61_000);
@@ -556,8 +581,7 @@ try {
     failed = true;
   }
   if (aheadMedian >= TIDE_MS) {
-    console.error(`bench-q1: FAIL: future tide median ${aheadMedian.toFixed(1)} ms is not under ${TIDE_MS} ms`);
-    failed = true;
+    if (timingBreach(`future tide median ${aheadMedian.toFixed(1)} ms is not under ${TIDE_MS} ms`)) failed = true;
   }
   // P14f: the day read of a cold /snapshot (readDoy): one UTC day key through the reference view, as rws_api. The
   // literal kind list is what lets the partial index of 20261116000001 apply through the view.
@@ -675,8 +699,7 @@ try {
         failed = true;
       }
       if (p95 >= limit) {
-        console.error(`bench-q1: FAIL: API ${label}: p95 ${p95.toFixed(1)} ms is not under ${limit} ms`);
-        failed = true;
+        if (timingBreach(`API ${label}: p95 ${p95.toFixed(1)} ms is not under ${limit} ms`)) failed = true;
       }
     };
     const snapshotProblem = (body: string) => {
@@ -717,8 +740,7 @@ try {
       `API /series ${SPAN_DAYS} d raw, tidal series: ${tidalCall.ms.toFixed(1)} ms, ${tidalCall.body.length} bytes (limit ${SERIES_MS} ms)`,
     );
     if (tidalCall.ms >= SERIES_MS) {
-      console.error(`bench-q1: FAIL: tidal /series ${tidalCall.ms.toFixed(1)} ms is not under ${SERIES_MS} ms`);
-      failed = true;
+      if (timingBreach(`tidal /series ${tidalCall.ms.toFixed(1)} ms is not under ${SERIES_MS} ms`)) failed = true;
     }
     const sizeAt = async () => {
       const fresh = createApp({ db: db.db, window: displayWindow });
@@ -741,4 +763,8 @@ try {
   await t.drop();
 }
 process.exitCode = failed ? 1 : 0;
-if (!failed) console.log('bench-q1: OK');
+if (!failed) {
+  console.log(
+    reported > 0 ? `bench-q1: OK (${reported} timing limits reported, not asserted: --report-timings)` : 'bench-q1: OK',
+  );
+}
