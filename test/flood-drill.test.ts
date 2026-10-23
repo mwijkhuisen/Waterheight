@@ -8,7 +8,17 @@ import { LAYOUT_DE } from '../apps/server/src/adapters/ch-4/normalise.ts';
 import { ManifestLine } from '../apps/server/src/archive/manifest.ts';
 import { ArchiveReader } from '../apps/server/src/archive/reader.ts';
 import { sha256 } from '../apps/server/src/archive/writer.ts';
-import { E2E_DOMAIN, MARKER, main, plan, refusal, SCENES, writeDrill } from '../scripts/flood-drill.ts';
+import {
+  E2E_DOMAIN,
+  MARKER,
+  main,
+  plan,
+  refusal,
+  SCENES,
+  STORM_ANCHOR,
+  STORM_SCENES,
+  writeDrill,
+} from '../scripts/flood-drill.ts';
 import { deriveLevel4, RAISED } from '../scripts/lib/shift-fr5.ts';
 import {
   anchorCap,
@@ -17,6 +27,7 @@ import {
   anchorDe6Events,
   CIARAN_DE,
   CIARAN_IT,
+  shiftNl1,
 } from '../scripts/lib/shift-sources.ts';
 
 // scripts/flood-drill.ts (P12a, issue #27): where it refuses to run, what it plans and what it writes.
@@ -311,6 +322,117 @@ describe('writeDrill', () => {
     // The recorder's modes: nothing for others (the loader reads as the owner or the group).
     expect(statSync(join(raw, '_manifest', '2026-10-12.jsonl')).mode & 0o007).toBe(0);
     expect(statSync(join(raw, '_manifest')).mode & 0o007).toBe(0);
+  });
+});
+
+describe('the storm phase (P20a): the synthetic Den Helder storm surge', () => {
+  /** Off the 10-minute grid and not on a whole minute, as a drill started by `date -u` is. */
+  const AT = Date.parse('2026-10-12T10:03:27Z');
+  const storm = plan(AT, 'storm');
+  type Meting = { Tijdstip: string; Meetwaarde: { Waarde_Numeriek: number } };
+  const rows = (body: Buffer) =>
+    (
+      JSON.parse(body.toString('utf8')) as { WaarnemingenLijst: { MetingenLijst: Meting[] }[] }
+    ).WaarnemingenLijst.flatMap((l) => l.MetingenLijst);
+  const valueAt = (body: Buffer, ms: number) => rows(body).find((m) => Date.parse(m.Tijdstip) === ms)?.Meetwaarde;
+  const fixture = (kind: string) =>
+    readFileSync(new URL(`nl-1/fixtures/nl-1-storm-denhelder-${kind}.synthetic.raw`, FIXTURES));
+  const at = (spec: string) => storm.find((p) => p.scene.spec === spec) as (typeof storm)[number];
+
+  it('is three scenes of its own, never part of all: the measurements, the astronomical tide, its high and low waters', () => {
+    expect(STORM_SCENES.map((s) => [s.source, s.spec, s.fixture, s.phase])).toEqual([
+      ['NL-1', 'nl-1-obs-sea', 'nl-1-storm-denhelder-obs.synthetic', 'storm'],
+      ['NL-1', 'nl-1-astro', 'nl-1-storm-denhelder-astro.synthetic', 'storm'],
+      ['NL-1', 'nl-1-hwlw-astro', 'nl-1-storm-denhelder-hwlw-astro.synthetic', 'storm'],
+    ]);
+    expect(storm.map((p) => p.variant)).toEqual([
+      'denhelder.marsdiep/H/NAP',
+      'denhelder.marsdiep/NAP',
+      'denhelder.marsdiep/NAP/NVT',
+    ]);
+    expect(plan(AT, 'all').some((p) => p.scene.phase === 'storm')).toBe(false);
+    expect(plan(AT, 'all').map((p) => p.scene.fixture)).toEqual(SCENES.map((s) => s.fixture));
+  });
+
+  it("the anchor is the fixture's storm high water: 2026-12-11T23:00Z, measured 333 cm, astro 83 cm, surge +250 cm", () => {
+    expect(new Date(STORM_ANCHOR).toISOString()).toBe('2026-12-11T23:00:00.000Z');
+    const measured = valueAt(fixture('obs'), STORM_ANCHOR)?.Waarde_Numeriek;
+    const astro = valueAt(fixture('astro'), STORM_ANCHOR)?.Waarde_Numeriek;
+    expect([measured, astro, (measured as number) - (astro as number)]).toEqual([333, 83, 250]);
+    // The high water of the astronomical extremes is there too (on local midnight, 00:00 at +01:00).
+    expect(valueAt(fixture('hwlw-astro'), STORM_ANCHOR)?.Waarde_Numeriek).toBe(83);
+  });
+
+  it('one offset for all three, the anchor at the drill now (lead 0), fetched at the drill now', () => {
+    expect(new Set(storm.map((p) => p.deltaMs))).toEqual(new Set([AT - STORM_ANCHOR]));
+    for (const p of storm) expect([p.placed, p.responseDeltaMs]).toEqual([AT, p.deltaMs]);
+  });
+
+  it('the measurements are cut at the anchor: none later than the drill now, the newest is the high water, astro + 250', () => {
+    const obs = rows(at('nl-1-obs-sea').body);
+    // 144 recorded values every 10 minutes, 2026-12-11T04:00Z to 2026-12-12T03:50Z; the 29 after 23:00Z are cut off.
+    expect([rows(fixture('obs')).length, obs.length]).toEqual([144, 115]);
+    const times = obs.map((m) => Date.parse(m.Tijdstip));
+    expect(Math.max(...times)).toBe(AT);
+    expect(times.at(-1)).toBe(AT);
+    expect(Math.min(...times)).toBe(AT - 19 * 3_600_000);
+    const astro = valueAt(at('nl-1-astro').body, AT)?.Waarde_Numeriek as number;
+    expect(valueAt(at('nl-1-obs-sea').body, AT)?.Waarde_Numeriek).toBe(astro + 250);
+    expect(astro).toBe(83);
+    // The cut is of the recorded clock: another drill clock keeps the same values.
+    const other = plan(AT + 7 * 60_000 + 5_000, 'storm')[0] as (typeof storm)[number];
+    expect(rows(other.body).map((m) => m.Meetwaarde)).toEqual(obs.map((m) => m.Meetwaarde));
+  });
+
+  it('keeps the fixed +01:00 and the milliseconds RWS writes, and the rest of the document byte for byte', () => {
+    for (const p of storm)
+      for (const m of rows(p.body)) expect(m.Tijdstip).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.000\+01:00$/);
+    expect(rows(at('nl-1-obs-sea').body).at(-1)?.Tijdstip).toBe('2026-10-12T11:03:27.000+01:00');
+    for (const kind of ['obs', 'astro', 'hwlw-astro'])
+      expect(shiftNl1(fixture(kind), 0).equals(fixture(kind))).toBe(true);
+    // Only Tijdstip moves: the documents differ from the fixtures in nothing else.
+    const strip = (b: Buffer) => b.toString('utf8').replace(/"Tijdstip":"[^"]*"/g, '');
+    for (const p of storm.slice(1)) expect(strip(p.body)).toBe(strip(fixture(p.scene.spec.slice(5))));
+    expect(() => shiftNl1(Buffer.from('{"features":[]}'), 0)).toThrow(/NL-1/);
+  });
+
+  it('the tide keeps its next day and starts inside the day before the fetch (no before_window, no beyond_horizon)', () => {
+    for (const spec of ['nl-1-astro', 'nl-1-hwlw-astro']) {
+      const times = rows(at(spec).body).map((m) => Date.parse(m.Tijdstip));
+      expect(Math.min(...times)).toBeGreaterThanOrEqual(AT - 86_400_000);
+      expect(Math.max(...times)).toBeGreaterThan(AT + 24 * 3_600_000);
+      expect(Math.max(...times)).toBeLessThanOrEqual(AT + 401 * 86_400_000);
+    }
+  });
+
+  it("writes the three lines with the capture specs' method and retention (obs for the measurements, forever for the tide)", async () => {
+    const raw = dir();
+    const lines = await writeDrill({ rawDir: raw, now: AT, phase: 'storm' });
+    expect(lines.map((l) => [l.spec, l.variant, l.request?.method, l.retention, l.fetched_at.end])).toEqual([
+      ['nl-1-obs-sea', 'denhelder.marsdiep/H/NAP', 'POST', 'obs', '2026-10-12T10:03:27.000Z'],
+      ['nl-1-astro', 'denhelder.marsdiep/NAP', 'POST', 'forever', '2026-10-12T10:03:27.000Z'],
+      ['nl-1-hwlw-astro', 'denhelder.marsdiep/NAP/NVT', 'POST', 'forever', '2026-10-12T10:03:27.000Z'],
+    ]);
+    const reader = new ArchiveReader(raw);
+    for (const [i, l] of lines.entries())
+      expect((await reader.readObject(l.key as string)).equals((storm[i] as (typeof storm)[number]).body)).toBe(true);
+  });
+
+  it('through the command line: --phase storm --now, fetched at that now', async () => {
+    const raw = dir();
+    const log: string[] = [];
+    const orig = console.log;
+    console.log = (m: string) => log.push(m);
+    try {
+      expect(
+        await main(['--phase', 'storm', '--now', new Date(AT).toISOString(), raw], GOOD_ENV, stack, () => AT + 9000),
+      ).toBe(0);
+    } finally {
+      console.log = orig;
+    }
+    expect(log.join('\n')).toMatch(
+      /3 manifest lines \(3 payloads\), phase storm, drill clock 2026-10-12T10:03:27.000Z/,
+    );
   });
 });
 

@@ -9,7 +9,7 @@
 #     /srv/rws/raw is writable.
 # The loader tails the manifest, so the appended lines load like a capture's. Afterwards the owner and modes of the new
 # objects are set as run.sh sets them after fixture-archive.ts (65532, directories 0750, files 0640).
-# Usage: scripts/flood-drill [--phase main|cancel|all] [--now <UTC instant>]
+# Usage: scripts/flood-drill [--phase main|cancel|all|storm] [--now <UTC instant>]
 set -euo pipefail
 
 refuse() {

@@ -3,7 +3,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { dayOf, type StaticStations } from '@rws/contracts';
+import { dayOf, LatestFile, type StaticStations, toSnapshot } from '@rws/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   buildFixtureArchive,
@@ -13,7 +13,7 @@ import {
   buildNrwLuFixtureArchive,
   buildP7aFixtureArchive,
 } from '../../../../scripts/fixture-archive.ts';
-import { writeDrill } from '../../../../scripts/flood-drill.ts';
+import { plan, writeDrill } from '../../../../scripts/flood-drill.ts';
 import { StaticCache } from '../../src/api/states.ts';
 import { ArchiveReader } from '../../src/archive/reader.ts';
 import { attributionRows } from '../../src/attribution.ts';
@@ -32,13 +32,22 @@ import { latestUpsertSql, obsInsertSql } from '../e2e/seed.ts';
 // scripts/fixture-archive.ts), the registry is the drill's (deploy/tests/flood/setup.sh: station 2020 public), the
 // observations are the load test's seed (the latest.json of a series needs a value), and the drill is written in its
 // two phases. What flood-check.mjs reads is what the renderers wrote: it passes on the open phase, fails on the closed
-// check of the same files and the other way round, so the check is neither vacuous nor blind.
+// check of the same files and the other way round, so the check is neither vacuous nor blind. Then P20a's storm phase
+// (the synthetic Den Helder storm surge) over the same seed, read back from the public latest.json.
 
 const ROOT = new URL('../../../../', import.meta.url);
 const NOW = Date.parse('2026-10-12T10:00:00Z');
 /** The publishers' clock: 12 minutes after the drill clock, so that the 10-minute bucket is the one after it. */
 const RENDER = NOW + 12 * 60_000;
 const FLOOD_CHECK = fileURLToPath(new URL('deploy/tests/e2e/flood-check.mjs', ROOT));
+/**
+ * The storm's drill clock: the seed's last instant (it runs from RENDER − 3 h on the 10-minute expected step), so the
+ * storm's measurements land on the seed's grid and its high water on the seed's newest value. The loader's clock is
+ * RENDER too; the publishers render the bucket after it.
+ */
+const STORM_NOW = RENDER;
+const STORM_RENDER = STORM_NOW + 10 * 60_000;
+const DEN_HELDER = 'denhelder.marsdiep/WATHTE/NAP/other:F007';
 
 const tmp: string[] = [];
 const dir = () => {
@@ -126,17 +135,17 @@ async function seed(): Promise<void> {
 }
 
 /** The files of both publishers, as the cycle writes them, in <root>/{public,owner}/v1. */
-async function render(root: string): Promise<void> {
+async function render(root: string, now = RENDER): Promise<void> {
   for (const family of ['public', 'owner'] as const) {
     const db = family === 'public' ? pub : own;
     const c: RenderCtx = {
       db: db.db,
       family,
-      now: RENDER,
+      now,
       window: { dataEpochMs: Date.parse('2026-09-01T00:00:00Z'), displayStartMs: Date.parse('2026-10-01T00:00:00Z') },
       build: 'dev',
       sections: vigicruesSections(),
-      cache: new StaticCache(60_000, () => RENDER),
+      cache: new StaticCache(60_000, () => now),
       inputs: undefined,
       attribution: await attributionRows(db.db, family),
     };
@@ -149,7 +158,7 @@ async function render(root: string): Promise<void> {
     put('stations.json', stations);
     put('latest.json', (await RENDERERS.latest(c, stations)).body);
     put('warnings/latest.geojson', await RENDERERS.warnings(c, null));
-    put('warnings/today.json', await RENDERERS.warnings(c, dayOf(RENDER)));
+    put('warnings/today.json', await RENDERERS.warnings(c, dayOf(now)));
     put('forecast/latest.json', await RENDERERS.forecast(c));
     put('sources.json', await RENDERERS.sources(c));
   }
@@ -258,5 +267,65 @@ describe('the flood drill through the loader, the renderers and flood-check.mjs'
     expect(r.out).toMatch(/FAIL forecast\/latest\.json: the CH-4 storm run/);
     expect(r.out).toMatch(/DE-3 is named in a public file/);
     expect(r.out).toMatch(/a public file holds the canary/);
+  });
+
+  it('the storm phase loads whole over the seed, and its high water wins at the drill now: 333 cm, the 19 seeded values changed', async () => {
+    const id = (await q('SELECT id FROM series WHERE provider_key = $1', [DEN_HELDER]))[0]?.id as number;
+    type Meting = { Tijdstip: string; Meetwaarde: { Waarde_Numeriek: number } };
+    const storm = new Map(
+      (
+        JSON.parse((plan(STORM_NOW, 'storm')[0] as { body: Buffer }).body.toString('utf8')) as {
+          WaarnemingenLijst: { MetingenLijst: Meting[] }[];
+        }
+      ).WaarnemingenLijst[0]?.MetingenLijst.map((m) => [Date.parse(m.Tijdstip), m.Meetwaarde.Waarde_Numeriek]),
+    );
+    // The seed holds Den Helder already (no astronomical tide), on the instants the storm's measurements land on.
+    const seeded = await q('SELECT ts, value FROM obs WHERE series_id = $1 ORDER BY ts', [id]);
+    expect(seeded.map((r) => iso(r.ts))).toEqual(
+      Array.from({ length: 19 }, (_, i) => new Date(STORM_NOW - (18 - i) * 600_000).toISOString()),
+    );
+    expect(seeded.every((r) => storm.has((r.ts as Date).getTime()))).toBe(true);
+    expect(await q('SELECT 1 FROM tide WHERE series_id = $1', [id])).toEqual([]);
+    const differ = seeded.filter((r) => storm.get((r.ts as Date).getTime()) !== r.value).length;
+
+    const lines = await writeDrill({ rawDir: raw, now: STORM_NOW, phase: 'storm' });
+    expect(lines.map((l) => [l.spec, l.retention])).toEqual([
+      ['nl-1-obs-sea', 'obs'],
+      ['nl-1-astro', 'forever'],
+      ['nl-1-hwlw-astro', 'forever'],
+    ]);
+    expect(await loader.tick()).toEqual({ lines: 3, loaded: 3 });
+    const batches = await q(
+      'SELECT spec_id, parse_status, n_new, n_changed FROM ingest_batch WHERE fetched_at = $1 ORDER BY id',
+      [new Date(STORM_NOW)],
+    );
+    expect(batches.map((b) => [b.spec_id, b.parse_status])).toEqual([
+      ['nl-1-obs-sea', 'ok'],
+      ['nl-1-astro', 'ok'],
+      ['nl-1-hwlw-astro', 'ok'],
+    ]);
+    expect(alerts.filter((a) => !CHANGES.has(a.code))).toEqual([]);
+    // The newer fetch wins every instant the seed held: each seeded value that differs is changed (an obs_revision),
+    // the rest of the 115 measurements are new. Observed: all 19 differ.
+    expect(differ).toBe(19);
+    expect([batches[0]?.n_new, batches[0]?.n_changed]).toEqual([115 - 19, 19]);
+    expect(await q('SELECT count(*)::int AS n FROM obs_revision WHERE series_id = $1', [id])).toEqual([{ n: 19 }]);
+
+    const root = dir();
+    await render(root, STORM_RENDER);
+    const latest = LatestFile.parse(JSON.parse(readFileSync(join(root, 'public', 'v1', 'latest.json'), 'utf8')));
+    const item = toSnapshot(latest).values.find((v) => v.series === id);
+    expect(item).toMatchObject({
+      ts: new Date(STORM_NOW).toISOString(),
+      value: 333,
+      state: 'high',
+      basis: { source: 'NL-4', kind: 'provider_class', label: 'Stormvloed (> 260cm)' },
+      tide: { astro: 83, surge: 250, derived: 'surge' },
+    });
+    expect(item?.value).toBe((item?.tide?.astro as number) + 250);
+    const stations = JSON.parse(readFileSync(join(root, 'public', 'v1', 'stations.json'), 'utf8')) as StaticStations;
+    expect(stations.stations.find((st) => st.id === 'nl.rws.denhelder.marsdiep')?.series.map((s) => s.id)).toContain(
+      id,
+    );
   });
 });
