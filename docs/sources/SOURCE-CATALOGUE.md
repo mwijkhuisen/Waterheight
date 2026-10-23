@@ -472,7 +472,7 @@ Each subsection covers: endpoints with their parameters or bodies, units, datum,
 | **Discharge forecast** | OW | Q | NVT | m3/s | verwachting | `RWSM-F232` (`other:F058` at maaseik) | 13 |
 
 - The 13 discharge-forecast locations are `arnhem.nederrijn`, `driel.boven`, `eijsden.grens`, `hagestein.boven`, `lobith.bovenrijn.tolkamer`, `maaseik`, `maastricht.borgharen.maas.beneden`, `maastricht.sintpieter`, `megen.maas`, `olst`, `tiel.sluis.waal`, `tiel.waal` and `venlo`.
-- `Kwaliteitswaardecode`: Waterinfo shows `00`, `10`, `20`, `25`, `30` and `40`. **`99` = gap, served with the value `0.0`.** Code 31 is no longer issued and became 25. What 25 means is UNVERIFIED.
+- `Kwaliteitswaardecode`: Waterinfo shows `00`, `10`, `20`, `25`, `30` and `40`. **`99` = gap, served with the value `0.0`.** **A placeholder with a normal code ([V] 2026-10-23, #213): K14 (WATHTE, MSL) served `99999904.0` with code `00`, `Ongecontroleerd`, at 2026-10-22 17:50–18:20Z, between ordinary values; the observation path drops any value over 1e7 cm on its own instant (`out_of_range`).** Code 31 is no longer issued and became 25. What 25 means is UNVERIFIED.
 - `Statuswaarde` is `Ongecontroleerd` (live), `Gecontroleerd` or `Definitief`.
 - `Referentievlak` is mostly `NVT`; ignore it and use `Hoedanigheid`.
 - `Bemonsteringshoogte` sentinels: `"0"` (live), `"-999999999"` (archived), `-100000000000` (WFS).
@@ -2092,7 +2092,7 @@ Our own checks:
 - **Stale:** `age = T − ts`. Show a badge when age > `max(3 × expected_step, 45 min)`; drop the station from the map after 25 h (the PEGELONLINE convention). Live, 10 of 737 PEGELONLINE W series were more than 1 h old, 3 more than 25 h and 1 more than 7 days.
 - **Frozen:** unchanged for 12 h or more **and** a linked neighbour moved by more than 5 cm. A flat line alone is not enough: Emmerich stayed at −7 cm legitimately, and weir reaches stay flat for days.
 - **Spike:** a jump beyond a physical rate (e.g. 50 cm per 15 min on the main rivers) that reverts within 2 steps.
-- **Sentinels to drop:** RWS `99`/`0.0`; PEGELONLINE `99999.0`; NLWKN `-888`; VMM `−10000`; KiWIS `null`/`-1`; Hub'Eau null codes; NRW `NA`; RLP `-`.
+- **Sentinels to drop:** RWS `99`/`0.0`, and `99999904.0` under a normal code (#213); PEGELONLINE `99999.0`; NLWKN `-888`; VMM `−10000`; KiWIS `null`/`-1`; Hub'Eau null codes; NRW `NA`; RLP `-`.
 
 ### 4.9 Class crosswalk to the common scale (proposal; the product owner must sign it off) [synth]
 
