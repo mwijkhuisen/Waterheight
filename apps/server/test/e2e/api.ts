@@ -130,6 +130,33 @@ const P19A_STATIONS: TestStation[] = [
 ];
 
 /**
+ * P19b (review SR-1): two synthetic gauges of the Gooimeer, whose body name apps/web/e2e/prepare-tiles.ts makes
+ * HTML-looking, with HTML-looking names of their own (payloads 6 to 9; 1 to 5 are used elsewhere). gooi-ref is the
+ * body's D27 reference, gooi-other its second gauge: the lake panel, the lake popup and the downstream chain must show
+ * them as text. Neither name contains "E2E" or "onerror", so the searches of the other specs (the E2E stations; payload 1) do not find them.
+ */
+const P19B_STATIONS: TestStation[] = [
+  {
+    id: 'nl.e2e.gooi-ref',
+    name: '<img src=x onload=alert(6)>Gooi ref',
+    water: '<svg onload=alert(8)>',
+    lon: 5.15,
+    lat: 52.29,
+    step: '10 min',
+    stale: '90 min',
+  },
+  {
+    id: 'nl.e2e.gooi-other',
+    name: '<img src=x onload=alert(7)>Gooi other',
+    water: '<svg onload=alert(9)>',
+    lon: 5.2,
+    lat: 52.31,
+    step: '10 min',
+    stale: '90 min',
+  },
+];
+
+/**
  * Test stations inside the Lobith map fixture (6.04,51.82 – 6.16,51.88): one H series each, a level in cm NAP.
  * nl.e2e.tier2 is the only tier-2 one there (#205: far out only tier 1).
  */
@@ -156,6 +183,7 @@ const STATIONS: TestStation[] = [
     tier: 2,
   },
   ...P19A_STATIONS,
+  ...P19B_STATIONS,
 ];
 
 const HOUR = 3_600_000;

@@ -14,6 +14,7 @@ import {
   start,
   type W,
 } from './helpers.ts';
+import { E2E_HOSTILE_LAKE } from './prepare-tiles.ts';
 
 // P19b (issue #67): the tide, lake and downstream sections of the station panel, the Method page's water boards and the
 // About tagline, on Chromium, Firefox and WebKit over the e2e seed (apps/server/test/e2e/api.ts P19A and P19B blocks):
@@ -26,13 +27,23 @@ import {
 //      to the reference, the lake popup's button, a lake without a reference; axe on the panel;
 //   4  the downstream chain of Lobith and Eijsden: the delta exits once, the IJssel branch to the IJsselmeer, text only;
 //   5  the Method page: every water board without data and its gauges, the surge and lake sections; axe on the page;
-//   6  the About tagline.
+//   6  the About tagline;
+//   7  review SR-1: HTML-looking names (a lake and two of its gauges, a station on the Rhine) are text in the lake section,
+//      the lake popup, its button and the downstream chain: no image, no handler, no alert.
 
 const COAST = 'nl.e2e.coast';
 const PLATFORM = 'nl.e2e.platform';
 const LAKE_GAUGE = 'nl.e2e.lake-gauge';
 const LAKE_REF = 'nl.e2e.lake-ref';
 const LAKE_NOREF = 'nl.e2e.lake-noref';
+/** SR-1: the Gooimeer's two e2e gauges (apps/server/test/e2e/api.ts P19B_STATIONS), their names HTML-looking; gooi-ref is the lake's reference. */
+const GOOI_REF = 'nl.e2e.gooi-ref';
+const GOOI_OTHER = 'nl.e2e.gooi-other';
+const HOSTILE_REF = '<img src=x onload=alert(6)>Gooi ref';
+const HOSTILE_OTHER = '<img src=x onload=alert(7)>Gooi other';
+/** The hostile station on the Rhine above Lobith (prepare-tiles.ts E2E_CHAIN) and the one upstream of it. */
+const HOSTILE_RHINE = '<img src=x onerror=alert(1)>';
+const RHINE_UPSTREAM = 'nl.e2e.dst';
 const LOBITH = 'nl.rws.lobith.bovenrijn.tolkamer';
 const EIJSDEN = 'nl.rws.eijsden.grens';
 /** The past hour (24 October, CEST), now, and now + 6 h (the forecast; 26 October is CET, the clocks changed on the 25th). */
@@ -481,7 +492,108 @@ for (const locale of ['nl', 'en'] as const) {
         ? 'Waterstanden van Nederland en de rivieren die het binnenstromen'
         : 'Water levels of the Netherlands and the rivers that flow into it',
     );
-    await expect(page.locator('main p').first()).toContainText(`${tagline}.`);
+    await expect(page.locator('main p').first()).toContainText(`${tagline}:`);
     await finish(page, s);
   });
 }
+
+// ---------------------------------------------------------------- 7: HTML-looking names stay text (review SR-1)
+
+/** window.alert is replaced by a recorder before any page script runs (the dialog listener of `start` is the second net). */
+const alertStub = (page: Page) =>
+  page.addInitScript(() => {
+    const w = window as unknown as { __alerts: string[] };
+    w.__alerts = [];
+    window.alert = (message?: unknown) => {
+      w.__alerts.push(String(message));
+    };
+  });
+const alerts = (page: Page) => page.evaluate(() => (window as unknown as { __alerts: string[] }).__alerts);
+/** No element made from a name or label: no image, no event-handler attribute anywhere on the page, and no alert. */
+async function expectInert(page: Page, where: string) {
+  await expect(page.locator('img[src="x"], [onerror], [onload]'), where).toHaveCount(0);
+  expect(await alerts(page), `${where}: alerts`).toEqual([]);
+}
+
+test('HTML-looking names are text in the lake section: the lake, its reference and its other gauge', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await alertStub(page);
+  // The reference gauge's own panel: the body is the section heading, the gauge itself plain text, the other gauge a button.
+  await open(page, `/?s=${GOOI_REF}`);
+  await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText(HOSTILE_REF);
+  const lake = lakeOf(page, E2E_HOSTILE_LAKE);
+  await expect(lake).toBeVisible();
+  await settled(page);
+  await expect(lake).toContainText(`${HOSTILE_REF} (${nl('lake_this_station')})`);
+  await expect(lake.getByRole('button', { name: HOSTILE_OTHER })).toBeVisible();
+  await expect(lake.locator('img')).toHaveCount(0);
+  await expectInert(page, 'the reference gauge panel');
+
+  // The other gauge's panel: the reference is a button with the hostile name; it opens the reference's panel.
+  await lake.getByRole('button', { name: HOSTILE_OTHER }).click();
+  await expect.poll(() => param(page, 's')).toBe(GOOI_OTHER);
+  await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText(HOSTILE_OTHER);
+  const other = lakeOf(page, E2E_HOSTILE_LAKE);
+  const reference = other.locator('p', { hasText: nl('lake_reference_label') });
+  await expect(reference.getByRole('button', { name: HOSTILE_REF, exact: true })).toBeVisible();
+  await expectInert(page, 'the other gauge panel');
+  await reference.getByRole('button', { name: HOSTILE_REF, exact: true }).click();
+  await expect.poll(() => param(page, 's')).toBe(GOOI_REF);
+  await expectInert(page, 'back on the reference gauge');
+  await finish(page, s);
+});
+
+test("the lake popup's reference name and button are text for a hostile lake and gauge; the button opens the reference", async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await alertStub(page);
+  await open(page, '/');
+  await page.locator('main').evaluate((main) => main.scrollIntoView({ block: 'end' }));
+  await lakeMap(page);
+  // The lake sits in the upper half of the map: its popup is long (reference, spread, wind note) and the time bar floats
+  // over the bottom of the window, so a popup opened low would put its button under the bar.
+  await page.evaluate(() =>
+    (window as unknown as { __rws: { map: LakeMap } }).__rws.map.jumpTo({ center: [5.17, 52.25], zoom: 11 }),
+  );
+  let at: { x: number; y: number } | null = null;
+  await expect
+    .poll(async () => (at = await lakePoint(page, 'gooimeer')), { message: 'a free point inside gooimeer' })
+    .not.toBeNull();
+  if (at === null) throw new Error('unreachable');
+  const point: { x: number; y: number } = at;
+  await page.mouse.click(point.x, point.y);
+  const popup = page.locator('.maplibregl-popup-content');
+  await expect(popup).toContainText(E2E_HOSTILE_LAKE);
+  await expect(popup).toContainText(HOSTILE_REF);
+  await expect(popup.locator('img, [onerror], [onload]')).toHaveCount(0);
+  await expectInert(page, 'the lake popup');
+  await popup.getByRole('button', { name: nl('lake_open'), exact: true }).click();
+  await expect.poll(() => param(page, 's')).toBe(GOOI_REF);
+  await expect(panelOf(page).getByRole('heading', { level: 2 })).toHaveText(HOSTILE_REF);
+  await expectInert(page, 'the panel the popup opened');
+  await finish(page, s);
+});
+
+test('a hostile station name is text in the downstream chain of the station upstream of it', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  await alertStub(page);
+  await open(page, `/?s=${RHINE_UPSTREAM}`);
+  const section = downstreamOf(page);
+  await expect(section).toBeVisible();
+  await openBranches(section);
+  await expect(section.getByRole('button', { name: HOSTILE_RHINE })).toHaveCount(1);
+  await expect(section.locator('img')).toHaveCount(0);
+  await expectInert(page, 'the downstream chain');
+  await finish(page, s);
+});

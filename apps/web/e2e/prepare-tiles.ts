@@ -47,6 +47,8 @@ const E2E_BODIES: readonly [body: string, stations: readonly string[], reference
   ['veluwemeer', ['nl.e2e.lake-noref']],
   ['waddenzee', ['nl.e2e.coast']],
   ['noordzee', ['nl.e2e.platform']],
+  // P19b (review SR-1): two gauges with HTML-looking names in the Gooimeer, whose own name is HTML-looking too.
+  ['gooimeer', ['nl.e2e.gooi-ref', 'nl.e2e.gooi-other'], 'nl.e2e.gooi-ref'],
 ];
 /** P19a: the Gooimeer's name in both languages, HTML-looking (payload 5: 1 to 3 are the xss station's and its class); it must render as text. */
 export const E2E_HOSTILE_LAKE = '<img src=x onerror=alert(5)>Gooimeer';
@@ -57,6 +59,12 @@ function e2eReaches(release: ReachesFile): ReachesFile {
     const reach = reaches.find((r) => r.id === reachId);
     if (reach === undefined || reach.up_station_id !== null) throw new Error(`e2e reaches: ${reachId} is not free`);
     reach.up_station_id = id;
+    // P19b (review SR-1): the reach upstream of it ends at the same joint, so a downstream walk reaches the station's row.
+    if (id === 'nl.e2e.xss') {
+      const before = reaches.find((r) => r.id === 'rhine.57');
+      if (before === undefined || before.down_station_id !== null) throw new Error('e2e reaches: rhine.57 is not free');
+      before.down_station_id = id;
+    }
     stations.push({
       id,
       river_id: reach.river_id,
