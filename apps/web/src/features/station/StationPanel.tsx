@@ -38,6 +38,8 @@ interface Props {
   station: ApiStation;
   /** Every station of the page (the neighbours' names and values). */
   stations: readonly ApiStation[];
+  /** P19b: every station, the hidden (stale) ones too: the lake section finds its reference there, as the lake popup does. */
+  allStations: readonly ApiStation[];
   values: ReadonlyMap<number, Value>;
   /** P11a: the feature-state record of every station at t (the upstream chain's state words). */
   states: ReadonlyMap<string, StationState>;
@@ -74,6 +76,7 @@ export function StationPanel({
   locale,
   station,
   stations,
+  allStations,
   values,
   states,
   forecasts,
@@ -223,7 +226,7 @@ export function StationPanel({
               locale={locale}
               station={station}
               body={lake}
-              stations={stations}
+              stations={allStations}
               values={values}
               forecasts={forecasts}
               t={t}

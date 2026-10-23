@@ -27,7 +27,10 @@ export interface LakeSectionProps {
   station: ApiStation;
   /** Its water body, of kind `lake` or `closed_estuary` (reaches file; names as text only). */
   body: WebWaterbody;
-  /** The visible stations of the page (after `?hide=`): only these become rows. */
+  /**
+   * Every station of the page, the hidden (stale) ones too, as the map's lake popup reads them: a stale reference is
+   * still the reference (its state "geen klasse"), never "no reference" (review CR-2).
+   */
   stations: readonly ApiStation[];
   /** The values at t by series (lakeGauges, lakeView). */
   values: ReadonlyMap<number, PlayedValue>;

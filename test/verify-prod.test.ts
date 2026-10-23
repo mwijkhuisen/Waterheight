@@ -4363,7 +4363,11 @@ describe('verify-prod: the rivers (P6b)', () => {
       const r = run(headPage(), metaPage({}, three));
       expect(r.ok).toBe(false);
       expect(r.detail).toContain('missing layers canals');
-      expect(pmtilesLayerIds(Buffer.from('plain'), 2)).toBe('metadata is not (gzipped) JSON');
+      expect(pmtilesLayerIds(Buffer.from('plain'), 2)).toBe('metadata is not (gzipped) JSON of at most 8 MiB');
+      // SR-2: a small blob that expands past 8 MiB is refused, not inflated.
+      expect(pmtilesLayerIds(gzipSync(Buffer.alloc(9 * 1024 * 1024, 0x20)), 2)).toBe(
+        'metadata is not (gzipped) JSON of at most 8 MiB',
+      );
       expect(pmtilesLayerIds(gzJson({}), 2)).toBe('metadata has no vector_layers');
       expect(pmtilesLayerIds(Buffer.from('{"vector_layers":[{"id":"canals"}]}'), 1)).toEqual(['canals']);
     });

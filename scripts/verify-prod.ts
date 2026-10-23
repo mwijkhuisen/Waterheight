@@ -1207,12 +1207,14 @@ export function pmtilesMetadataSpan(
 /** The `vector_layers` ids of a PMTiles metadata blob (gunzipped when compression is 2). */
 export function pmtilesLayerIds(blob: Buffer, compression: number): string[] | string {
   try {
-    const json: unknown = JSON.parse((compression === 2 ? gunzipSync(blob) : blob).toString('utf8'));
+    // At most 8 MiB once gunzipped (review SR-2): a larger output throws and is reported below.
+    const plain = compression === 2 ? gunzipSync(blob, { maxOutputLength: 8 * 1024 * 1024 }) : blob;
+    const json: unknown = JSON.parse(plain.toString('utf8'));
     const layers = (json as { vector_layers?: unknown } | null)?.vector_layers;
     if (!Array.isArray(layers)) return 'metadata has no vector_layers';
     return layers.map((l) => String((l as { id?: unknown } | null)?.id));
   } catch {
-    return 'metadata is not (gzipped) JSON';
+    return 'metadata is not (gzipped) JSON of at most 8 MiB';
   }
 }
 

@@ -19,7 +19,7 @@ What P19b leaves (`PHASES.md` §54 "P19b as built"; ids renumber on merge).
 | KG-458 | agent-prod | **The IJsselmeer → Waddenzee outflow reaches production after the next `geo.yml` release and `rws-rivers-refresh`;** until then the IJssel chain ends at the IJsselmeer. | [agent-prod] after the release | open |
 | KG-459 | owner | **The gauges of `registry/uncovered.yaml` are a proposal:** the picks rest on coordinates and station names (weak: HHNK, Rijnland, Delfland; Breda on the Mark is an assumption). | [owner] review of the file | open [U] |
 | KG-460 | owner | **The IJsselmeer outflow evidence** (the Rijkswaterstaat Afsluitdijk page, `https://www.rijkswaterstaat.nl/water/projectenoverzicht/afsluitdijk`) **was not fetched;** Wikidata (Q4121) gave no outflow. | [owner] check of the page | open [U] |
-| KG-461 | a11y | **A reference gauge hidden as stale (> 25 h) gives "no reference" and no classes** in the lake section, as in the map popup. | A decision to show a stale reference | open |
+| KG-461 | a11y | **A reference gauge hidden as stale (> 25 h) gave "no reference" and no classes** in the lake section, while the map's lake popup still named it (review round 1, CR-2). Settled: the lake section reads every station, the stale ones too, as the popup does; a stale reference shows "geen klasse". | – | closed in review round 1 (CR-2) |
 
 ## #205 Stage 0, the calm opening view
 

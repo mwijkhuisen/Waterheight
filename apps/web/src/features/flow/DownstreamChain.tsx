@@ -108,8 +108,10 @@ function BranchView({
       ))}
       {branch.end.kind === 'mouth' && <Exits exit={branch.end} names={names} locale={locale} />}
       {branch.end.kind === 'end' && <li className={styles.gap}>{m.downstream_end({}, { locale })}</li>}
-      {branch.children.map((c) => (
-        <li key={`${c.riverId}@${c.at}@${c.rows[0]?.ids[0] ?? ''}`}>
+      {branch.children.map((c, i) => (
+        // The index too: two empty arms of one split on the same river would share the rest (review CR-3).
+        // biome-ignore lint/suspicious/noArrayIndexKey: the arms are rebuilt as a whole per walk, never reordered
+        <li key={`${c.riverId}@${c.at}@${c.rows[0]?.ids[0] ?? ''}@${i}`}>
           <details className={styles.group}>
             <summary>
               {m.downstream_branch({ river: names.river(c.riverId), count: String(c.rows.length) }, { locale })}
