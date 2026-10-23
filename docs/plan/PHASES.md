@@ -4333,10 +4333,12 @@ PR "P20b: Roadmap 2 release" (draft, "Closes #68"), stacked on P20a (#211) and o
 **Not done, on purpose.** A Caddy-matcher test per station id (no route changed); a field allow-list for the water-body tile layers (the metadata leak grep covers it; the tile blobs are not decoded, KG-474); a separate `off stations` check (the 18 NL-1 `off` ids sit in the leak terms instead); a relaxed floor for the three existing NL-1 intervals (they passed in production on 2026-10-17).
 
 **P20b criteria and evidence.**
-- [ ] [CI] `verify-prod --dry-run` lists every roadmap 2 check. Evidence: {{CI}} (the `roadmap 2 (P20b):` block of `scripts/verify-prod.sh --dry-run x`; the `EXPECTED` dry-run test).
-- [ ] [CI] The deploy job requires PASS for every check that needs no live data. Evidence: {{CI}} (`test/verify-gate.test.ts`; the `deploy` job log with `PASS rivers layers`, `PASS status specs`, `PASS method uncovered`, `PASS rivers download` and `verify-gate: ok`).
+- [ ] [CI] `verify-prod --dry-run` lists every roadmap 2 check. Evidence: ci run 40006894523 on 58f1dbd (the `roadmap 2 (P20b):` block of `scripts/verify-prod.sh --dry-run x`; the `EXPECTED` dry-run test).
+- [ ] [CI] The deploy job requires PASS for every check that needs no live data. Evidence: ci run 40006894523 on 58f1dbd, `deploy` job and the launch-phase run inside `run.sh`: `verify-prod: 131 checks, 40 failed` (all 40 the allow-listed live-data checks), `PASS status specs — 43 of the 43 scheduled public specs of the registry listed`, `PASS rivers layers` (four layers, none of 43 owner terms in the metadata), `PASS rivers download` (attribution and ODbL-1.0 before "features"), `PASS rivers manifest|tiles|reaches`, `PASS method uncovered — all 21 water boards of the registry, none of 41 owner terms`, `PASS owner leak` twice (the static one covers `/data/v1/series/nl.rws.borssele/recent.json` and `/data/v1/series/nl.rws.krabbersgat.ijsselmeer/recent.json`), `verify-gate: ok` twice; every other `ci` check passed. The `loadtest` workflow's `drill` job (P20a's storm drill, not touched by P20b) failed once with "only 4 publisher samples (the window was shorter than two minutes)" and was re-run: {{CI drill rerun}}. Also `test/verify-gate.test.ts` (the `deploy` job log with `PASS rivers layers`, `PASS status specs`, `PASS method uncovered`, `PASS rivers download` and `verify-gate: ok`).
 - [ ] [agent-prod] `scripts/verify-prod.sh waterradar.io --edge cloudflare` passes every `ROADMAP2_CHECKS` entry (KG-472).
 - [ ] [owner] A9 done; the k6 burst run in a quiet hour, with its output attached; E6 signed (`docs/launch-checklist.md` section 8); E7 sent (KG-473).
+
+Review round 1 (Sonnet high code and security) found no blocker or high; everything was fixed in round 1 (F1 to F4, S1 to S5; F5, F6 and S6 needed no change).
 
 Open [U]: KG-472 to KG-475.
 
