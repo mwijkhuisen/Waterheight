@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 
 // The CI e2e job (P3) must test what production runs: the Playwright image is
 // the version of the installed @playwright/test, and Caddy is the very image
@@ -29,5 +30,14 @@ describe('e2e job pins', () => {
     const from = /^FROM (caddy:\S+)$/m.exec(read('deploy/web/Dockerfile'))?.[1];
     expect(from).toBeDefined();
     expect(env('CADDY_IMAGE')).toBe(from);
+  });
+
+  it('runs every Playwright project in exactly one leg of the e2e matrix', () => {
+    const legs: { projects: string }[] = parse(ci).jobs.e2e.strategy.matrix.include;
+    const inLegs = legs.flatMap((leg) => leg.projects.split(' '));
+    const config = read('apps/web/e2e/playwright.config.ts');
+    const projects = new Set([...config.matchAll(/\bname: '([a-z0-9-]+)'/g)].map((m) => m[1]));
+    expect(new Set(inLegs).size).toBe(inLegs.length);
+    expect(new Set(inLegs)).toEqual(projects);
   });
 });

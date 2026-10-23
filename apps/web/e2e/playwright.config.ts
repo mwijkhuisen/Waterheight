@@ -57,15 +57,15 @@ const firefox = {
 const chromium = { ...devices['Desktop Chrome'], viewport };
 const webkit = { ...devices['Desktop Safari'], viewport };
 
-// The projects Lighthouse waits for, so that it measures with no other browser on the CPU (see `workers`).
+// The projects Lighthouse waits for, so that it measures with no other browser on the CPU (see `workers`). Only the
+// Chromium ones: CI runs Firefox and WebKit on runners of their own (ci.yml, the e2e legs), and a dependency on them
+// would pull them into the Chromium leg. A local run of every project can overlap them; `--project=lighthouse` cannot.
 const LIGHTHOUSE_AFTER = [
   'chromium',
-  'firefox',
-  'webkit',
   'no-webgl2',
   'cvd',
   ...(visual ? ['visual'] : []),
-  ...(ownerUrl === undefined ? [] : ['owner-chromium', 'owner-firefox', 'owner-webkit']),
+  ...(ownerUrl === undefined ? [] : ['owner-chromium']),
 ];
 
 const ownerUse = {
@@ -131,8 +131,8 @@ export default defineConfig({
             : []),
           // Lighthouse (C8): the spec starts Playwright's Chromium itself with --remote-debugging-port=9222 and
           // --ignore-certificate-errors, because a browser Playwright launches has no debugging port (lighthouse.spec.ts).
-          // It runs after every other project (`dependencies`), alone, so parallel workers never skew its scores; to
-          // run it on its own, add --no-deps.
+          // It runs after the other Chromium projects (`dependencies`, LIGHTHOUSE_AFTER), alone, so parallel workers
+          // never skew its scores; to run it on its own, add --no-deps.
           {
             name: 'lighthouse',
             testMatch: /lighthouse\.spec\.ts$/,
@@ -140,9 +140,9 @@ export default defineConfig({
             dependencies: LIGHTHOUSE_AFTER,
           },
           // The frame rate of the map with the flow animation on (P11a, issue #26 C4, fps.spec.ts): Chromium's trace of
-          // 10 s of timebar scrubbing, on desktop and on a throttled phone. After Lighthouse (which itself waits for every
-          // other project), so that the two never run at once and each has the CPU to itself; to run it on its own, add
-          // --no-deps. Its thresholds are fixed (owner decision D-B): a shortfall is reported, never tuned away.
+          // 10 s of timebar scrubbing, on desktop and on a throttled phone. After Lighthouse (which itself waits for the
+          // other Chromium projects), so that the two never run at once and each has the CPU to itself; to run it on its
+          // own, add --no-deps. Its thresholds are fixed (owner decision D-B): a shortfall is reported, never tuned away.
           {
             name: 'fps',
             testMatch: /fps\.spec\.ts$/,
