@@ -4,6 +4,11 @@ div.map {
   inset: 0;
 }
 
+/* #205: the zoom buttons stand beside the station drawer. */
+div.map :global(.maplibregl-ctrl-top-right) {
+  right: var(--drawer-w, 0px);
+}
+
 /* MapLibre's compact attribution button stands above the timebar and beside the station drawer, level with the
    "Bronnen" button (App.module.css `.corner`). */
 div.map :global(.maplibregl-ctrl-bottom-right) {

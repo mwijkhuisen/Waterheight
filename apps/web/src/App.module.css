@@ -41,7 +41,8 @@
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
-  right: calc(var(--drawer-w, 0px) + 0.5rem);
+  /* #205: clear of MapLibre's zoom buttons (29 px, 10 px from the edge). */
+  right: calc(var(--drawer-w, 0px) + 3rem);
   align-items: flex-start;
   pointer-events: none;
 }

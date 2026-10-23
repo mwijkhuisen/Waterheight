@@ -23,7 +23,7 @@ import { formatNumber } from '../station/value.ts';
 import styles from './map.module.css';
 import { badgeLine, changeLine, modeLines, surgeLine } from './popup.ts';
 import { hasReachBins, highlightRiver, RIVERS, RIVERS_HIGHLIGHT, showRivers } from './rivers.ts';
-import { SOURCE, setStationMode, showStations } from './stationLayer.ts';
+import { SOURCE, setSelectedStation, setStationMode, showStations } from './stationLayer.ts';
 import { useMapLibre } from './useMapLibre.ts';
 import { showWarnings, WARNINGS_FILL } from './warnings.ts';
 import type { WaterHandle } from './waterLayer.ts';
@@ -32,7 +32,15 @@ import type { WaterHandle } from './waterLayer.ts';
 // as a feature-state circle layer. A click selects; the selected station's name
 // is shown in a popup as a text node (invariant 3: never setHTML).
 
-const OPTIONS = { center: [7.2, 50.6] as [number, number], zoom: 5.3 };
+// #205: the map opens on the Netherlands and its border gauges (owner 2026-10-22), the south edge at 50.2 so that
+// Eijsden stays clear of the collapsed timebar from about 1280x720 (owner 2026-10-23). MapLibre's `bounds` overrides the
+// center and zoom of createMap; no camera padding, which would outlive the first view.
+const OPTIONS = {
+  bounds: [
+    [3.2, 50.2],
+    [7.4, 53.6],
+  ] as [[number, number], [number, number]],
+};
 
 interface Props {
   locale: Locale;
@@ -223,6 +231,11 @@ export function StationsMap({
         map.setFeatureState({ source: SOURCE, id: st.id }, { ...s, selected: st.id === selected?.id });
     }
   }, [map, shown, states, selected]);
+  // #205: the selected station is drawn at every zoom, a tier-2 one too (its id in the layer filters); the view stays.
+  const selectedId = selected?.id;
+  useEffect(() => {
+    if (map !== null) setSelectedStation(map, selectedId);
+  }, [map, selectedId]);
 
   // The paint follows the mode; the warnings and rivers are layers of their own (data changes rarely: setData).
   useEffect(() => {
@@ -416,7 +429,6 @@ export function StationsMap({
   }, [map]);
   // A station chosen anywhere (the map, the search, the table, a link) closes the lake popup, so its own popup shows
   // (review CR-5). On the id: a new station object of the same station is no new choice.
-  const selectedId = selected?.id;
   useEffect(() => {
     if (selectedId !== undefined) setLake(undefined);
   }, [selectedId]);
