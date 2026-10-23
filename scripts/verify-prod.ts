@@ -40,7 +40,10 @@
 //   scripts/verify-prod.sh <domain> --capacity [--owner-bytes-per-day N] [--static-gb-year N] [--out FILE]
 //                                                the year-1 projection (>= 2 complete days) printed, or with --out written
 //                                                as the capacity block of docs/capacity.md (3 public GETs: capture.json,
-//                                                ops.json, /data/v1/status.json)
+//                                                ops.json, /data/v1/status.json). The 2x-median alert rule needs >= 3
+//                                                complete days and says n/a below that. A committed --out run NEVER passes
+//                                                --owner-bytes-per-day: that aggregate is derived from owner rows
+//                                                (invariant 11), so it is for a local, uncommitted run only
 //   scripts/verify-prod.sh <domain> --profile prelaunch|launch   (P12b; default prelaunch, until the launch flip) what the
 //                                                public site is expected to be: prelaunch is noindex everywhere with no
 //                                                robots.txt or sitemap, launch has no noindex on the pages (it stays on /api,
@@ -583,6 +586,10 @@ export function capacity(
       perDay.set(spec, row);
     }
   }
+  // With fewer than 3 complete days the median of a spec is the mean of two days, which no day can exceed twice: the 2x rule
+  // cannot fire, so its PASS would say nothing (review CR-6).
+  const enough = complete.length >= 3;
+  const needs3 = `n/a (needs ≥ 3 complete days; ${complete.length} available)`;
   const rows: string[] = [];
   const warn: string[] = [];
   const unmeasured: string[] = [];
@@ -607,10 +614,10 @@ export function capacity(
     else obsDisk += yearBytes * kept;
     bucket += yearBytes;
     const med = median(days);
-    const bad = daily && med > 0 && Math.max(...days) > 2 * med;
+    const bad = enough && daily && med > 0 && Math.max(...days) > 2 * med;
     if (bad) warn.push(s.id);
     rows.push(
-      `| ${s.source} | ${s.id} | ${s.retention} | ${daily ? 'daily or faster, mean of the days' : s.cron === null ? 'one-shot, once' : 'per run x runs a year'} | ${daily ? '–' : runs} | ${daily ? '–' : perRun === null ? 'not in the window' : Math.round(perRun)} | ${Math.round(yearBytes / 365)} | ${((yearBytes * kept) / GB).toFixed(3)} | ${daily && med > 0 ? `${Math.round(2 * med)} ${bad ? 'WARN' : 'PASS'}` : '–'} |`,
+      `| ${s.source} | ${s.id} | ${s.retention} | ${daily ? 'daily or faster, mean of the days' : s.cron === null ? 'one-shot, once' : 'per run x runs a year'} | ${daily ? '–' : runs} | ${daily ? '–' : perRun === null ? 'not in the window' : Math.round(perRun)} | ${Math.round(yearBytes / 365)} | ${((yearBytes * kept) / GB).toFixed(3)} | ${daily && med > 0 ? (enough ? `${Math.round(2 * med)} ${bad ? 'WARN' : 'PASS'}` : needs3) : '–'} |`,
     );
   }
   if (ownerBytesPerDay !== null) {
@@ -634,7 +641,7 @@ export function capacity(
     '',
     `Measured from ${complete.length} complete UTC days of production capture (${complete[0]} to ${complete.at(-1)}), from the \`days[]\` block of \`/status/capture.json\` (generated ${status.generated_at}): zstd bytes stored after sha256 deduplication, per spec (issue #16). The partial day is left out. A spec that runs less than daily (monthly, weekly) or once (a catch-up, \`cron: null\`) is not averaged over the window: its row is the bytes of the day it ran times its runs a year from its cron (a one-shot counts once, and its bytes are those of the window).${unmeasured.length === 0 ? '' : ` **Not in the window, so not measured and left out: ${unmeasured.map((x) => `\`${x}\``).join(', ')}.**`}`,
     ownerBytesPerDay === null
-      ? 'Owner-audience specs are not in the public status file and are **not included**; add them with `--owner-bytes-per-day` (docs/runbooks/owner-checks.md).'
+      ? 'Owner-audience specs are not in the public status file and are **not included**; add them with `--owner-bytes-per-day` (docs/runbooks/owner-checks.md), in a local run only: that aggregate is derived from owner rows and is never committed (invariant 11).'
       : 'Owner-audience specs are included as one aggregate from the owner status file, counted as kept forever (an upper bound).',
     '',
     '### Per spec',
@@ -647,7 +654,7 @@ export function capacity(
     '',
     '| Rule | Result |',
     '|---|---|',
-    `| No spec above 2x its measured median on a complete day | ${warn.length === 0 ? 'PASS' : `WARN: ${warn.map((x) => `\`${x}\``).join(', ')}`} |`,
+    `| No spec above 2x its measured median on a complete day | ${!enough ? needs3 : warn.length === 0 ? 'PASS' : `WARN: ${warn.map((x) => `\`${x}\``).join(', ')}`} |`,
     `| The public total at most 1 GB a day (largest complete day: ${peak} B) | ${peak <= GB ? 'PASS' : 'WARN'} |`,
     '',
     '### Year-1 projection',
@@ -3414,7 +3421,7 @@ export const CHECKS = [
 
 function usage(): never {
   console.error(
-    'usage: scripts/verify-prod.sh <domain> [--profile prelaunch|launch] [--site | --soak | --capacity [--owner-bytes-per-day N] [--static-gb-year N] [--out FILE]] [--interval] [--edge direct|cloudflare] [--dry-run]',
+    'usage: scripts/verify-prod.sh <domain> [--profile prelaunch|launch] [--site | --soak | --capacity [--owner-bytes-per-day N] [--static-gb-year N] [--out FILE]] [--interval] [--edge direct|cloudflare] [--dry-run]  (--owner-bytes-per-day is derived from owner rows: never with a committed --out)',
   );
   process.exit(64);
 }

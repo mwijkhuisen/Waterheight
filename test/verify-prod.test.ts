@@ -664,12 +664,16 @@ describe('freshness, soak and capacity', () => {
     expect(c.ok).toBe(true);
     expect(c.markdown).toContain('from 2 complete UTC days of production capture (2026-09-30 to 2026-10-01)');
     expect(c.markdown).toMatch(
-      /\| NL-1 \| nl-1-obs-key \| obs \| daily or faster, mean of the days \| – \| – \| 2000000 \| 0\.180 \| 4000000 PASS \|/,
+      /\| NL-1 \| nl-1-obs-key \| obs \| daily or faster, mean of the days \| – \| – \| 2000000 \| 0\.180 \| n\/a \(needs ≥ 3 complete days; 2 available\) \|/,
     );
     expect(c.markdown).toMatch(
-      /\| NL-1 \| nl-1-fc-1h \| forever \| daily or faster, mean of the days \| – \| – \| 1000000 \| 0\.365 \| 2000000 PASS \|/,
+      /\| NL-1 \| nl-1-fc-1h \| forever \| daily or faster, mean of the days \| – \| – \| 1000000 \| 0\.365 \| n\/a \(needs ≥ 3 complete days; 2 available\) \|/,
     );
     expect(c.markdown).toContain('| owner (aggregate) |');
+    // CR-6: with 2 complete days the 2x-median rule cannot fire, so its row is n/a and never a PASS.
+    expect(c.markdown).toContain(
+      '| No spec above 2x its measured median on a complete day | n/a (needs ≥ 3 complete days; 2 available) |',
+    );
     expect(c.markdown).not.toMatch(/BE-3|LU-2|lu-3-percentile/);
   });
 
