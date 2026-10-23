@@ -105,15 +105,10 @@ test('the owner site: hourly playback reads the owner frames api only, its answe
   const t = new Date(Math.floor(Date.now() / hour) * hour - 6 * hour).toISOString().slice(0, 16);
   await page.goto(`/?t=${t}Z&s=be.spw.5447&mode=delta&play=normal`);
   await expect(page.getByRole('slider', { name: 'Tijdlijn' })).toBeVisible();
-  // The production build starts with the flow animation on. Until #177 each of its steps (up to 25 a second) set the
-  // dashes' `line-dasharray`, a cross-faded property, so MapLibre 6 reloaded every tile of the `rivers` source each step;
-  // at the station's zoom 9 (the bin layers on) and on the job's GPU-less runner, beside the whole stack, that starved
-  // the page for minutes (the Play button not back within 60 s, once page.evaluate itself timing out). A step now only
-  // moves an opacity, but this smoke checks the owner frames, not the flow, so its real pause control still turns the
-  // flow off (the e2e build starts with it off, App.tsx).
+  // #205: the production build, as every build, starts with the flow animation off (owner 2026-10-22; degraded.spec.ts
+  // shows it on the public site). It was on until then, and this smoke turned it off first: until #177 each step (up to
+  // 25 a second) reloaded every tile of the `rivers` source on the job's GPU-less runner and starved the page.
   const flowToggle = page.getByRole('button', { name: msg('nl', 'flow_toggle'), exact: true });
-  await expect(flowToggle).toHaveAttribute('aria-pressed', 'true');
-  await flowToggle.click();
   await expect(flowToggle).toHaveAttribute('aria-pressed', 'false');
   const play = page.getByRole('button', { name: msg('nl', 'play'), exact: true });
   // Paused on the map, the page reads the frames of t's days for the travel-time shift (#112, App.tsx shiftWindow), and
