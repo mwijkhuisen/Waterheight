@@ -1,0 +1,11 @@
+{
+  "$comment": "What the storm drill (scripts/flood-drill.ts --phase storm, deploy/tests/storm/run.sh; P20a, issue #68) must reach in latest.json and stations.json: Den Helder (Marsdiep) at the synthetic storm's 23:00Z high, shifted to the drill clock. Measured = astro + surge (83 + 250 = 333 cm NAP), above the NL-4 band 'Stormvloed (> 260cm)' (260 to 345) of registry/thresholds/nl-4.csv. Read by deploy/tests/e2e/storm-check.mjs; checked against the thresholds and against packages/contracts/src/canaries.ts by test/storm-expected.test.ts. 'canary' is CANARY_RENDERINGS: the owner canary (777777.777 and its stored real 777777.75) first, then the withheld one (123456.789, 123456.79).",
+  "version": 1,
+  "station": { "id": "nl.rws.denhelder.marsdiep", "quantity": "H" },
+  "state": "high",
+  "value": 333,
+  "tide": { "astro": 83, "surge": 250, "derived": "surge" },
+  "basis": { "source": "NL-4", "kind": "provider_class", "label": "Stormvloed (> 260cm)" },
+  "surgeUpFrom": 50,
+  "canary": ["777777.777", "777777.75", "123456.789", "123456.79"]
+}
