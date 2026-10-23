@@ -14,16 +14,22 @@
 #      high, basis NL-4 "Stormvloed (> 260cm)", the tide, stations.json tidal (the hatch), the surge >= 50 (the up
 #      triangle), the recent bucket file, and no public byte with any of the four canary renderings; prints
 #      "PASS storm-check";
-#   4. Playwright in the pinned image (apps/web/e2e/storm-drill.spec.ts): the popup says "Opzet: +250 cm (afgeleid)", the
-#      panel the Stormvloed basis, with a visual baseline. A missing storm-drill-*.png is written and its test FAILS
-#      (the project's rule for visual baselines): commit it from the job's artifact after looking at it;
+#   4. the public answers at the storm, fetched from outside with the api up (CR-5): /api/v1/snapshot at the storm bucket (it
+#      holds Den Helder at surge 250), /api/v1/series/<Den Helder H> over the last day (raw), /api/v1/health and
+#      /health/sources, /data/v1/status.json, /status/capture.json, /status/ops.json and /data/v1/rivers/manifest.json
+#      (the last three may be absent on the drill stack): none holds any of the four canary renderings of expected.json;
 #   5. degraded mode, under the burst: the api container stopped; /api/v1/snapshot answers 200 with X-Degraded: 1 and
 #      Cache-Control: no-store and the body of /data/v1/latest.json (Den Helder's surge 250 included), the static files
 #      keep answering 200; the api starts again and is healthy within 240 s (a trap starts it on any failure);
 #   6. the publisher kept up for the whole window (replay to here): the largest status.json publisher.cycleSeconds is at
-#      most 60 (the cycle period, A§9.1), after the replay settled meta.json says degraded false and latest.json's
+#      most 60 (CYCLE_MS, the cycle period, A§9.1), after the replay settled meta.json says degraded false and latest.json's
 #      generatedAt is at most 120 s old at each sample. A sample whose fetch failed is counted, and more than one in five
-#      fails the drill.
+#      fails the drill;
+#   7. LAST, Playwright in the pinned image (apps/web/e2e/storm-drill.spec.ts): the popup says "Opzet: +250 cm (afgeleid)", the
+#      panel the Stormvloed basis, with a visual baseline. It runs after steps 4 to 6 so that a missing baseline (the
+#      project's rule for visual baselines: a missing storm-drill-*.png is written and its test FAILS; commit it from the
+#      job's artifact after looking at it) cannot hide them, and it needs the api back and healthy (step 5), because the
+#      panel reads it.
 # Time: the wait of step 2 is the distance to the next 10-minute boundary (0 to 10 min, 5 on average) plus one publisher
 # cycle and the loader; the rest is about 1 min of storm-check and Playwright (the image is cached by the flood drill)
 # and 1 to 3 min of degraded mode. The k6 duration (STORM_DURATION in loadtest.yml) must outlast the typical run.
@@ -70,6 +76,7 @@ export RWS_E2E=1
 domain=$RWS_E2E_DOMAIN
 server_image=${RWS_SERVER_IMAGE:-rws-server:ci}
 wait_s=${STORM_WAIT_S:-900}
+[[ $wait_s =~ ^[0-9]+$ ]] || fail "STORM_WAIT_S is not a number of seconds"
 station=$(jq -r '.station.id' "$storm/expected.json")
 samples=/ci/storm-samples.tsv
 
@@ -159,24 +166,52 @@ grep -q '^PASS storm-check$' /ci/storm-check.out || fail "storm-check.mjs did no
 proof "storm-check.mjs: $(grep -c '^PASS' /ci/storm-check.out) PASS lines, no FAIL: $station is high on NL-4 'Stormvloed (> 260cm)' at 333 cm = astro 83 + surge 250 (derived surge), flagged tidal in stations.json, the surge is at least 50, the recent bucket file holds it, and none of the four canary renderings is in any file (compressed ones read) of the public tree while the owner canary is in the owner tree"
 endstep
 
-step "Playwright: the popup and the panel of Den Helder on the storm day, visual baseline (pinned image)"
-shopt -s nullglob
-before=("$repo"/apps/web/e2e/visual/__screenshots__/storm-drill-*.png)
-ui_rc=0
-docker run --rm --init --network host --ipc=host --add-host "$domain:$RWS_E2E_CADDY_IP" \
-  -e CI=true -e E2E_COMPOSE=1 -e E2E_SPEC=storm-drill -e "E2E_COMPOSE_URL=https://$domain" -e DRILL_NOW="$now" \
-  -v "$repo:/work" -w /work/apps/web \
-  "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
-  node_modules/.bin/playwright test -c e2e/playwright.config.ts --project=chromium 2>&1 | tee /ci/storm-pw.out || ui_rc=$?
-after=("$repo"/apps/web/e2e/visual/__screenshots__/storm-drill-*.png)
-if ((${#after[@]} > ${#before[@]})); then
-  fail "storm-drill.spec.ts WROTE a missing baseline (now: ${after[*]##*/}); look at it in the job's artifact and commit it"
-fi
-((ui_rc == 0)) || fail "storm-drill.spec.ts failed (exit $ui_rc)"
-# The scene ran: Playwright exits 0 when every test is skipped.
-grep -qE '^ *1 passed' /ci/storm-pw.out || fail "storm-drill.spec.ts did not pass (skipped or filtered)"
-((${#before[@]} >= 1)) || fail "storm-drill.spec.ts: no storm-drill-*.png baseline committed"
-proof "storm-drill.spec.ts in the pinned image (Chromium, host network, $domain -> $RWS_E2E_CADDY_IP): the popup of Den Helder, Marsdiep says 'Opzet: +250 cm (afgeleid)', the panel says high with the basis 'Stormvloed (> 260cm)', the popup equals its committed baseline (0.2 % of the pixels), no request left the origin and no CSP violation"
+step "The public answers at the storm: no canary rendering in the snapshot, a series, health, status or the rivers manifest"
+# A visitor's reads while the api is up and the storm is in latest.json (the static tree is scanned by storm-check.mjs; these are
+# the answers it does not read). The snapshot and the series are the reads that carry Den Helder's tide; the status files and the
+# rivers manifest may be absent on the drill stack (404 is accepted there, and its body is scanned too).
+sweep=/ci/storm-sweep
+rm -rf "$sweep"
+mkdir -p "$sweep"
+storm_t=$(date -u -d "$(jq -r '.t' /ci/storm-latest.json)" +%Y-%m-%dT%H:%MZ) || fail "latest.json has no usable t"
+series_id=$(jq -r --slurpfile e "$storm/expected.json" \
+  '.stations[] | select(.id == $e[0].station.id) | .series[] | select(.quantity == $e[0].station.quantity) | .id' \
+  /ci/storm-stations.json | head -n 1)
+[[ $series_id =~ ^[0-9]+$ ]] || fail "no $station series id in stations.json"
+to_s=$(($(date -u +%s) / 600 * 600))
+series_from=$(date -u -d "@$((to_s - 86400))" +%Y-%m-%dT%H:%MZ)
+series_to=$(date -u -d "@$to_s" +%Y-%m-%dT%H:%MZ)
+# sweep_get <name> <path> <200 | 200,404>: the status code must be one of the list; the body is kept for the scan.
+sweep_get() {
+  local code
+  code=$(ip netns exec "$RWS_E2E_CLIENT_NETNS" curl -sS --max-time 20 --cacert "$RWS_E2E_CA" \
+    --resolve "$domain:443:$RWS_E2E_CADDY_IP" -o "$sweep/$1" -w '%{http_code}' "https://$domain$2") ||
+    fail "$2: the request failed"
+  [[ ,$3, == *",$code,"* ]] || fail "$2 answered $code (expected $3)"
+  swept+=("$2=$code")
+}
+swept=()
+sweep_get snapshot "/api/v1/snapshot?t=$storm_t" 200
+sweep_get series "/api/v1/series/$series_id?from=$series_from&to=$series_to&res=raw" 200
+sweep_get health /api/v1/health 200
+sweep_get health-sources /api/v1/health/sources 200
+sweep_get data-status /data/v1/status.json 200
+sweep_get status-capture /status/capture.json 200,404
+sweep_get status-ops /status/ops.json 200,404
+sweep_get rivers-manifest /data/v1/rivers/manifest.json 200,404
+# The snapshot at the storm bucket is the read that proves the sweep looked at the storm: Den Helder's surge is in it.
+jq -e --argjson sid "$series_id" --slurpfile e "$storm/expected.json" \
+  '[.values[] | select(.series == $sid)][0].tide.surge == $e[0].tide.surge' "$sweep/snapshot" >/dev/null ||
+  fail "/api/v1/snapshot?t=$storm_t does not hold $station at surge 250"
+i=0
+while IFS= read -r rendering; do
+  for f in "$sweep"/*; do
+    if grep -qF -- "$rendering" "$f"; then fail "canary rendering #$i is in the public answer ${f##*/}"; fi
+  done
+  i=$((i + 1))
+done < <(jq -r '.canary[]' "$storm/expected.json")
+((i == 4)) || fail "expected.json lists $i canary renderings, not 4"
+proof "public answers fetched from outside through Caddy at the storm (${swept[*]}): none holds any of the $i canary renderings of expected.json, and the snapshot at $storm_t holds $station at surge 250"
 endstep
 
 step "Degraded mode under the burst: the api stopped, the map still answers from files"
@@ -239,6 +274,26 @@ echo "samples: $n, fetch failures: $missed, max cycleSeconds: $maxcyc, after the
 ((degraded_n == 0)) || fail "meta.json said degraded in $degraded_n of $judged samples after the replay settled"
 ((old_n == 0)) || fail "latest.json's generatedAt was older than 120 s in $old_n of $judged samples (oldest ${oldest} s)"
 proof "publisher kept up: $n samples every 10 s from the replay on ($missed fetch failures), the largest publisher.cycleSeconds in status.json was $maxcyc s (budget 60 s); after the replay settled ($judged samples) meta.json never said degraded and latest.json's generatedAt was at most $oldest s old (limit 120 s)"
+endstep
+
+step "Playwright, last: the popup and the panel of Den Helder on the storm day, visual baseline (pinned image)"
+shopt -s nullglob
+before=("$repo"/apps/web/e2e/visual/__screenshots__/storm-drill-*.png)
+ui_rc=0
+docker run --rm --init --network host --ipc=host --add-host "$domain:$RWS_E2E_CADDY_IP" \
+  -e CI=true -e E2E_COMPOSE=1 -e E2E_SPEC=storm-drill -e "E2E_COMPOSE_URL=https://$domain" -e DRILL_NOW="$now" \
+  -v "$repo:/work" -w /work/apps/web \
+  "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
+  node_modules/.bin/playwright test -c e2e/playwright.config.ts --project=chromium 2>&1 | tee /ci/storm-pw.out || ui_rc=$?
+after=("$repo"/apps/web/e2e/visual/__screenshots__/storm-drill-*.png)
+if ((${#after[@]} > ${#before[@]})); then
+  fail "storm-drill.spec.ts WROTE a missing baseline (now: ${after[*]##*/}); look at it in the job's artifact and commit it"
+fi
+((ui_rc == 0)) || fail "storm-drill.spec.ts failed (exit $ui_rc)"
+# The scene ran: Playwright exits 0 when every test is skipped.
+grep -qE '^ *1 passed' /ci/storm-pw.out || fail "storm-drill.spec.ts did not pass (skipped or filtered)"
+((${#before[@]} >= 1)) || fail "storm-drill.spec.ts: no storm-drill-*.png baseline committed"
+proof "(run last, after the public answers, the degraded mode and the publisher verdict) storm-drill.spec.ts in the pinned image (Chromium, host network, $domain -> $RWS_E2E_CADDY_IP): the popup of Den Helder, Marsdiep says 'Opzet: +250 cm (afgeleid)', the panel says high with the basis 'Stormvloed (> 260cm)', the popup equals its committed baseline (0.2 % of the pixels), no request left the origin and no CSP violation"
 endstep
 
 echo "storm drill done"

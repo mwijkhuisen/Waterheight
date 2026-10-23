@@ -56,6 +56,7 @@ export RWS_E2E=1
 domain=$RWS_E2E_DOMAIN
 server_image=${RWS_SERVER_IMAGE:-rws-server:ci}
 wait_s=${FLOOD_WAIT_S:-900}
+[[ $wait_s =~ ^[0-9]+$ ]] || fail "FLOOD_WAIT_S is not a number of seconds"
 
 # From the client namespace, like a visitor: the host's own traffic would reach Caddy through the bridge.
 outside() {

@@ -246,21 +246,38 @@ describe('storm-check.mjs: the canary scan', () => {
 describe('the storm drill is wired the way the issue asks', () => {
   const run = text('deploy/tests/storm/run.sh');
 
-  it('run.sh: replay, wait on the surge, check, publisher keeps up, Playwright, then the degraded mode, in that order', () => {
+  it('run.sh: replay, wait on the surge, check, public answers, degraded mode, publisher keeps up, then Playwright last', () => {
     const order = [
       'scripts/flood-drill" --phase storm',
       'wait_for "tide.surge 250',
       '"$server_image" /storm-check.mjs',
-      'E2E_SPEC=storm-drill',
+      'The public answers at the storm',
       'rws_compose stop api',
       'x-degraded: 1',
       'wait_for "api healthy again"',
       'The publisher kept up for the whole window',
+      'E2E_SPEC=storm-drill',
     ].map((part) => {
       expect(run, part).toContain(part);
       return run.indexOf(part);
     });
     expect(order).toEqual([...order].sort((a, b) => a - b));
+    // CR-5: the answers a visitor reads at the storm are scanned for all four renderings, not only the static tree.
+    for (const path of [
+      '/api/v1/snapshot?t=',
+      '/api/v1/series/$series_id?',
+      '/api/v1/health 200',
+      '/api/v1/health/sources',
+      '/data/v1/status.json',
+      '/status/capture.json',
+      '/status/ops.json',
+      '/data/v1/rivers/manifest.json',
+    ])
+      expect(run, path).toContain(path);
+    expect(run).toContain("jq -r '.canary[]'");
+    expect(run).toContain('grep -qF -- "$rendering"');
+    // SR-1: the wait is validated before it reaches bash arithmetic.
+    expect(run).toContain('[[ $wait_s =~ ^[0-9]+$ ]]');
     expect(run).toContain('--project=chromium');
     expect(run).toContain('.publisher.cycleSeconds');
     expect(run).toContain('((maxcyc <= 60))');
