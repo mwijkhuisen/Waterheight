@@ -21,6 +21,7 @@ import {
   CANARIES,
   CANARY_RENDERINGS,
   RiversManifest,
+  SeriesAnswer,
   SeriesForecastAnswer,
   SnapshotAnswer,
   StationsAnswer,
@@ -148,11 +149,40 @@ const at = (hours: number) => new Date(NOW.getTime() + hours * HOUR).toISOString
  * observations start on 2026-10-24, and a day settles 48 h after its end, so the static file is recent/2026-10-24/1200.json.
  */
 const P19A_SETTLED_HOUR = at(-48);
-/** P19a: the NL-4 class of the lake stations ("Licht verhoogd" is elevated, "Hoogwater" high), 0 to 1000 cm. */
+/**
+ * P19a/P19b: the NL-4 classes of the lake stations, [station, label, season from, season to (MMDD), from, to] in cm
+ * (the label's stem decides the state: "Licht verhoogd" is elevated, "Hoogwater" high). lake-ref has a WINTER class
+ * (1 October to 31 March, the one in force on the seeded days: elevated, 0 to 1000 cm) and a SUMMER class of another
+ * label (1 April to 30 September): the lake panel must list the winter one only. lake-gauge is high all year.
+ */
 const P19A_LAKE_CLASSES = [
-  ['nl.e2e.lake-ref', 'Licht verhoogd (>0cm)'],
-  ['nl.e2e.lake-gauge', 'Hoogwater (>0cm)'],
+  ['nl.e2e.lake-ref', 'Licht verhoogd (>0cm)', 1001, 331, 0, 1000],
+  ['nl.e2e.lake-ref', 'Hoogwater (>600cm)', 401, 930, 600, 1000],
+  ['nl.e2e.lake-gauge', 'Hoogwater (>0cm)', 101, 1231, 0, 1000],
 ] as const;
+/**
+ * P19b: the high and low waters of nl.e2e.coast (kind 'extreme' = measured, 'extreme_astro' = astronomical; cm NAP).
+ * Local days: Oct 24 is CEST (UTC+2), Oct 26 is CET (UTC+1, the clocks changed on Oct 25), so the table shows both
+ * labels. The rows of the next local day (22:10Z on Oct 24 is 00:10 on Oct 25, 03:50Z on Oct 27 is the day after the
+ * 26th) must not appear in the table of the day before. At NOW (Oct 26 12:00Z) the table holds six rows: the measured
+ * and astronomical high and low of the morning, then the two next astronomical ones (15:30Z high, 21:40Z low).
+ */
+const P19B_EXTREMES: readonly (readonly ['extreme' | 'extreme_astro', 'high' | 'low', string, number])[] = [
+  ['extreme_astro', 'low', '2026-10-24T03:20:00Z', -58],
+  ['extreme', 'low', '2026-10-24T03:30:00Z', -45],
+  ['extreme_astro', 'high', '2026-10-24T09:30:00Z', 190],
+  ['extreme', 'high', '2026-10-24T09:40:00Z', 198],
+  ['extreme_astro', 'low', '2026-10-24T15:45:00Z', -60],
+  ['extreme', 'low', '2026-10-24T15:55:00Z', -52],
+  ['extreme_astro', 'high', '2026-10-24T22:10:00Z', 195],
+  ['extreme_astro', 'high', '2026-10-26T03:05:00Z', 205],
+  ['extreme', 'high', '2026-10-26T03:10:00Z', 212],
+  ['extreme_astro', 'low', '2026-10-26T09:15:00Z', -55],
+  ['extreme', 'low', '2026-10-26T09:25:00Z', -48],
+  ['extreme_astro', 'high', '2026-10-26T15:30:00Z', 210],
+  ['extreme_astro', 'low', '2026-10-26T21:40:00Z', -50],
+  ['extreme_astro', 'high', '2026-10-27T03:50:00Z', 208],
+];
 /**
  * Synthetic forecast runs (P8b), hourly from `first` to `last` (hours from NOW), the value base + per × hour index:
  * - nl.e2e.xss: an NL-1 run whose issue time is inferred (fetched at NOW - 2 h), with a 10-90 % band; the provider's
@@ -362,16 +392,19 @@ try {
   );
   for (const table of ['obs_1h', 'obs_1d'] as const) await t.admin.query(rollupInsertSql(table));
 
-  // P19a: the NL-4 classes of the two lake stations (0 to 1000 cm, the xss pattern above): lake-ref elevated, lake-gauge
-  // high, so the lake must read the reference's class (D27).
+  // P19a/P19b: the NL-4 classes of the lake stations (0 to 1000 cm, the xss pattern above): lake-ref elevated in the
+  // winter and of another label in the summer, lake-gauge high, so the lake must read the reference's class (D27) and
+  // its panel only the season's classes.
   await t.admin.query(
     `INSERT INTO reference_value (series_id, source_id, kind, value, unit, semantics, season_from_md, season_to_md,
                                   priority, basis_label, valid)
-     SELECT s.id, 'NL-4', k.kind, k.value, 'cm', 'provider_class', 101, 1231, 0, c.label, tstzrange('2020-01-01Z', NULL)
+     SELECT s.id, 'NL-4', k.kind, CASE k.kind WHEN 'NL4_FROM' THEN c.lo ELSE c.hi END, 'cm', 'provider_class',
+            c.season_from, c.season_to, 0, c.label, tstzrange('2020-01-01Z', NULL)
      FROM series s
-     JOIN unnest($1::text[], $2::text[]) AS c(station, label) ON c.station = s.station_id,
-          (VALUES ('NL4_FROM', 0), ('NL4_TO', 1000)) AS k(kind, value)`,
-    [P19A_LAKE_CLASSES.map(([station]) => station), P19A_LAKE_CLASSES.map(([, label]) => label)],
+     JOIN unnest($1::text[], $2::text[], $3::int[], $4::int[], $5::int[], $6::int[])
+          AS c(station, label, season_from, season_to, lo, hi) ON c.station = s.station_id,
+          (VALUES ('NL4_FROM'), ('NL4_TO')) AS k(kind)`,
+    [0, 1, 2, 3, 4, 5].map((i) => P19A_LAKE_CLASSES.map((c) => c[i])),
   );
   // P19a: the astronomical tide of nl.e2e.coast, computed from its observations (the shared sine) so that the surge
   // (obs - astro) is exact at the observed instant: 80 at NOW, -60 at the past hour, 20 at every other point.
@@ -382,6 +415,17 @@ try {
             o.value - CASE o.ts WHEN $1::timestamptz THEN 80 WHEN $2::timestamptz THEN -60 ELSE 20 END, NULL, 1
      FROM obs o JOIN series s ON s.id = o.series_id WHERE s.station_id = 'nl.e2e.coast'`,
     [NOW.toISOString(), P19A_SETTLED_HOUR],
+  );
+
+  // P19b: the measured and astronomical high and low waters of nl.e2e.coast, before the publisher runs (the static
+  // snapshots carry them too). The platform gets none.
+  await t.admin.query(
+    `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id)
+     SELECT s.id, x.kind, x.ts, x.value, x.hilo, 1
+     FROM series s
+     JOIN unnest($1::text[], $2::text[], $3::timestamptz[], $4::real[]) AS x(kind, hilo, ts, value)
+          ON s.station_id = 'nl.e2e.coast'`,
+    [0, 1, 2, 3].map((i) => P19B_EXTREMES.map((e) => e[i])),
   );
 
   await seedPublic(t.admin, NOW.toISOString());
@@ -536,6 +580,30 @@ try {
     throw new Error('self-check: the snapshot at NOW + 6 h has no coast surge of 150 or no elevated lake-ref forecast');
   if (seriesValue(snapshot, lakeRef)?.state !== 'elevated' || seriesValue(snapshot, lakeGauge)?.state !== 'high')
     throw new Error('self-check: nl.e2e.lake-ref is not elevated or nl.e2e.lake-gauge not high at NOW');
+
+  // P19b: the raw /series of a local day carries the tide of the coast (the surge at the seeded instants, the astronomical
+  // curve and the measured and astronomical high and low waters of the span) and the MSL platform's has none.
+  const dayOf = async (id: number | undefined, from: string, to: string) =>
+    SeriesAnswer.parse(await get(`/api/v1/series/${id}?from=${from}&to=${to}&res=raw`));
+  const morning = await dayOf(coast, '2026-10-25T23:00:00Z', '2026-10-26T12:10:00Z');
+  const settledDay = await dayOf(coast, '2026-10-23T22:00:00Z', '2026-10-24T22:00:00Z');
+  const kinds = (a: typeof morning) =>
+    a.res === 'raw' ? (a.tide?.extremes ?? []).map((e) => `${e.ts.slice(5, 16)} ${e.kind} ${e.hilo} ${e.value}`) : [];
+  if (morning.res !== 'raw' || morning.tide?.surge.find((p) => p.ts === NOW.toISOString())?.value !== 80)
+    throw new Error('self-check: the raw coast series has no surge of 80 at NOW');
+  if (
+    kinds(morning).join('|') !==
+    '10-26T03:05 astro high 205|10-26T03:10 measured high 212|10-26T09:15 astro low -55|10-26T09:25 measured low -48'
+  )
+    throw new Error(`self-check: the raw coast series has the wrong extremes of 26 October: ${kinds(morning)}`);
+  if (kinds(settledDay).length !== 6)
+    throw new Error('self-check: the raw coast series has not six high and low waters on 24 October');
+  const platformDay = await dayOf(platform, '2026-10-25T23:00:00Z', '2026-10-26T12:10:00Z');
+  if (platformDay.res !== 'raw' || platformDay.tide !== undefined)
+    throw new Error('self-check: the raw platform series has a tide');
+  const snapshotExtremes = seriesValue(snapshot, coast)?.tide?.extremes.length;
+  if (snapshotExtremes !== 6)
+    throw new Error(`self-check: the snapshot at NOW holds ${snapshotExtremes} extremes, not 6`);
 
   // P10a: the seeded zero, classes and warnings, in the snapshot and in the published files (the XSS text as data).
   const fr = seriesOf(FR_STATION);

@@ -10,6 +10,12 @@
     "rewriteRelativeImportExtensions": false,
     "tsBuildInfoFile": "../node_modules/.cache/tsc/e2e.tsbuildinfo"
   },
-  "include": [".", "../src/lib/routes.ts", "../src/lib/attribution.ts", "../../../scripts/lib/capacity-egress.ts"],
+  "include": [
+    ".",
+    "../src/lib/routes.ts",
+    "../src/lib/attribution.ts",
+    "../src/features/pages/uncovered.gen.ts",
+    "../../../scripts/lib/capacity-egress.ts"
+  ],
   "references": [{ "path": "../../../packages/core" }]
 }
