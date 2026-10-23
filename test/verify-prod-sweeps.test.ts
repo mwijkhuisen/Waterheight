@@ -36,6 +36,8 @@ import {
 const registry = loadRegistry();
 const terms = sweepTerms(registry);
 const NOW = '2026-11-20T12:34:56Z';
+/** No tide set in the registry: the api sweep asks no pick and requires none. */
+const NO_TIDE = { sets: {}, picks: [] };
 
 const page = (body: string, over: Partial<Page> = {}): Page => ({
   status: 200,
@@ -230,7 +232,7 @@ describe('api sweep', () => {
     const out = await run(() => '{"values":[]}');
     expect(out.problems).toEqual([]);
     expect(out.requests).toBe((asked?.asks.length ?? 0) * SWEEP_ENCODINGS.length);
-    expect(checkApiSweep(asked, out, terms.length)).toMatchObject({ check: 'api sweep', ok: true });
+    expect(checkApiSweep(asked, out, terms.length, NO_TIDE)).toMatchObject({ check: 'api sweep', ok: true });
   });
 
   it.each([
@@ -247,7 +249,7 @@ describe('api sweep', () => {
         terms,
       );
       expect(out.problems, enc).toEqual([`/api/v1/stations (${enc}): found ${secret}`]);
-      expect(checkApiSweep(asked, out, terms.length)).toMatchObject({
+      expect(checkApiSweep(asked, out, terms.length, NO_TIDE)).toMatchObject({
         ok: false,
         detail: new RegExp(`found ${secret}`),
       });
@@ -265,10 +267,10 @@ describe('api sweep', () => {
   });
 
   it('fails when the sources of the ids are not known or a route has no sweep', () => {
-    expect(checkApiSweep(undefined, undefined, 3)).toMatchObject({ ok: false });
+    expect(checkApiSweep(undefined, undefined, 3, NO_TIDE)).toMatchObject({ ok: false });
     const out = { requests: 0, problems: [] };
     expect(
-      checkApiSweep({ asks: [{ label: 'x', path: '/x', heavy: false }], unknown: ['/api/v1/new'] }, out, 3),
+      checkApiSweep({ asks: [{ label: 'x', path: '/x', heavy: false }], unknown: ['/api/v1/new'] }, out, 3, NO_TIDE),
     ).toMatchObject({
       ok: false,
       detail: /no sweep for the route \/api\/v1\/new/,
@@ -428,15 +430,15 @@ describe('the roadmap 2 series of the api sweep (P20b)', () => {
       ],
     } as never;
     expect(
-      tideSweepPicks(listed, [
-        ['nl.rws.absent', 'nl.rws.q', 'nl.rws.coast'],
-        ['nl.rws.lake', 'nl.rws.coast'],
-      ]),
+      tideSweepPicks(listed, {
+        coast: ['nl.rws.absent', 'nl.rws.q', 'nl.rws.coast'],
+        lakes: ['nl.rws.lake', 'nl.rws.coast'],
+      }),
     ).toEqual([
-      { station: 'nl.rws.coast', series: 7 },
-      { station: 'nl.rws.lake', series: 8 },
+      { set: 'coast', station: 'nl.rws.coast', series: 7 },
+      { set: 'lakes', station: 'nl.rws.lake', series: 8 },
     ]);
-    expect(tideSweepPicks(listed, [['nl.rws.absent', 'nl.rws.q'], []])).toEqual([]);
+    expect(tideSweepPicks(listed, { coast: ['nl.rws.absent', 'nl.rws.q'], lakes: [] })).toEqual([]);
   });
 
   it('an off station id or the owner canary in the tide answer of an extra series fails the sweep', async () => {
@@ -452,8 +454,42 @@ describe('the roadmap 2 series of the api sweep (P20b)', () => {
           (enc) => `/api/v1/series/42?from=2026-11-20T09:30Z&to=2026-11-20T12:30Z&res=raw (${enc}): found ${secret}`,
         ),
       );
-      expect(checkApiSweep(asked, out, terms.length).ok).toBe(false);
+      expect(checkApiSweep(asked, out, terms.length, NO_TIDE).ok).toBe(false);
     }
+  });
+
+  const coast = { set: 'coast', station: 'nl.rws.coast', series: 42 };
+  const sets = { coast: ['nl.rws.coast'], lakes: [] };
+  const raw42 = '/api/v1/series/42?from=2026-11-20T09:30Z&to=2026-11-20T12:30Z&res=raw';
+
+  it('the detail names the tide picks and their sets', async () => {
+    const asked = sweepAsks(stations(), NOW, [42]);
+    const out = await runApiSweep(asked?.asks ?? [], async (_a, e) => served('{}', e), terms);
+    expect(checkApiSweep(asked, out, terms.length, { sets, picks: [coast] })).toMatchObject({
+      ok: true,
+      detail: expect.stringMatching(/; tide picks 1 \(coast nl\.rws\.coast series 42\)$/),
+    });
+    expect(checkApiSweep(asked, out, terms.length, NO_TIDE).detail).toMatch(/; tide picks 0$/);
+  });
+
+  it('fails when a registry set is not empty but no pick was made for it', async () => {
+    const asked = sweepAsks(stations(), NOW);
+    const out = await runApiSweep(asked?.asks ?? [], async (_a, e) => served('{}', e), terms);
+    expect(checkApiSweep(asked, out, terms.length, { sets, picks: [] })).toMatchObject({
+      ok: false,
+      detail: 'no coast pick: none of the 1 NL-1 coast stations is listed with an H series',
+    });
+  });
+
+  it("fails when a pick's raw series path answers 404; its forecast and the other series may", async () => {
+    const asked = sweepAsks(stations(), NOW, [42]);
+    const out = await runApiSweep(
+      asked?.asks ?? [],
+      async (a, e) => ({ ...served('{}', e), status: a.path.startsWith('/api/v1/series/') ? 404 : 200 }),
+      terms,
+    );
+    expect(out.problems).toEqual(SWEEP_ENCODINGS.map((enc) => `${raw42} (${enc}): status 404`));
+    expect(checkApiSweep(asked, out, terms.length, { sets, picks: [coast] }).ok).toBe(false);
   });
 });
 

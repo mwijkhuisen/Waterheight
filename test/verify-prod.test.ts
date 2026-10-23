@@ -1392,7 +1392,9 @@ describe('DE-7 and LU-1 health, tier-1, coverage, interval, bytes and label offs
     expect(at({ spec: 'nl-1-hwlw', seconds: 86_330 }).ok).toBe(true);
     expect(at({ spec: 'nl-1-hwlw', seconds: 82_799 })).toMatchObject({
       ok: false,
-      detail: expect.stringMatching(/is 82799 s, under 82800 s \(requested more often than once a day\)$/),
+      detail: expect.stringMatching(
+        /is 82799 s, under 82800 s \(requested more often than once a day, or a retry of a failed daily run: read the capture log\)$/,
+      ),
     });
     expect(at()).toMatchObject({ ok: false, detail: 'no interval measured yet' });
     // Another NL-1 spec's entry is not this one's.

@@ -181,7 +181,13 @@ export const INTERVAL_RULES = {
   'NL-1 nl-1-obs-sea': { source: 'NL-1', spec: 'nl-1-obs-sea', minS: 595, why: NL1_WHY },
   'NL-1 nl-1-obs-wide': { source: 'NL-1', spec: 'nl-1-obs-wide', minS: 1795, why: NL1_WHY },
   'NL-1 nl-1-obs-slow': { source: 'NL-1', spec: 'nl-1-obs-slow', minS: 3595, why: NL1_WHY },
-  'NL-1 nl-1-hwlw': { source: 'NL-1', spec: 'nl-1-hwlw', minS: 82_800, why: 'requested more often than once a day' },
+  'NL-1 nl-1-hwlw': {
+    source: 'NL-1',
+    spec: 'nl-1-hwlw',
+    minS: 82_800,
+    // The scheduler retries a failed daily run's variants 1 h later and the loader counts every request.
+    why: 'requested more often than once a day, or a retry of a failed daily run: read the capture log',
+  },
 } as const;
 /**
  * The twin pairs of registry/twins.yaml (test/verify-prod.test.ts keeps the two lists equal): `--soak` asks for
@@ -2587,7 +2593,8 @@ export function grepPage(label: string, page: Page, enc: SweepEncoding, terms: r
   return out;
 }
 
-export type SweepAsk = { label: string; path: string; heavy: boolean };
+/** `strict` (P20b, a tide pick's raw series path): a 404 is a problem there too. */
+export type SweepAsk = { label: string; path: string; heavy: boolean; strict?: boolean };
 export type SweepIo = {
   get: (path: string, headers: Readonly<Record<string, string>>) => Promise<Page | string>;
   sleep: (ms: number) => Promise<void>;
@@ -2650,7 +2657,8 @@ export function sweepAsks(
   const t = floorBucket(now);
   const asks: SweepAsk[] = [];
   const unknown: string[] = [];
-  const add = (path: string, heavy: boolean) => asks.push({ label: path, path, heavy });
+  const add = (path: string, heavy: boolean, strict = false) =>
+    asks.push({ label: path, path, heavy, ...(strict ? { strict } : {}) });
   for (const route of ROUTES) {
     if (route.planned || route.method !== 'GET') continue;
     switch (route.path) {
@@ -2670,6 +2678,7 @@ export function sweepAsks(
           add(
             `/api/v1/series/${id}?from=${instantParam(t - 3 * SWEEP_HOUR_MS)}&to=${instantParam(t)}&res=raw`,
             route.rate === 'heavy',
+            extra.includes(id),
           );
         break;
       case '/api/v1/series/:id/forecast':
@@ -2691,27 +2700,32 @@ export function sweepAsks(
   return { asks, unknown };
 }
 
+export type TidePick = { set: string; station: string; series: number };
+/** The registry's tide sets by name (nl1TideSets: coast, lakes) and the picks of tideSweepPicks, for checkApiSweep. */
+export type TideSweep = { sets: Readonly<Record<string, readonly string[]>>; picks: readonly TidePick[] };
+
 /**
  * P20b: of each set of station ids (nl1TideSets: the coast, the lakes) the first station /api/v1/stations lists with an
  * H series, and that series. The api sweep asks for the series, the static checks for the station's recent.json.
  */
-export function tideSweepPicks(
-  stations: Stations,
-  sets: readonly (readonly string[])[],
-): { station: string; series: number }[] {
+export function tideSweepPicks(stations: Stations, sets: TideSweep['sets']): TidePick[] {
   const byId = new Map(stations.stations.map((st) => [st.id, st]));
-  return sets.flatMap((ids) => {
+  return Object.entries(sets).flatMap(([set, ids]) => {
     for (const id of ids) {
       const h = byId.get(id)?.series.find((s) => s.quantity === 'H');
-      if (h !== undefined) return [{ station: id, series: h.id }];
+      if (h !== undefined) return [{ set, station: id, series: h.id }];
     }
     return [];
   });
 }
 
-/** The statuses a sweep tolerates: 200, and the 404 an api-off series answers on the series routes. */
-const sweepStatusOk = (path: string, status: number) =>
-  status === 200 || (status === 404 && path.startsWith('/api/v1/series/'));
+/**
+ * The statuses a sweep tolerates: 200, and the 404 an api-off series answers on the series routes. Not on a tide
+ * pick's raw path (`strict`): /series/{id} answers 404 only for a series outside the api channel (unknown, inactive or
+ * api off), never for a listed NL-1 series without rows in the span (200, no points).
+ */
+const sweepStatusOk = (ask: SweepAsk, status: number) =>
+  status === 200 || (status === 404 && ask.strict !== true && ask.path.startsWith('/api/v1/series/'));
 
 export type SweepOutcome = { requests: number; problems: string[] };
 
@@ -2728,7 +2742,7 @@ export async function runApiSweep(
       out.requests += 1;
       if (typeof page === 'string') out.problems.push(`${ask.label} (${enc}): ${page}`);
       else {
-        if (!sweepStatusOk(ask.path, page.status)) out.problems.push(`${ask.label} (${enc}): status ${page.status}`);
+        if (!sweepStatusOk(ask, page.status)) out.problems.push(`${ask.label} (${enc}): status ${page.status}`);
         out.problems.push(...grepPage(ask.label, page, enc, terms));
       }
     }
@@ -2739,6 +2753,7 @@ export function checkApiSweep(
   asked: ReturnType<typeof sweepAsks> | undefined,
   outcome: SweepOutcome | undefined,
   nTerms: number,
+  tide: TideSweep,
 ): Result {
   const check = 'api sweep';
   if (asked === undefined || outcome === undefined)
@@ -2746,12 +2761,17 @@ export function checkApiSweep(
   const problems = [
     ...asked.unknown.map((p) => `no sweep for the route ${p}`),
     ...(asked.asks.length === 0 ? ['no request to make'] : []),
+    // P20b: a non-empty registry set with no pick means the tide path was never asked.
+    ...Object.entries(tide.sets)
+      .filter(([set, ids]) => ids.length > 0 && !tide.picks.some((p) => p.set === set))
+      .map(([set, ids]) => `no ${set} pick: none of the ${ids.length} NL-1 ${set} stations is listed with an H series`),
     ...outcome.problems,
   ];
+  const picks = tide.picks.map((p) => `${p.set} ${p.station} series ${p.series}`).join(', ');
   return problems.length === 0
     ? pass(
         check,
-        `${asked.asks.length} paths in ${SWEEP_ENCODINGS.join(', ')} (${outcome.requests} requests), none of ${nTerms} owner and canary terms in any decoded body`,
+        `${asked.asks.length} paths in ${SWEEP_ENCODINGS.join(', ')} (${outcome.requests} requests), none of ${nTerms} owner and canary terms in any decoded body; tide picks ${tide.picks.length}${picks === '' ? '' : ` (${picks})`}`,
       )
     : miss(check, problems.slice(0, 12).join('; ') + (problems.length > 12 ? `; ${problems.length - 12} more` : ''));
 }
@@ -3453,7 +3473,7 @@ export const CHECKS = [
   `interval NL-1 nl-1-obs-sea: the min_interval_s of nl-1-obs-sea is >= 595 s (every 10 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
   `interval NL-1 nl-1-obs-wide: the min_interval_s of nl-1-obs-wide is >= 1795 s (every 30 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
   `interval NL-1 nl-1-obs-slow: the min_interval_s of nl-1-obs-slow is >= 3595 s (every 60 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
-  `interval NL-1 nl-1-hwlw: the min_interval_s of nl-1-hwlw is >= ${INTERVAL_RULES['NL-1 nl-1-hwlw'].minS} s (daily, P20b: a 23 h floor, not the cadence less 5 s, because its rows run one after another with a 179 s pause and its start drifts by up to about 80 s from one day to the next); no entry yet is a FAIL (the first one comes with the second daily run)`,
+  `interval NL-1 nl-1-hwlw: the min_interval_s of nl-1-hwlw is >= ${INTERVAL_RULES['NL-1 nl-1-hwlw'].minS} s (daily, P20b: a 23 h floor, not the cadence less 5 s, because its rows run one after another with a 179 s pause and its start drifts by up to about 80 s from one day to the next); a FAIL may be a retry of a failed daily run (the scheduler retries its failed variants 1 h later): read the capture log; no entry yet is a FAIL (the first one comes with the second daily run)`,
   `bytes DE-7: the days of /status/capture.json (today, partial, and the two before) each hold at most ${DE7_BYTES_MAX / 1e6} MB of zstd bytes stored for ${DE7_SPEC}; the spec missing from capture.json, or no bytes in any day, is a FAIL`,
   `owner sources: /api/v1/health/sources (the contract document, max-age=30) counts at least ${OWNER_SOURCES_MIN} owner sources (owner_sources.total, which the registry sync writes, captured or not) and lists no owner-audience source of registry/sources.yaml in sources[]; the detail holds counts only`,
   'owner health: /api/v1/health/sources has owner_sources.healthy = owner_sources.total (needs live owner capture; the detail holds counts only)',
@@ -3514,7 +3534,7 @@ export const CHECKS = [
   `runtime config: GET /runtime-config.json is 200 application/json, Cache-Control no-cache and JSON with exactly the keys ${RUNTIME_CONFIG_KEYS.join(', ')}: audience "public", contact an e-mail address, operator a non-empty text (at most 120 characters), cdn a text (at most 80; empty is no CDN), none of them holding { } # " \\ < > or a control character (the operator's name is personal data: a failure names the field, never its value; compose leaves RWS_OPERATOR_NAME empty until the owner sets it, and this FAILs until then)`,
   `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}), NL-1 off station id (P20b: the structure-internal locations of registry/stations/nl-1.yaml) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body, the rivers manifest and the reaches file, and (P9a) every public /data/v1 file fetched by the static checks`,
   'owner ids: no owner-audience source ID of registry/sources.yaml as a whole word in a string value or object key of /api/v1/health or health/sources',
-  `api sweep: every non-planned GET route of the route table (meta, stations, snapshot at now, -6 h, -3 d and +6 h of /meta's now, series over a raw 3 h span and series forecast for the first series of each source, at most ${SWEEP_MAX_SERIES}, and (P20b) the first H series of the first listed NL-1 tier-1 tidal and lake station of the registry, health, health/sources, openapi) fetched with Accept-Encoding ${SWEEP_ENCODINGS.join(', ')} (compressed bodies inflated): no owner or withheld canary rendering, nl.canary.owner, CANARY-OWNER, owner source ID, spec ID, owner-only host or NL-1 off station id in any body, no 5xx; heavy routes at least ${SWEEP_PACE_MS} ms apart and one Retry-After honoured per 429 (all of a CI run's requests share one IP)`,
+  `api sweep: every non-planned GET route of the route table (meta, stations, snapshot at now, -6 h, -3 d and +6 h of /meta's now, series over a raw 3 h span and series forecast for the first series of each source, at most ${SWEEP_MAX_SERIES}, and (P20b) the first H series of the first listed NL-1 tier-1 tidal and lake station of the registry, named in the detail; a non-empty set with no listed pick, or a 404 on a pick's raw series path, is a FAIL; health, health/sources, openapi) fetched with Accept-Encoding ${SWEEP_ENCODINGS.join(', ')} (compressed bodies inflated): no owner or withheld canary rendering, nl.canary.owner, CANARY-OWNER, owner source ID, spec ID, owner-only host or NL-1 off station id in any body, no 5xx; heavy routes at least ${SWEEP_PACE_MS} ms apart and one Retry-After honoured per 429 (all of a CI run's requests share one IP)`,
   `settled sweep: ${SWEEP_SETTLED_SNAPSHOTS} settled snapshots and frames files of up to ${SWEEP_SETTLED_FRAMES} days sampled deterministically from meta.dayVersions (absent day = version 1, 0 = skipped), each in ${SWEEP_ENCODINGS.join(', ')} and grepped as the api sweep (a 404 is a file not rendered yet: static settled judges that); N/A while no settled day is complete or none of the files is served`,
   `interval DE-6: (--interval, slow: ${DE6_SAMPLES} samples of /status/capture.json ${DE6_GAP_MS / 60_000} min apart, about 30 min) ${DE6_SPECS.join(' and ')} have a last_success at most ${DE6_MAX_AGE_S} s before that sample's generated_at in every sample (a missing spec or null last_success is a FAIL) and it advanced; without the flag the check is N/A (skipped)`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
@@ -3752,9 +3772,9 @@ async function main(argv: string[]): Promise<number> {
       checkBelgianSet(belgianIds(), stationsRead.data, snapReads.get('now')?.data, metaRead.data?.now),
     );
     const tide = nl1TideSets();
+    const tideSets = { coast: tide.coast, lakes: tide.lakes };
     // P20b: a tidal and a lake station of the API, for the api sweep and the static grep below.
-    const tidePicks =
-      stationsRead.data === undefined ? [] : tideSweepPicks(stationsRead.data, [tide.coast, tide.lakes]);
+    const tidePicks = stationsRead.data === undefined ? [] : tideSweepPicks(stationsRead.data, tideSets);
     const nowSnap = snapReads.get('now')?.data;
     results.push(
       checkFreshSet('fresh NL-1 coast', tide.coast, stationsRead.data, nowSnap, metaRead.data?.now),
@@ -3970,7 +3990,7 @@ async function main(argv: string[]): Promise<number> {
         ? undefined
         : await runSettledSweep(sample, (path, enc) => st(`${D}${path}`, { 'accept-encoding': enc }), sweep);
     results.push(
-      checkApiSweep(asked, apiOutcome, sweep.length),
+      checkApiSweep(asked, apiOutcome, sweep.length, { sets: tideSets, picks: tidePicks }),
       checkSettledSweep(sample, settledOutcome, sweep.length),
     );
 
