@@ -17,9 +17,9 @@ test('with the API down a future t still shows the map and the degraded banner',
   await page.goto(`/?t=${t}Z`);
   await expect(page.locator('canvas.maplibregl-canvas')).toBeVisible();
   await expect(page.getByRole('status').filter({ hasText: /server/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: msg('nl', 'flow_toggle'), exact: true })).toHaveAttribute(
-    'aria-pressed',
-    'false',
-  );
+  const flowToggle = page.getByRole('button', { name: msg('nl', 'flow_toggle'), exact: true });
+  await expect(flowToggle).toHaveAttribute('aria-pressed', 'false');
+  // Under reduced motion the toggle is forced off and disabled, which would prove nothing.
+  await expect(flowToggle).toBeEnabled();
   await expectClean(page, log);
 });

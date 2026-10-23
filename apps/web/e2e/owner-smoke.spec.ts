@@ -110,6 +110,7 @@ test('the owner site: hourly playback reads the owner frames api only, its answe
   // 25 a second) reloaded every tile of the `rivers` source on the job's GPU-less runner and starved the page.
   const flowToggle = page.getByRole('button', { name: msg('nl', 'flow_toggle'), exact: true });
   await expect(flowToggle).toHaveAttribute('aria-pressed', 'false');
+  await expect(flowToggle).toBeEnabled(); // under reduced motion it is forced off and disabled, which proves nothing
   const play = page.getByRole('button', { name: msg('nl', 'play'), exact: true });
   // Paused on the map, the page reads the frames of t's days for the travel-time shift (#112, App.tsx shiftWindow), and
   // Play drops that read (its fetch is aborted). It finishes first, so the frames answer awaited below is the

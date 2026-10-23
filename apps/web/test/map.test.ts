@@ -32,6 +32,11 @@ describe('createMap', () => {
     const source = readFileSync(new URL('../src/features/map/createMap.ts', import.meta.url), 'utf8');
     expect(source.match(/new Protocol\([^)]*\)/g)).toEqual(['new Protocol({ metadata: false })']);
   });
+  it('turns every rotation off, since the zoom buttons have no compass to turn the map back (#205)', () => {
+    const source = readFileSync(new URL('../src/features/map/createMap.ts', import.meta.url), 'utf8');
+    for (const off of ['dragRotate: false', 'touchZoomRotate.disableRotation()', 'keyboard.disableRotation()'])
+      expect(source).toContain(off);
+  });
 });
 
 describe('resolveStyle', () => {

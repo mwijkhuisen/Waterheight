@@ -5,6 +5,7 @@ import {
   expectNoSeriousAxe,
   featureState,
   finish,
+  jumpTo,
   mapReady,
   msg,
   open,
@@ -12,6 +13,7 @@ import {
   param,
   pickStation,
   playHold,
+  renderedIds,
   start,
 } from './helpers.ts';
 import { E2E_HOSTILE_LAKE } from './prepare-tiles.ts';
@@ -58,7 +60,6 @@ interface QMap {
   getPaintProperty(layer: string, name: string): unknown;
   getFilter(layer: string): unknown;
   getSource(id: string): { getData(): Promise<unknown> } | undefined;
-  jumpTo(o: { center: Point; zoom: number }): void;
   project(lngLat: Point): { x: number; y: number };
   unproject(p: Point): { lng: number; lat: number };
   isSourceLoaded(id: string): boolean;
@@ -69,27 +70,6 @@ type Win = Window & { __rws: { map: QMap } };
 
 /** The hook holds a map (it is null for an instant whenever the station layers are rebuilt, e.g. when the lake list arrives). */
 const mapUp = (page: Page) => page.waitForFunction(() => (window as unknown as Win).__rws?.map);
-/** Moves the map (the view is not in the URL). */
-const jump = async (page: Page, center: Point, zoom: number) => {
-  await mapUp(page);
-  await page.evaluate(
-    ([c, z]) => (window as unknown as Win).__rws.map.jumpTo({ center: c as Point, zoom: z as number }),
-    [center, zoom] as const,
-  );
-};
-
-/** The ids of the features that `layers` renders in the whole canvas now (empty while tiles load). */
-const renderedIds = (page: Page, layers: string[]) =>
-  page.evaluate(
-    (layers) => [
-      ...new Set(
-        (window as unknown as Win).__rws?.map
-          ?.queryRenderedFeatures(undefined, { layers })
-          .map((f) => String(f.id ?? f.properties.id)) ?? [],
-      ),
-    ],
-    layers,
-  );
 /** The ids of the station points the `stations` source holds (the GeoJSON data as set, not what is in view). */
 const sourceIds = (page: Page) =>
   page.evaluate(async () => {
@@ -212,7 +192,7 @@ async function lakePoint(page: Page, id: string) {
 
 /** Moves to a lake, waits for its tiles, and clicks an interior point of it. */
 async function clickLake(page: Page, id: string, centre: Point, zoom: number) {
-  await jump(page, centre, zoom);
+  await jumpTo(page, centre, zoom);
   let at: { x: number; y: number } | null = null;
   await expect
     .poll(async () => (at = await lakePoint(page, id)), { message: `a free point inside ${id}` })
@@ -233,7 +213,7 @@ test('lakes: the fill takes the reference gauge state, a lake without a referenc
   await open(page, '/');
   await coastReady(page);
   // Both lakes are in the view at zoom 8 over the Markermeer and the Veluwemeer.
-  await jump(page, [5.5, 52.55], 8);
+  await jumpTo(page, [5.5, 52.55], 8);
   await expect
     .poll(async () => (await renderedIds(page, ['water-lakes'])).sort())
     .toEqual(expect.arrayContaining(['ijsselmeer', 'veluwemeer']));
@@ -244,7 +224,7 @@ test('lakes: the fill takes the reference gauge state, a lake without a referenc
   expect(await featureState(page, LAKE_GAUGE)).toMatchObject({ has: true, level: 4 });
   expect(await featureState(page, LAKE_REF)).toMatchObject({ has: true, level: ELEVATED });
   // The lake gauge is a point of its own in the station layer, not folded into the lake.
-  await jump(page, [5.5, 52.6], 9);
+  await jumpTo(page, [5.5, 52.6], 9);
   await expect.poll(() => renderedIds(page, ['stations'])).toEqual(expect.arrayContaining([LAKE_GAUGE, LAKE_REF]));
   await expect.poll(() => held(page, LAKE_STATIONS)).toEqual(LAKE_STATIONS);
 
@@ -277,7 +257,7 @@ test('the lakes colour in the state mode only: grey "geen klasse" in the delta a
       page.evaluate(() => JSON.stringify((window as unknown as Win).__rws?.map?.getFilter('water-lakes-tidal'))),
     )
     .toContain('"haringvliet"');
-  await jump(page, [4.25, 51.8], 9);
+  await jumpTo(page, [4.25, 51.8], 9);
   await expect.poll(() => renderedIds(page, ['water-lakes-tidal'])).toContain('haringvliet');
   await finish(page, s);
 });
@@ -293,7 +273,7 @@ test('coast: the station has coast true and surge 80, sits in the tidal hatch la
   await open(page, '/');
   await coastReady(page);
   await expect.poll(() => featureState(page, COAST)).toMatchObject({ has: true, coast: true, surge: 80 });
-  await jump(page, [5.25, 53.4], 8);
+  await jumpTo(page, [5.25, 53.4], 8);
   await expect.poll(() => renderedIds(page, ['stations-tidal'])).toContain(COAST);
   // ▲ (surge ≥ +50): the layer's own icon-opacity for this feature-state is 1; the ▼ layer is 0.
   const state = await featureState(page, COAST);
@@ -335,7 +315,7 @@ test('the offshore MSL platform is drawn, marked MSL and hollow, with no surge',
   await open(page, '/');
   await coastReady(page);
   // #205: the platforms are tier 2, so they are drawn from z8 (owner 2026-10-23; P19a drew them at every zoom).
-  await jump(page, [4.7, 54.6], 8);
+  await jumpTo(page, [4.7, 54.6], 8);
   await expect.poll(() => renderedIds(page, ['stations'])).toContain(PLATFORM);
   await expect.poll(() => renderedIds(page, ['stations-msl'])).toContain(PLATFORM);
   await expect.poll(() => featureState(page, PLATFORM)).toMatchObject({ has: true, coast: true, surge: null });
@@ -377,7 +357,7 @@ test('the tidal delta is hatched and does not flow; the canals draw, and do not 
     [7, 'rivers-reach-tidal'],
     [9, 'rivers-reach-tidal-bin'],
   ] as const) {
-    await jump(page, [4.5, 51.85], zoom);
+    await jumpTo(page, [4.5, 51.85], zoom);
     await expect
       .poll(async () => (await tidalOf([hatch])).tidal, { message: `${hatch} at zoom ${zoom}` })
       .toBeGreaterThan(0);
@@ -387,7 +367,7 @@ test('the tidal delta is hatched and does not flow; the canals draw, and do not 
 
   // The canals are drawn (the Amsterdam-Rijnkanaal and the others of the fixture), and no flow layer reads their
   // source-layer: they read `rivers` only, so a canal never flows.
-  await jump(page, [5.2, 52.0], 7);
+  await jumpTo(page, [5.2, 52.0], 7);
   await expect.poll(async () => (await tidalOf(['water-canals'])).total).toBeGreaterThan(0);
   const sourceLayers = await page.evaluate(() =>
     (window as unknown as Win).__rws.map
