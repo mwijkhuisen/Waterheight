@@ -199,8 +199,8 @@ jobs:
           scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
           echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
-      - name: Q1 and the API (/snapshot cold/warm, /series 14 d raw) on 3,000 series × 60 days, as rws_api
-        run: node scripts/bench-q1.ts
+      - name: Q1 and the API (/snapshot cold/warm, /series 14 d raw) on 4,000 series × 60 days, as rws_api, and the publisher (budgets B1 to B4)
+        run: node scripts/bench-q1.ts --series 4000
 
   # Its own job (P8a, C8): the seed is 25 M forecast values, and an aggregate that did not need it would gate nothing.
   bench-q2:
