@@ -18,6 +18,7 @@ The owner's design document (issue #90, 2026-09-29) as the repository applies it
 | `name_lead` / `name_accent` (the two colours) | Water / Radar | Water / Radar |
 | `site_title` (the map's `<title>`) | Water Radar – Waterstanden en afvoer naar Nederland | Water Radar – River levels & discharge to the Netherlands |
 | `subtitle` (under the name) | Waterstanden en afvoer van de rivieren naar Nederland | River levels & discharge on their way to the Netherlands |
+| `intro` (the About lede; D24, P19b) | Waterstanden van Nederland en de rivieren die het binnenstromen | Water levels of the Netherlands and the rivers that flow into it |
 | `meta_description` | Water Radar toont bijna-realtime waterstanden en afvoer van de rivieren die Nederland binnenstromen, met verwachtingen en waarschuwingen waar beschikbaar. Kies zelf datum en tijd. | Water Radar shows near-real-time river levels and discharge for the rivers flowing into the Netherlands, with forecasts and warnings where available. Pick any date and time. |
 
 Every other page's title is `<page> · Water Radar`. The short text for cards and the repository's About: "Kijk mee met de rivieren richting Nederland." / "Watch the rivers heading for the Netherlands."
