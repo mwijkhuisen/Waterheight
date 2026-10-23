@@ -37,7 +37,7 @@ test('Den Helder on the storm day: the popup says the surge, derived; the panel 
   baseURL,
 }) => {
   const log = await instrument(page, context, baseURL);
-  await page.goto(`/?t=${T_STORM}Z`);
+  await page.goto(`/?t=${T_STORM}Z&mode=state`);
   // The one station named Marsdiep ("Den Helder, veersteiger" is another gauge).
   await pickStation(page, 'Den Helder, Marsdiep');
   const panel = panelOf(page);
