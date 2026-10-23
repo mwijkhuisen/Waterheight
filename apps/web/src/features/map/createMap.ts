@@ -74,12 +74,16 @@ export async function createMap(
       center: [6.1, 51.85],
       zoom: 7,
       maxPitch: 0,
+      dragRotate: false,
       pixelRatio: Math.min(devicePixelRatio, 2),
       attributionControl: { compact: true },
       locale: mapLocale(lang),
       ...options,
     });
-    // #205: zoom buttons, no compass (the map never rotates); their words are mapLocale's.
+    // #205: zoom buttons, no compass, so nothing may rotate the map (there is no reset-north): `dragRotate` is off in the
+    // options, the touch twist and Shift+arrow here; their words are mapLocale's.
+    map.touchZoomRotate.disableRotation();
+    map.keyboard.disableRotation();
     map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
     let disposed = false;
     return {
