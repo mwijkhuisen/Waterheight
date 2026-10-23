@@ -31,6 +31,7 @@ const input = (stations: string[], graph: object = {}) =>
 function fakeMap(opts: { source?: boolean; zoom?: number } = {}) {
   const calls: { fn: string; args: unknown[] }[] = [];
   const layers = new Set<string>();
+  const hidden = new Set<string>();
   const images = new Set<string>();
   const handlers = new Map<string, () => void>();
   let source = opts.source ?? true;
@@ -50,6 +51,11 @@ function fakeMap(opts: { source?: boolean; zoom?: number } = {}) {
     addLayer: rec('addLayer', (l: { id: string }) => layers.add(l.id)),
     removeLayer: rec('removeLayer', (id: string) => layers.delete(id)),
     setLayerZoomRange: rec('setLayerZoomRange'),
+    getLayoutProperty: (id: string, name: string) =>
+      name === 'visibility' ? (hidden.has(id) ? 'none' : 'visible') : undefined,
+    setLayoutProperty: rec('setLayoutProperty', (id: string, _name: string, v: string) =>
+      v === 'none' ? hidden.add(id) : hidden.delete(id),
+    ),
     setFeatureState: rec('setFeatureState'),
     removeFeatureState: rec('removeFeatureState'),
     getZoom: () => zoom,
@@ -62,7 +68,7 @@ function fakeMap(opts: { source?: boolean; zoom?: number } = {}) {
     zoom = z;
     handlers.get('zoomend')?.();
   };
-  return { map: map as never, calls, dropSource: () => (source = false), zoomTo };
+  return { map: map as never, calls, dropSource: () => (source = false), zoomTo, hidden };
 }
 const only = (calls: { fn: string; args: unknown[] }[], fn: string) => calls.filter((c) => c.fn === fn);
 const byId = (id: string) => reachLayers().find((l) => l.id === id);
@@ -314,6 +320,17 @@ describe('addReaches with bins', () => {
       { source: 'rivers', sourceLayer: 'rivers', id: 'a' },
       binTarget('a/0'),
     ]);
+  });
+  it('the bin copies take the visibility of their twin layer (a `?hide=rivers` pass ran before them; review CR-1)', async () => {
+    const f = fakeMap();
+    let resolve: (b: boolean) => void = () => undefined;
+    addReaches(f.map, 'rivers-highlight', new Promise<boolean>((r) => (resolve = r)));
+    // StationsMap's pass hides every per-reach layer but the casing before the archive's metadata is read
+    for (const l of reachLayers().slice(1)) f.hidden.add(l.id);
+    resolve(true);
+    await tick();
+    expect(only(f.calls, 'addLayer')).toHaveLength(10);
+    expect(reachLayers().map((l) => f.hidden.has(`${l.id}-bin`))).toEqual([false, true, true, true, true]);
   });
   it('a dispose before the promise resolves adds nothing', async () => {
     const f = fakeMap();

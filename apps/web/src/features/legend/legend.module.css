@@ -137,7 +137,8 @@
 }
 
 .menu .mode,
-.menu .view {
+.menu .view,
+.menu .layers {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -145,15 +146,25 @@
 }
 
 .menu .mode legend,
-.menu .view legend {
+.menu .view legend,
+.menu .layers legend {
   float: none;
   margin: 0 0 0.35rem;
   padding: 0;
   font-weight: 600;
 }
 
-.menu .mode label {
+.menu .mode label,
+.menu .layers label {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
   white-space: nowrap;
+}
+
+/* P19a: the layer checkboxes under the mode radios. */
+.menu .layers {
+  margin-top: 0.6rem;
 }
 
 .view button {
@@ -175,4 +186,42 @@
   flex-wrap: wrap;
   align-items: flex-start;
   gap: 0.5rem;
+}
+
+/* P19a: the surge scale (a gradient bar with its stop values under it, placed in proportion) and the MSL marker. */
+.scale {
+  position: relative;
+  margin: 0.3rem 0.5rem 1.3rem;
+}
+
+.scaleBar {
+  height: 0.7rem;
+  border: 1px solid #333;
+}
+
+.tick {
+  position: absolute;
+  top: 0.8rem;
+  transform: translateX(-50%);
+  font-size: 0.7rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tickFirst {
+  transform: none;
+}
+
+.tickLast {
+  transform: translateX(-100%);
+}
+
+.mslMark {
+  display: inline-block;
+  min-width: 1.6rem;
+  padding: 0 0.2rem;
+  border: 1px solid var(--ink);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-align: center;
 }

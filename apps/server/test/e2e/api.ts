@@ -56,8 +56,77 @@ const DST_VALUES: [string, number][] = [
 ];
 /** The basis label of the xss series' NL-4 class: a known stem, then HTML that must stay text. */
 const HOSTILE_BASIS_LABEL = 'Licht verhoogd (<img src=y onerror=alert(3)>)';
+type TestStation = {
+  id: string;
+  name: string;
+  water: string;
+  lon: number;
+  lat: number;
+  step: string;
+  stale: string;
+  /** The primary H series' datum (default NAP). */
+  datum?: 'NAP' | 'MSL';
+  /** `station.flags` (default none). */
+  flags?: Record<string, boolean>;
+};
+
+/**
+ * P19a (lakes, coast and sea layers): synthetic water-body stations, listed in the e2e reaches file by
+ * apps/web/e2e/prepare-tiles.ts (e2eReaches). Positions were checked against the polygons of the committed
+ * rivers-fixture.pmtiles (layer `waterbodies`, z7-z12): lake-ref (Enkhuizen shore) and lake-gauge (Lemmer shore) lie
+ * in the IJsselmeer, lake-noref in the Veluwemeer; the coast point lies in the Wadden Sea, the platform north of 54 N.
+ *   coast: tidal, with astro rows (below) giving a surge of 80 cm at NOW, -60 at P19A_SETTLED_HOUR, 20 elsewhere,
+ *          and 150 at NOW + 6 h (forecast).
+ *   platform: tidal, datum MSL, no astro, so no surge.
+ *   lake-ref: NL-4 class "Licht verhoogd" (elevated), the D27 reference of the IJsselmeer, with a forecast.
+ *   lake-gauge: NL-4 class "Hoogwater" (high), the same lake: the lake must still read elevated.
+ *   lake-noref: no class (the Veluwemeer has no reference gauge).
+ */
+const P19A_STATIONS: TestStation[] = [
+  {
+    id: 'nl.e2e.coast',
+    name: 'E2E coast',
+    water: 'E2E',
+    lon: 5.25,
+    lat: 53.4,
+    step: '10 min',
+    stale: '90 min',
+    flags: { tidal: true },
+  },
+  {
+    id: 'nl.e2e.platform',
+    name: 'E2E platform',
+    water: 'E2E',
+    lon: 4.73,
+    lat: 54.85,
+    step: '10 min',
+    stale: '90 min',
+    datum: 'MSL',
+    flags: { tidal: true },
+  },
+  { id: 'nl.e2e.lake-ref', name: 'E2E lake ref', water: 'E2E', lon: 5.31, lat: 52.72, step: '10 min', stale: '90 min' },
+  {
+    id: 'nl.e2e.lake-gauge',
+    name: 'E2E lake gauge',
+    water: 'E2E',
+    lon: 5.62,
+    lat: 52.83,
+    step: '10 min',
+    stale: '90 min',
+  },
+  {
+    id: 'nl.e2e.lake-noref',
+    name: 'E2E lake noref',
+    water: 'E2E',
+    lon: 5.71,
+    lat: 52.4,
+    step: '10 min',
+    stale: '90 min',
+  },
+];
+
 /** Test stations inside the Lobith map fixture (6.04,51.82 – 6.16,51.88): one H series each, a level in cm NAP. */
-const STATIONS = [
+const STATIONS: TestStation[] = [
   {
     id: 'nl.e2e.xss',
     name: '<img src=x onerror=alert(1)>',
@@ -69,10 +138,21 @@ const STATIONS = [
   },
   { id: 'nl.e2e.gap', name: 'E2E gap', water: 'E2E', lon: 6.07, lat: 51.84, step: '10 min', stale: '90 min' },
   { id: 'nl.e2e.dst', name: 'E2E DST', water: 'E2E', lon: 6.13, lat: 51.86, step: '15 min', stale: '45 min' },
+  ...P19A_STATIONS,
 ];
 
 const HOUR = 3_600_000;
 const at = (hours: number) => new Date(NOW.getTime() + hours * HOUR).toISOString();
+/**
+ * P19a: the past hour of the surge check, NOW - 2 d at a fixed HH:00 (-60 cm there). Not a settled day: the seeded
+ * observations start on 2026-10-24, and a day settles 48 h after its end, so the static file is recent/2026-10-24/1200.json.
+ */
+const P19A_SETTLED_HOUR = at(-48);
+/** P19a: the NL-4 class of the lake stations ("Licht verhoogd" is elevated, "Hoogwater" high), 0 to 1000 cm. */
+const P19A_LAKE_CLASSES = [
+  ['nl.e2e.lake-ref', 'Licht verhoogd (>0cm)'],
+  ['nl.e2e.lake-gauge', 'Hoogwater (>0cm)'],
+] as const;
 /**
  * Synthetic forecast runs (P8b), hourly from `first` to `last` (hours from NOW), the value base + per × hour index:
  * - nl.e2e.xss: an NL-1 run whose issue time is inferred (fetched at NOW - 2 h), with a 10-90 % band; the provider's
@@ -132,6 +212,32 @@ const FORECASTS = [
     last: 36,
     base: CANARIES.owner.value,
     per: 0,
+    band: false,
+    segmentEnd: null,
+  },
+  // P19a: nl.e2e.coast (336 at NOW + 6 h, its astro below gives a forecast surge of 150) and nl.e2e.lake-ref (346 at
+  // NOW + 6 h, class elevated), each an NL-1 run from NOW to NOW + 24 h.
+  {
+    station: 'nl.e2e.coast',
+    source: 'NL-1',
+    issued: null,
+    fetched: at(-1),
+    first: 0,
+    last: 24,
+    base: 330,
+    per: 1,
+    band: false,
+    segmentEnd: null,
+  },
+  {
+    station: 'nl.e2e.lake-ref',
+    source: 'NL-1',
+    issued: null,
+    fetched: at(-1),
+    first: 0,
+    last: 24,
+    base: 340,
+    per: 1,
     band: false,
     segmentEnd: null,
   },
@@ -216,14 +322,15 @@ try {
 
   for (const s of STATIONS) {
     await t.admin.query(
-      `INSERT INTO station (id, name, water_name, country, lon, lat, tier) VALUES ($1, $2, $3, 'NL', $4, $5, 1)`,
-      [s.id, s.name, s.water, s.lon, s.lat],
+      `INSERT INTO station (id, name, water_name, country, lon, lat, tier, flags)
+       VALUES ($1, $2, $3, 'NL', $4, $5, 1, $6::jsonb)`,
+      [s.id, s.name, s.water, s.lon, s.lat, JSON.stringify(s.flags ?? {})],
     );
     await t.admin.query(
       `INSERT INTO series (station_id, source_id, quantity, value_kind, provider_key, native_unit, to_canonical, datum,
                            native_step, expected_step, staleness_limit, role)
-       VALUES ($1, 'NL-1', 'H', 'level', $1, 'cm', 1, 'NAP', $2::interval, $2::interval, $3::interval, 'primary')`,
-      [s.id, s.step, s.stale],
+       VALUES ($1, 'NL-1', 'H', 'level', $1, 'cm', 1, $4, $2::interval, $2::interval, $3::interval, 'primary')`,
+      [s.id, s.step, s.stale, s.datum ?? 'NAP'],
     );
   }
 
@@ -255,6 +362,28 @@ try {
   );
   for (const table of ['obs_1h', 'obs_1d'] as const) await t.admin.query(rollupInsertSql(table));
 
+  // P19a: the NL-4 classes of the two lake stations (0 to 1000 cm, the xss pattern above): lake-ref elevated, lake-gauge
+  // high, so the lake must read the reference's class (D27).
+  await t.admin.query(
+    `INSERT INTO reference_value (series_id, source_id, kind, value, unit, semantics, season_from_md, season_to_md,
+                                  priority, basis_label, valid)
+     SELECT s.id, 'NL-4', k.kind, k.value, 'cm', 'provider_class', 101, 1231, 0, c.label, tstzrange('2020-01-01Z', NULL)
+     FROM series s
+     JOIN unnest($1::text[], $2::text[]) AS c(station, label) ON c.station = s.station_id,
+          (VALUES ('NL4_FROM', 0), ('NL4_TO', 1000)) AS k(kind, value)`,
+    [P19A_LAKE_CLASSES.map(([station]) => station), P19A_LAKE_CLASSES.map(([, label]) => label)],
+  );
+  // P19a: the astronomical tide of nl.e2e.coast, computed from its observations (the shared sine) so that the surge
+  // (obs - astro) is exact at the observed instant: 80 at NOW, -60 at the past hour, 20 at every other point.
+  // nl.e2e.platform gets none (no tide, no surge).
+  await t.admin.query(
+    `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id)
+     SELECT o.series_id, 'astro', o.ts,
+            o.value - CASE o.ts WHEN $1::timestamptz THEN 80 WHEN $2::timestamptz THEN -60 ELSE 20 END, NULL, 1
+     FROM obs o JOIN series s ON s.id = o.series_id WHERE s.station_id = 'nl.e2e.coast'`,
+    [NOW.toISOString(), P19A_SETTLED_HOUR],
+  );
+
   await seedPublic(t.admin, NOW.toISOString());
   if (OWNER_DIR) await seedOwner(t.admin, FROM, NOW.toISOString());
 
@@ -277,6 +406,18 @@ try {
     );
     if ((seeded.rowCount ?? 0) === 0) throw new Error(`seed: no ${f.source} run on ${f.station}`);
   }
+  // P19a: the astronomical tide at each forecast point of nl.e2e.coast (forecast - astro = the forecast surge): 150 at
+  // NOW + 6 h, 20 elsewhere. The point at NOW keeps the observation's astro row above.
+  await t.admin.query(
+    `INSERT INTO tide (series_id, kind, ts, value, hilo, batch_id)
+     SELECT r.series_id, 'astro', v.valid_ts, v.value - CASE v.valid_ts WHEN $1::timestamptz THEN 150 ELSE 20 END, NULL, 1
+     FROM forecast_run r
+     JOIN forecast_value v ON v.run_id = r.id
+     JOIN series s ON s.id = r.series_id
+     WHERE s.station_id = 'nl.e2e.coast'
+     ON CONFLICT DO NOTHING`,
+    [at(6)],
+  );
 
   // P9a: the static files, from the same seeded data and the same fixed clock, as the real `publish` role writes them
   // (one full strict cycle). The web reads them first; it finds the API behind them.
@@ -373,6 +514,29 @@ try {
   const everything = JSON.stringify([plus2, gapForecast, xssForecast]);
   if (CANARY_RENDERINGS.some((c) => everything.includes(c))) throw new Error('self-check: a canary in a public answer');
 
+  // P19a: the coast's surge now (80), at the past hour (-60) and at NOW + 6 h (150, forecast), no tide on the MSL
+  // platform, and the lake classes (reference elevated, the other gauge high), in the answers and in latest.json.
+  const [coast, platform, lakeRef, lakeGauge] = ['coast', 'platform', 'lake-ref', 'lake-gauge'].map((n) =>
+    seriesOf(`nl.e2e.${n}`),
+  );
+  const seriesValue = (answer: ReturnType<typeof SnapshotAnswer.parse>, id: number | undefined) =>
+    answer.values.find((v) => v.series === id);
+  const pastHour = SnapshotAnswer.parse(await get(`/api/v1/snapshot?t=${P19A_SETTLED_HOUR.slice(0, 16)}Z`));
+  const sixHours = SnapshotAnswer.parse(await get(`/api/v1/snapshot?t=${at(6).slice(0, 16)}Z`));
+  if (
+    seriesValue(snapshot, coast)?.tide?.surge !== 80 ||
+    seriesValue(snapshot, coast)?.tide?.derived !== 'surge' ||
+    seriesValue(pastHour, coast)?.tide?.surge !== -60
+  )
+    throw new Error('self-check: nl.e2e.coast has no surge of 80 at NOW and -60 at the past hour');
+  if (seriesValue(snapshot, platform) === undefined || seriesValue(snapshot, platform)?.tide !== undefined)
+    throw new Error('self-check: nl.e2e.platform has no value, or a tide');
+  const heldAt6 = (id: number | undefined) => sixHours.forecasts?.find((f) => f.series === id);
+  if (heldAt6(coast)?.tide?.surge !== 150 || heldAt6(lakeRef)?.state !== 'elevated')
+    throw new Error('self-check: the snapshot at NOW + 6 h has no coast surge of 150 or no elevated lake-ref forecast');
+  if (seriesValue(snapshot, lakeRef)?.state !== 'elevated' || seriesValue(snapshot, lakeGauge)?.state !== 'high')
+    throw new Error('self-check: nl.e2e.lake-ref is not elevated or nl.e2e.lake-gauge not high at NOW');
+
   // P10a: the seeded zero, classes and warnings, in the snapshot and in the published files (the XSS text as data).
   const fr = seriesOf(FR_STATION);
   const frValue = snapshot.values.find((v) => v.series === fr);
@@ -381,6 +545,11 @@ try {
   const file = async (path: string) => readFile(join(E2E_PUBLISH_DIR, 'v1', path), 'utf8');
   const latest = await file('warnings/latest.geojson');
   const ended = await file(`warnings/${ENDED_DAY}.json`);
+  // P19a: the static latest.json carries the tide column too (coast 80, the platform none).
+  const latestFile = JSON.parse(await file('latest.json')) as { series: number[]; tide?: ({ surge: number } | null)[] };
+  const tideOf = (id: number | undefined) => latestFile.tide?.[latestFile.series.indexOf(id ?? -1)];
+  if (tideOf(coast)?.surge !== 80 || (tideOf(platform) ?? null) !== null)
+    throw new Error('self-check: latest.json has no coast surge of 80, or a tide for the platform');
   if (
     !latest.includes(XSS) ||
     !latest.includes('e2e-river') ||

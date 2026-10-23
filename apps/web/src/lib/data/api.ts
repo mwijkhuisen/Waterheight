@@ -22,6 +22,7 @@ import {
   riversOf,
   travelOf,
   type WebMeta,
+  waterbodiesOf,
 } from './chain.ts';
 import { type Change, changesAt } from './change.ts';
 import { type Contracts, PUBLIC_CONTRACTS } from './contracts.ts';
@@ -147,6 +148,9 @@ export const useRivers = () => useReachesFile(riversOf);
 
 /** The stations and reaches of the river graph, for the neighbours of a station (P10d); lenient, never an error. */
 export const useReachGraph = () => useReachesFile(graphOf);
+
+/** P19a: the water bodies of the same file (groups, lake levels, lake names); lenient, never an error. */
+export const useWaterbodies = () => useReachesFile(waterbodiesOf);
 
 /**
  * `?river=` once the river list has answered (plan C17): kept while it loads, dropped when the list failed or does

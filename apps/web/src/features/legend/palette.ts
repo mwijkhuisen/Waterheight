@@ -90,3 +90,19 @@ export const REACH_CASING_COLOUR = '#5f5f5f';
  * beside their NL-4 class. Derived (measured − astronomical), never an official class; P19a draws it.
  */
 export const SURGE_STOPS_CM = [-100, -50, 0, 50, 100, 150, 200, 300] as const;
+
+/**
+ * P19a (T2): the surge colours, parallel to SURGE_STOPS_CM and interpolated between them on the coast markers (state
+ * mode only). PuOr, diverging at 0: purples below, a light neutral at 0, oranges to dark brown above. The marker keeps
+ * its dark ring, so the light middle still reads on the light map.
+ */
+export const SURGE_COLOURS = [
+  '#542788',
+  '#998ec3',
+  '#f7f7f7',
+  '#fee0b6',
+  '#fdb863',
+  '#e08214',
+  '#b35806',
+  '#7f3b08',
+] as const;

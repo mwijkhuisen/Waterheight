@@ -1,8 +1,9 @@
-import { type ApiStation, type Meta, ReachRiver, RiversManifest, toSnapshot } from '@rws/contracts';
+import { type ApiStation, type Meta, ReachRiver, RiversManifest, toSnapshot, WATERBODY_KINDS } from '@rws/contracts';
 import { holdForecasts } from '@rws/core/forecast-hold';
 import { z } from 'zod';
 import {
   type Contracts,
+  lenient,
   PUBLIC_CONTRACTS,
   type ReachGraph,
   ReachGraphFile,
@@ -334,6 +335,28 @@ export function graphOf({ file }: ReachesRead): ReachGraph {
   }
   return graph;
 }
+
+// P19a: the water bodies of the same file (schema 2, P17b), for the station groups, the lake fills and the lake
+// popup's names (text nodes only, never the tile's names). Lenient like the graph: a bad row is dropped, a file
+// without the key (schema 1) has none. Here, not in contracts.ts: the owner chunk shares that module, and a value of
+// the reaches contract there moves the contracts into a chunk of their own, out of the entry's first reads.
+const WaterbodyRef = z
+  .string()
+  .max(80)
+  .regex(/^[a-z]{2}\.[a-z0-9-]+\.[A-Za-z0-9._-]+$/);
+const Waterbody = z.looseObject({
+  id: z.string().regex(/^[a-z][a-z0-9-]{1,40}$/),
+  kind: z.enum(WATERBODY_KINDS),
+  name_nl: z.string().min(1).max(80),
+  name_en: z.string().min(1).max(80),
+  stations: z.array(WaterbodyRef).max(2_000),
+  reference_station_id: WaterbodyRef.nullable(),
+});
+const WaterbodiesFile = z.looseObject({ waterbodies: lenient(Waterbody, 500).catch([]) });
+export type WebWaterbody = z.infer<typeof Waterbody>;
+
+/** P19a: the water bodies (lenient: a bad row is dropped, never thrown). */
+export const waterbodiesOf = ({ file }: ReachesRead): WebWaterbody[] => WaterbodiesFile.parse(file).waterbodies;
 
 export const loadReachTravel = async (f: Fetcher, signal?: AbortSignal, c: Contracts = PUBLIC_CONTRACTS) =>
   travelOf(await loadReachesFile(f, signal), c);

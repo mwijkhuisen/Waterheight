@@ -7,6 +7,7 @@ import type {
   SymbolLayerSpecification,
 } from 'maplibre-gl';
 import type { Mode } from '../../lib/url/url.ts';
+import { isMsl } from '../../lib/water.ts';
 import {
   DH_COLOUR,
   LADDER,
@@ -16,6 +17,8 @@ import {
   Q_RADIUS,
   STATE_COLOUR,
   STATE_RADIUS,
+  SURGE_COLOURS,
+  SURGE_STOPS_CM,
 } from '../legend/palette.ts';
 import { hatchAreaIcon, hatchIcon, type Icon, triangleIcon } from './icons.ts';
 import { showWarnings } from './warnings.ts';
@@ -23,7 +26,7 @@ import { showWarnings } from './warnings.ts';
 // The stations as `circle` layers whose look comes only from feature-state (the P3 pattern: a new `t` never rebuilds
 // the source; P10a: the paint follows the map mode and is replaced with `setPaintProperty` when the mode changes).
 // Feature state (lib/stationStates.ts): has, stale, forecast, estimate, level, section, suspect, dhBin, qSize, owner,
-// hidden (never drawn: a hidden station is not in the source), plus selected. Layers, bottom to top:
+// hidden (never drawn: a hidden station is not in the source), coast, surge, plus selected. Layers, bottom to top:
 //   stations          the marker: fill by mode (state level, 24 h change bin or discharge size), radius by level or
 //                     discharge size; hollow grey ring = nothing to show in this mode; a stale value is fainter; a
 //                     small grey dot = no value, the newest one past its staleness limit (`stale` without `has`,
@@ -32,12 +35,20 @@ import { showWarnings } from './warnings.ts';
 //   stations-owner    a third, wider purple ring (owner site only: the state is only ever true there).
 //   stations-trend-*  the ▲ / ▼ icons of the delta mode (symbol layout cannot use feature-state, so two layers whose
 //                     `icon-opacity` does).
+//   stations-surge-*  P19a: the ▲ / ▼ of a coast station's surge ≥ +50 / ≤ −50 cm (state mode), the same pattern.
 //   stations-tidal    the `hatch` icon on tidal stations; stations-impounded the localised short text.
+//   stations-msl      P19a: "MSL" beside a station whose primary H series is in MSL (the platforms), at every zoom.
+// P19a (T2, honest display): in the state mode a coast station is coloured by its surge only, on SURGE_STOPS_CM, at
+// one fixed size, and is hollow without a surge, whatever its level (an MSL level never meets a NAP scale or an NL-4
+// class). The delta and Q modes are unchanged.
 // After now (P8b) the shapes change meaning: a ring is a forecast, a fainter ring an estimate, a grey dot no forecast.
 
 export const SOURCE = 'stations';
 
-/** Points for the stations that have a position; the id and the two registry flags are the only properties, so no name reaches the renderer. */
+/**
+ * Points for the stations that have a position; the id, the two registry flags and `msl` (P19a) are the only
+ * properties, so no name reaches the renderer.
+ */
 export function stationPoints(stations: readonly ApiStation[]) {
   return {
     type: 'FeatureCollection' as const,
@@ -47,7 +58,12 @@ export function stationPoints(stations: readonly ApiStation[]) {
         : [
             {
               type: 'Feature' as const,
-              properties: { id: st.id, tidal: st.flags.tidal === true, impounded: st.flags.impounded === true },
+              properties: {
+                id: st.id,
+                tidal: st.flags.tidal === true,
+                impounded: st.flags.impounded === true,
+                msl: isMsl(st),
+              },
               geometry: { type: 'Point' as const, coordinates: [st.lon, st.lat] },
             },
           ],
@@ -67,12 +83,18 @@ const NO_BIN = 99;
 const ring: ExpressionSpecification = ['all', state('forecast'), state('has')];
 /** KG-233: no value at t, and a series' newest value is past its limit (under 25 h): a small grey dot. */
 const lapsed: ExpressionSpecification = ['all', ['!', state('has')], state('stale')];
+/** P19a: a coast station with a surge at t (the surge is null without one, and on every other station). */
+const surged: ExpressionSpecification = ['all', state('coast'), ['!=', ['feature-state', 'surge'], null]];
+const surge = num('surge', 0);
+/** The size of a coast marker with a surge: one size, so the NL-4 ladder never shows through. */
+const SURGE_RADIUS = 6.5;
 
 /** Nothing to show in this mode: no value, no state (state mode), no change (delta mode) or no discharge (q mode). */
 export function hollow(mode: Mode): ExpressionSpecification {
   const none: ExpressionSpecification =
     mode === 'state'
-      ? ['==', level, 0]
+      ? // A coast station shows its surge or nothing; any other its level (P19a T2).
+        ['case', state('coast'), ['!', surged], ['==', level, 0]]
       : mode === 'delta'
         ? ['==', num('dhBin', NO_BIN), NO_BIN]
         : ['<=', num('qSize', 0), 0];
@@ -87,7 +109,12 @@ const pairs = (entries: readonly (readonly [number, unknown])[]) => entries.flat
 function radius(mode: Mode): ExpressionSpecification {
   const base: ExpressionSpecification = ex(
     mode === 'state'
-      ? ['match', level, ...pairs(LADDER.map((s, i) => [i, STATE_RADIUS[s]] as const)), 5]
+      ? [
+          'case',
+          state('coast'),
+          ['case', surged, SURGE_RADIUS, STATE_RADIUS.no_ref],
+          ['match', level, ...pairs(LADDER.map((s, i) => [i, STATE_RADIUS[s]] as const)), 5],
+        ]
       : mode === 'delta'
         ? ['case', state('has'), 6.5, 4]
         : ['match', num('qSize', 0), ...pairs(([0, 1, 2, 3, 4] as const).map((q) => [q, Q_RADIUS[q]] as const)), 4],
@@ -98,7 +125,12 @@ function radius(mode: Mode): ExpressionSpecification {
 function fill(mode: Mode): ExpressionSpecification {
   const coloured: ExpressionSpecification = ex(
     mode === 'state'
-      ? ['match', level, ...pairs(LADDER.map((s, i) => [i, STATE_COLOUR[s]] as const)), STATE_COLOUR.no_ref]
+      ? [
+          'case',
+          surged,
+          ['interpolate', ['linear'], surge, ...SURGE_STOPS_CM.flatMap((cm, i) => [cm, SURGE_COLOURS[i]])],
+          ['match', level, ...pairs(LADDER.map((s, i) => [i, STATE_COLOUR[s]] as const)), STATE_COLOUR.no_ref],
+        ]
       : mode === 'delta'
         ? [
             'match',
@@ -119,6 +151,13 @@ export function layerPaints(mode: Mode): Record<string, Record<string, unknown>>
     ex([
       'case',
       mode === 'delta' ? ['all', state('has'), ['!', state('forecast')], [up ? '>' : '<', num('dhBin', 0), 0]] : false,
+      1,
+      0,
+    ]);
+  const surgeTri = (up: boolean): ExpressionSpecification =>
+    ex([
+      'case',
+      mode === 'state' ? ['all', state('has'), surged, up ? ['>=', surge, 50] : ['<=', surge, -50]] : false,
       1,
       0,
     ]);
@@ -165,6 +204,8 @@ export function layerPaints(mode: Mode): Record<string, Record<string, unknown>>
     },
     'stations-trend-up': { 'icon-opacity': tri(true) },
     'stations-trend-down': { 'icon-opacity': tri(false) },
+    'stations-surge-up': { 'icon-opacity': surgeTri(true) },
+    'stations-surge-down': { 'icon-opacity': surgeTri(false) },
   };
 }
 
@@ -186,9 +227,15 @@ const TEXT_FONT = ['Noto Sans Regular'];
 
 /**
  * Adds the sources and layers, or only replaces the points when they exist. `impounded` is the localised short word
- * of the impounded label (a message, never provider text).
+ * of the impounded label and `msl` the MSL marker's (messages, never provider text).
  */
-export function showStations(map: MapLibreMap, stations: readonly ApiStation[], mode: Mode, impounded: string): void {
+export function showStations(
+  map: MapLibreMap,
+  stations: readonly ApiStation[],
+  mode: Mode,
+  impounded: string,
+  msl: string,
+): void {
   const existing = map.getSource<GeoJSONSource>(SOURCE);
   if (existing !== undefined) {
     existing.setData(stationPoints(stations));
@@ -219,6 +266,8 @@ export function showStations(map: MapLibreMap, stations: readonly ApiStation[], 
   );
   map.addLayer(trend('stations-trend-up', 'tri-up'));
   map.addLayer(trend('stations-trend-down', 'tri-down'));
+  map.addLayer(trend('stations-surge-up', 'tri-up'));
+  map.addLayer(trend('stations-surge-down', 'tri-down'));
   map.addLayer({
     id: 'stations-tidal',
     type: 'symbol',
@@ -239,6 +288,22 @@ export function showStations(map: MapLibreMap, stations: readonly ApiStation[], 
       'text-size': 10,
       'text-offset': [0, 1.4],
       'text-optional': true,
+    },
+    paint: { 'text-color': '#303030', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
+  });
+  // Above the marker (the impounded word goes below), at every zoom: the platforms north of 54° N lie over the world
+  // basemap at low zoom (D29, owner decision O-2).
+  map.addLayer({
+    id: 'stations-msl',
+    type: 'symbol',
+    source: SOURCE,
+    filter: ['==', ['get', 'msl'], true],
+    layout: {
+      'text-field': msl,
+      'text-font': TEXT_FONT,
+      'text-size': 10,
+      'text-offset': [0, -1.4],
+      'text-allow-overlap': true,
     },
     paint: { 'text-color': '#303030', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
   });

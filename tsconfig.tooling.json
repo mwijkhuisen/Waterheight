@@ -39,6 +39,8 @@
     "apps/web/src/features/flow/reaches/spans.ts",
     "apps/web/src/features/flow/reaches/colour.ts",
     "apps/web/src/features/flow/reaches/reachLayer.ts",
+    "apps/web/src/features/map/waterLayer.ts",
+    "apps/web/src/lib/water.ts",
     "apps/web/src/features/flow/playback/engine.ts",
     "apps/web/src/features/flow/hovmoller/path.ts",
     "apps/web/src/features/flow/hovmoller/grid.ts",

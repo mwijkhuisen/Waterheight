@@ -137,6 +137,21 @@ describe('e2e build', () => {
     }
   });
 
+  // P19a (issue #67): the lake and canal layers are a lazy chunk too. The canal dash literal is held by that chunk
+  // only (the layer ids are eager, in lib/water.ts, and the legend draws its canal swatch another way).
+  it('keeps the lake and canal layers out of every page’s initial load, in a lazy chunk of their own', () => {
+    const water = manifest['src/features/map/waterLayer.ts'];
+    expect(water?.isDynamicEntry).toBe(true);
+    const marker = /line-dasharray["'`]?:\s*\[2,\s*1\.5\]/;
+    expect(read(water?.file ?? '')).toMatch(marker);
+    for (const page of pages) {
+      for (const file of initialLoad(page)) {
+        expect(read(file), `${page} → ${file}`).not.toMatch(marker);
+        expect(file, `${page} → ${file}`).not.toBe(water?.file);
+      }
+    }
+  });
+
   // P11c (issue #26): a second lazy ECharts importer (the Hovmöller chart) hoists ECharts core into a chunk both share,
   // so the station chart's markers are asserted on the entry's static closure, not on its own file.
   it('keeps ECharts in lazy chunks, away from every initial load and from the map chunk', () => {
