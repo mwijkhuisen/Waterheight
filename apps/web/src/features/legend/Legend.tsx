@@ -287,6 +287,7 @@ export function Legend({ reaches, shifted, locale, mode, forecast, owner, warnin
         </>
       )}
       <p className={styles.note}>{m.legend_honesty({}, o)}</p>
+      <p className={styles.note}>{m.legend_tier({}, o)}</p>
       <p className={styles.note}>{m.basis_nl4({}, o)}</p>
     </details>
   );

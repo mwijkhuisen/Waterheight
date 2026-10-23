@@ -260,6 +260,7 @@
   "mode_q": "Afvoer",
   "legend_heading": "Legenda",
   "legend_honesty": "Klassen volgen de referenties van elke instantie; niet strikt vergelijkbaar",
+  "legend_tier": "Uitgezoomd staan alleen de hoofdstations op de kaart",
   "legend_no_value": "geen waarde op dit tijdstip",
   "legend_stale": "ouder dan twee meetstappen, of geen waarde binnen de maximale ouderdom",
   "legend_suspect": "twijfelachtige waarde (kwaliteitsvlag)",

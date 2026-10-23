@@ -108,6 +108,8 @@ The map is the page: a sticky top bar, then the viewer fills the rest of the win
 - **Timebar:** a card over the bottom centre of the view (at most 46rem, clear of the drawer), full width below 48rem; collapsed by default, with "Tijdopties" for the rest (§8 for its colours).
 - **Disclosures:** the mode ("Kaart: Toestand") and the view ("Weergave: Kaart") are `<details>` over the top left, and the legend a collapsed one in the bottom-right stack; all three in `--paper` with a `--line` border and an `--ink` chevron, as the legend of §8. Focus rings follow §3.
 - **Search:** a magnifier button in the bar; opened, a field with a listbox below it in the same `--paper` and `--line`.
+- **Zoom buttons:** MapLibre's own navigation control, top right, without the compass; from 48rem it sits beside the drawer, not under it, and the control row keeps clear of it. Its two names come from Paraglide ("Inzoomen" / "Uitzoomen", "Zoom in" / "Zoom out"). No token (#205).
+- **Opening view:** the map opens on the Netherlands with its border gauges (bounds 3.2 to 7.4 E, 50.2 to 53.6 N). Far out only the tier-1 stations are drawn and tier 2 joins from z8; the flow animation is off until the visitor turns it on. The legend says so in one line. No token (#205).
 
 ## 7. Open items (owner)
 

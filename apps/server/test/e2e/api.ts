@@ -69,6 +69,8 @@ type TestStation = {
   datum?: 'NAP' | 'MSL';
   /** `station.flags` (default none). */
   flags?: Record<string, boolean>;
+  /** `station.tier` (default 1). #205: tier 2 is drawn only from z8, or while it is selected. */
+  tier?: 1 | 2;
 };
 
 /**
@@ -78,7 +80,7 @@ type TestStation = {
  * in the IJsselmeer, lake-noref in the Veluwemeer; the coast point lies in the Wadden Sea, the platform north of 54 N.
  *   coast: tidal, with astro rows (below) giving a surge of 80 cm at NOW, -60 at P19A_SETTLED_HOUR, 20 elsewhere,
  *          and 150 at NOW + 6 h (forecast).
- *   platform: tidal, datum MSL, no astro, so no surge.
+ *   platform: tidal, datum MSL, no astro, so no surge; tier 2, as every platform of the registry (#205: from z8).
  *   lake-ref: NL-4 class "Licht verhoogd" (elevated), the D27 reference of the IJsselmeer, with a forecast.
  *   lake-gauge: NL-4 class "Hoogwater" (high), the same lake: the lake must still read elevated.
  *   lake-noref: no class (the Veluwemeer has no reference gauge).
@@ -104,6 +106,7 @@ const P19A_STATIONS: TestStation[] = [
     stale: '90 min',
     datum: 'MSL',
     flags: { tidal: true },
+    tier: 2,
   },
   { id: 'nl.e2e.lake-ref', name: 'E2E lake ref', water: 'E2E', lon: 5.31, lat: 52.72, step: '10 min', stale: '90 min' },
   {
@@ -126,7 +129,10 @@ const P19A_STATIONS: TestStation[] = [
   },
 ];
 
-/** Test stations inside the Lobith map fixture (6.04,51.82 – 6.16,51.88): one H series each, a level in cm NAP. */
+/**
+ * Test stations inside the Lobith map fixture (6.04,51.82 – 6.16,51.88): one H series each, a level in cm NAP.
+ * nl.e2e.tier2 is the only tier-2 one there (#205: far out only tier 1).
+ */
 const STATIONS: TestStation[] = [
   {
     id: 'nl.e2e.xss',
@@ -139,6 +145,16 @@ const STATIONS: TestStation[] = [
   },
   { id: 'nl.e2e.gap', name: 'E2E gap', water: 'E2E', lon: 6.07, lat: 51.84, step: '10 min', stale: '90 min' },
   { id: 'nl.e2e.dst', name: 'E2E DST', water: 'E2E', lon: 6.13, lat: 51.86, step: '15 min', stale: '45 min' },
+  {
+    id: 'nl.e2e.tier2',
+    name: 'E2E tier two',
+    water: 'E2E',
+    lon: 6.15,
+    lat: 51.83,
+    step: '10 min',
+    stale: '90 min',
+    tier: 2,
+  },
   ...P19A_STATIONS,
 ];
 
@@ -353,8 +369,8 @@ try {
   for (const s of STATIONS) {
     await t.admin.query(
       `INSERT INTO station (id, name, water_name, country, lon, lat, tier, flags)
-       VALUES ($1, $2, $3, 'NL', $4, $5, 1, $6::jsonb)`,
-      [s.id, s.name, s.water, s.lon, s.lat, JSON.stringify(s.flags ?? {})],
+       VALUES ($1, $2, $3, 'NL', $4, $5, $6, $7::jsonb)`,
+      [s.id, s.name, s.water, s.lon, s.lat, s.tier ?? 1, JSON.stringify(s.flags ?? {})],
     );
     await t.admin.query(
       `INSERT INTO series (station_id, source_id, quantity, value_kind, provider_key, native_unit, to_canonical, datum,

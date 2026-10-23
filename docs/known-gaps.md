@@ -21,6 +21,16 @@ What P19b leaves (`PHASES.md` §54 "P19b as built"; ids renumber on merge).
 | KG-460 | owner | **The IJsselmeer outflow evidence** (the Rijkswaterstaat Afsluitdijk page, `https://www.rijkswaterstaat.nl/water/projectenoverzicht/afsluitdijk`) **was not fetched;** Wikidata (Q4121) gave no outflow. | [owner] check of the page | open [U] |
 | KG-461 | a11y | **A reference gauge hidden as stale (> 25 h) gives "no reference" and no classes** in the lake section, as in the map popup. | A decision to show a stale reference | open |
 
+## #205 Stage 0, the calm opening view
+
+What #205 leaves (`PHASES.md` §58).
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-449 | web | **Eijsden can fall under the timebar card in a short window:** below about 1280x720 the opening view (fixed bounds, no camera padding, because padding persists in the transform) can still put Eijsden under the collapsed timebar card. | The Stage 1 timebar work | open |
+| KG-450 | web, owner | **The 12 MSL platforms are drawn only from z8:** they are tier 2 (owner, 2026-10-23, Q1), so D29's "points at z0-6" no longer holds. | Re-tier them in the registry if they should show far out | open |
+| KG-451 | owner | **A look at the opening view on a phone and a desktop after the deploy:** the Netherlands with Lobith and Eijsden in view. | [owner] after the deploy | open [U] |
+
 ## P19a lakes, coast and sea layers (#67)
 
 What P19a leaves (`PHASES.md` §54 "P19a as built").

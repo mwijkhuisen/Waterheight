@@ -33,7 +33,10 @@ export interface FlowHost {
 }
 
 export interface FlowAnimation {
-  /** The pause control (WCAG 2.2.2): off stops the loop; on starts it unless the tab is hidden or motion is reduced. */
+  /**
+   * The pause control (WCAG 2.2.2), off by default since #205: off stops the loop; on starts it unless the tab is hidden
+   * or motion is reduced.
+   */
   setEnabled(on: boolean): void;
   running(): boolean;
   /** Stops the loop and removes the host listeners. */
