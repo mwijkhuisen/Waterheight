@@ -334,7 +334,8 @@ test('the offshore MSL platform is drawn, marked MSL and hollow, with no surge',
   const s = await start(page, context, baseURL, 'state');
   await open(page, '/');
   await coastReady(page);
-  await jump(page, [4.7, 54.6], 5);
+  // #205: the platforms are tier 2, so they are drawn from z8 (owner 2026-10-23; P19a drew them at every zoom).
+  await jump(page, [4.7, 54.6], 8);
   await expect.poll(() => renderedIds(page, ['stations'])).toContain(PLATFORM);
   await expect.poll(() => renderedIds(page, ['stations-msl'])).toContain(PLATFORM);
   await expect.poll(() => featureState(page, PLATFORM)).toMatchObject({ has: true, coast: true, surge: null });

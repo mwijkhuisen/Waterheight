@@ -172,6 +172,8 @@ for (const locale of ['nl', 'en'] as const)
     for (const state of ['low', 'normal', 'elevated', 'high', 'extreme', 'no_ref'])
       await expect(box.getByText(msg(locale, `state_${state}`), { exact: true })).toBeVisible();
     await expect(box.getByText(msg(locale, 'legend_honesty'), { exact: true })).toBeVisible();
+    // #205: far out only the tier-1 stations, and the legend says so.
+    await expect(box.getByText(msg(locale, 'legend_tier'), { exact: true })).toBeVisible();
     await expect(box.getByText(msg(locale, 'basis_nl4'), { exact: true })).toBeVisible();
     // The keys for the other cues; the warnings key shows while an area is on the map (NOW: three).
     // (EN: the reach legend's own "impounded" entry says the same word, P11b: the first is enough)

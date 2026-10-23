@@ -3,7 +3,7 @@
 // URL (no blob:, ADR-0016), the style is bundled here, glyphs and sprites are
 // under /assets/map/, the tiles are named by /tiles/manifest.json.
 import { parseTilesManifest } from '@rws/core/tiles-manifest';
-import { addProtocol, Map as MapLibreMap, type MapOptions, setWorkerUrl } from 'maplibre-gl';
+import { addProtocol, Map as MapLibreMap, type MapOptions, NavigationControl, setWorkerUrl } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { Protocol } from 'pmtiles';
@@ -79,6 +79,8 @@ export async function createMap(
       locale: mapLocale(lang),
       ...options,
     });
+    // #205: zoom buttons, no compass (the map never rotates); their words are mapLocale's.
+    map.addControl(new NavigationControl({ showCompass: false }), 'top-right');
     let disposed = false;
     return {
       map,

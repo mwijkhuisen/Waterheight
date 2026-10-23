@@ -4,7 +4,8 @@ import type { Locale } from '../../paraglide/runtime.js';
 import styles from './toggle.module.css';
 
 // The pause control of the flow animation (P11a, WCAG 2.2.2): "Stroming animeren / Animate flow", a button with
-// aria-pressed beside the mode and view disclosures (P10e). Off and inert under prefers-reduced-motion. No URL key.
+// aria-pressed beside the mode and view disclosures (P10e). Off by default (#205, owner 2026-10-22): nothing moves until
+// the visitor asks. Off and inert under prefers-reduced-motion. No URL key.
 
 export interface FlowToggleProps {
   locale: Locale;

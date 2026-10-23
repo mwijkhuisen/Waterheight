@@ -4,6 +4,16 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## #205 Stage 0, the calm opening view
+
+What #205 leaves (`PHASES.md` §58).
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-449 | web | **Eijsden can fall under the timebar card in a short window:** below about 1280x720 the opening view (fixed bounds, no camera padding, because padding persists in the transform) can still put Eijsden under the collapsed timebar card. | The Stage 1 timebar work | open |
+| KG-450 | web, owner | **The 12 MSL platforms are drawn only from z8:** they are tier 2 (owner, 2026-10-23, Q1), so D29's "points at z0-6" no longer holds. | Re-tier them in the registry if they should show far out | open |
+| KG-451 | owner | **A look at the opening view on a phone and a desktop after the deploy:** the Netherlands with Lobith and Eijsden in view. | [owner] after the deploy | open [U] |
+
 ## P19a lakes, coast and sea layers (#67)
 
 What P19a leaves (`PHASES.md` §54 "P19a as built").

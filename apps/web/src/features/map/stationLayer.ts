@@ -37,7 +37,10 @@ import { showWarnings } from './warnings.ts';
 //                     `icon-opacity` does).
 //   stations-surge-*  P19a: the ▲ / ▼ of a coast station's surge ≥ +50 / ≤ −50 cm (state mode), the same pattern.
 //   stations-tidal    the `hatch` icon on tidal stations; stations-impounded the localised short text.
-//   stations-msl      P19a: "MSL" beside a station whose primary H series is in MSL (the platforms), at every zoom.
+//   stations-msl      P19a: "MSL" beside a station whose primary H series is in MSL (the platforms).
+// #205: far out only tier 1. Every layer above but stations-impounded (minzoom 8) shows tier 2 from TIER2_MINZOOM, and
+// the selected station at every zoom (stationFilter); the platforms are tier 2, so they too wait until z8 (owner
+// 2026-10-23, KG-450).
 // P19a (T2, honest display): in the state mode a coast station is coloured by its surge only, on SURGE_STOPS_CM, at
 // one fixed size, and is hollow without a surge, whatever its level (an MSL level never meets a NAP scale or an NL-4
 // class). The delta and Q modes are unchanged.
@@ -46,8 +49,8 @@ import { showWarnings } from './warnings.ts';
 export const SOURCE = 'stations';
 
 /**
- * Points for the stations that have a position; the id, the two registry flags and `msl` (P19a) are the only
- * properties, so no name reaches the renderer.
+ * Points for the stations that have a position; the id, the two registry flags, `msl` (P19a) and the tier (#205) are
+ * the only properties, so no name reaches the renderer.
  */
 export function stationPoints(stations: readonly ApiStation[]) {
   return {
@@ -63,12 +66,57 @@ export function stationPoints(stations: readonly ApiStation[]) {
                 tidal: st.flags.tidal === true,
                 impounded: st.flags.impounded === true,
                 msl: isMsl(st),
+                tier: st.tier,
               },
               geometry: { type: 'Point' as const, coordinates: [st.lon, st.lat] },
             },
           ],
     ),
   };
+}
+
+/**
+ * Tier 2 joins the map at this zoom (#205). It equals BIN_MINZOOM (features/flow/reaches/bins.ts), on purpose and by
+ * hand: the stations switch to all tiers where the reaches switch to their 500 m bins, and that file is the lazy flow
+ * chunk.
+ */
+export const TIER2_MINZOOM = 8;
+
+/** The station layers thinned by tier, each with its own filter, if any. */
+const TIERED: Record<string, ExpressionSpecification | undefined> = {
+  [SOURCE]: undefined,
+  'stations-suspect': undefined,
+  'stations-owner': undefined,
+  'stations-trend-up': undefined,
+  'stations-trend-down': undefined,
+  'stations-surge-up': undefined,
+  'stations-surge-down': undefined,
+  'stations-tidal': ['==', ['get', 'tidal'], true],
+  'stations-msl': ['==', ['get', 'msl'], true],
+};
+
+/**
+ * Below TIER2_MINZOOM only tier 1 and the selected station; from it, all. The id is a literal because a filter cannot
+ * read feature-state. MapLibre evaluates a filter per tile, at the tile's integer zoom (a GeoJSON tile is 512 px, so
+ * that is the map's zoom rounded down): tier 2 appears at exactly z8.0. A zoom `step` may sit inside `all` in a filter
+ * (only paint and layout need it at the top).
+ */
+export function stationFilter(layer: string, selected = ''): ExpressionSpecification {
+  const tier: ExpressionSpecification = [
+    'step',
+    ['zoom'],
+    ['any', ['==', ['get', 'tier'], 1], ['==', ['get', 'id'], selected]],
+    TIER2_MINZOOM,
+    true,
+  ];
+  const own = TIERED[layer];
+  return own === undefined ? tier : ['all', own, tier];
+}
+
+/** Puts the selected station (or none) into the filters, so it stays drawn at every zoom; the camera does not move. */
+export function setSelectedStation(map: MapLibreMap, selected: string | undefined): void {
+  for (const id of Object.keys(TIERED))
+    if (map.getLayer(id) !== undefined) map.setFilter(id, stationFilter(id, selected));
 }
 
 const state = (key: string): ExpressionSpecification => ['boolean', ['feature-state', key], false];
@@ -247,11 +295,18 @@ export function showStations(
   map.addSource(SOURCE, { type: 'geojson', data: stationPoints(stations), promoteId: 'id' });
   const paints = layerPaints(mode);
   const circle = (id: string, extra: Record<string, unknown>): LayerSpecification =>
-    ({ id, type: 'circle', source: SOURCE, paint: { ...paints[id], ...extra } }) as LayerSpecification;
+    ({
+      id,
+      type: 'circle',
+      source: SOURCE,
+      filter: stationFilter(id),
+      paint: { ...paints[id], ...extra },
+    }) as LayerSpecification;
   const trend = (id: string, icon: string): SymbolLayerSpecification => ({
     id,
     type: 'symbol',
     source: SOURCE,
+    filter: stationFilter(id),
     layout: { 'icon-image': icon, 'icon-size': 0.8, 'icon-allow-overlap': true, 'icon-ignore-placement': true },
     paint: paints[id] as NonNullable<SymbolLayerSpecification['paint']>,
   });
@@ -272,7 +327,7 @@ export function showStations(
     id: 'stations-tidal',
     type: 'symbol',
     source: SOURCE,
-    filter: ['==', ['get', 'tidal'], true],
+    filter: stationFilter('stations-tidal'),
     layout: { 'icon-image': 'hatch', 'icon-allow-overlap': true, 'icon-ignore-placement': true },
     paint: { 'icon-opacity': ['case', state('has'), 1, 0] },
   });
@@ -291,13 +346,13 @@ export function showStations(
     },
     paint: { 'text-color': '#303030', 'text-halo-color': '#ffffff', 'text-halo-width': 1.5 },
   });
-  // Above the marker (the impounded word goes below), at every zoom: the platforms north of 54° N lie over the world
-  // basemap at low zoom (D29, owner decision O-2).
+  // Above the marker (the impounded word goes below), with it: the platforms are tier 2, so from z8 (#205; D29's points
+  // over the world basemap at low zoom no longer hold, owner 2026-10-23).
   map.addLayer({
     id: 'stations-msl',
     type: 'symbol',
     source: SOURCE,
-    filter: ['==', ['get', 'msl'], true],
+    filter: stationFilter('stations-msl'),
     layout: {
       'text-field': msl,
       'text-font': TEXT_FONT,
