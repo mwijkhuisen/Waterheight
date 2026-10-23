@@ -103,7 +103,7 @@ sudo jq --arg today "$(date -u +%F)" \
   /srv/rws/owner/status/capture.json      # complete UTC days only
 ```
 
-Give the agent that number for `--owner-bytes-per-day`.
+Give the agent that number for `--owner-bytes-per-day`, for a local run that is not committed. A committed `--out docs/capacity.md` run never passes it: the aggregate is derived from owner rows and must not reach the public repository (invariant 11).
 
 ## 8. The outage drill (P2b, issue #17)
 
