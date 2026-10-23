@@ -2,7 +2,7 @@
 
 **Trigger:**
 - the P16a `[agent-prod]` criterion of issue #64: after the deploy, `/status/capture.json` shows the six new NL-1 specs fresh (`docs/plan/PHASES.md` §54, P16a);
-- a failing `interval NL-1 nl-1-obs-sea`, `… nl-1-obs-wide` or `… nl-1-obs-slow`, or a stale or failing spec among the six;
+- a failing `interval NL-1 nl-1-obs-sea`, `… nl-1-obs-wide`, `… nl-1-obs-slow` or (since P20b) `… nl-1-hwlw`, a failing `status specs`, or a stale or failing spec among the six;
 - a spec that fails with `invalid_too_large` or an `http_*` code;
 - Rijkswaterstaat asks us to slow down or stop (§5).
 
@@ -43,7 +43,8 @@ scripts/verify-prod.sh <domain>
 ```
 
 - A spec is fresh while its last success is at most 3 × its cadence old: 30 min, 90 min, 3 h, 3 days, and 84 days for the two monthly specs. Until the first monthly run (the 1st at 20:00 UTC and the 2nd at 04:30 UTC) `nl-1-astro` and `nl-1-hwlw-astro` show no success; that is not a failure.
-- `interval NL-1 nl-1-obs-sea` (at least 595 s), `… nl-1-obs-wide` (1795 s) and `… nl-1-obs-slow` (3595 s) read `min_interval_s`, the shortest gap in the last 24 h. There is no such check for the daily and monthly specs; `freshness` covers them.
+- `interval NL-1 nl-1-obs-sea` (at least 595 s), `… nl-1-obs-wide` (1795 s) and `… nl-1-obs-slow` (3595 s) read `min_interval_s`, the shortest gap in the last 24 h. Since P20b the daily `nl-1-hwlw` has one too, `interval NL-1 nl-1-hwlw`, with a floor of 82,800 s (23 h) instead of the cadence minus 5 s: its rows run one after another with a 179 s pause, so the start of a run drifts by up to about 80 s from day to day. It is measurable after the second run (a first day shows no interval, which FAILs the check). This reverses P16a's limit to sub-daily specs on purpose. The two monthly specs never show an interval in a 24 h window; `astro horizon` (60 days, §2) covers them, and `freshness` covers all of them.
+- `status specs` (P20b) checks `/status/capture.json` against the registry: every public spec with a cadence must be listed, and a missing one is named. The one-shot catch-ups have no cadence and are not listed; an unknown extra is only counted. The web `/status` page lists sources, not specs, and never reads `capture.json`, so this check is the one place the spec list is judged. A rebuild drill with `RWS_CAPTURE_SKIP` makes it FAIL on purpose (`docs/runbooks/vps-rebuild.md`).
 - `nl-1-hwlw` may log nothing but 204 answers: at Vlissingen `GETETM2` answered 204 on 2026-10-17 for a 3-day and a 31-day window. A 204 passes the validity check (it is an answer with no data); whether RWS publishes measured extremes through `OphalenWaarnemingen` is still to be established (KG-366; P16b probed September 2025 as well, with and without `other:F010`, and both answered 204).
 - Health of NL-1 itself is unchanged: roadmap 1's series are judged as before.
 
@@ -224,7 +225,22 @@ curl -s https://<domain>/api/v1/health/sources | jq '.sources[] | select(.id=="N
 - `/data/v1/status.json`: `publisher.cycleSeconds`. The cycle period is 60 s (`CYCLE_MS`; the storm drill checks it through `cycleSeconds`). B4 is a different number: the 600 s in which one bucket's new values are drained (`docs/capacity.md` § Publisher). A steady bench cycle stops at the 35 s budget (`BUDGET_MS`) and took about 35 s in the P20a bench.
 - `curl -sI https://<domain>/api/v1/snapshot` shows `X-Degraded: 1` only when the API is down and the static file answers.
 - `scripts/verify-prod.sh <domain> --edge cloudflare`: `surge` and `fresh NL-1 coast` pass.
+- The `astro_horizon` alert (§2, §6): the stored astronomical tide must reach 60 days ahead. Without it every surge is `null`, whatever the weather.
+- The `surge` figures in `/api/v1/health/sources` (§7): `surge` close to `astro` close to `tidal`.
+- An RWS 429 or 5xx during the storm: capture slows down by itself (full jitter, `Retry-After`, a probe every 30 min; §4). Raise nothing and edit nothing on the VPS.
 
-**The rule: no hot fix during an active storm-surge warning without a rollback plan.** A deploy, a registry change or a replay on a storm day needs the previous release named, tested and ready to restore first (`docs/runbooks/deploy-rollback.md`); if there is no such plan, wait until the warning is lifted. The drill is not a licence to try changes on production.
+**The rule: no hot fix during an active storm-surge warning without a rollback plan.** A deploy, a registry change or a replay on a storm day needs the previous release named, tested and ready to restore first (`docs/runbooks/deploy-rollback.md`); if there is no such plan, wait until the warning is lifted. The drill is not a licence to try changes on production. The steps:
 
-P20b completes this section (the full `verify-prod` list and the checklist addendum).
+1. Name the previous release: `cat /var/lib/rws/current` on the VPS (the tag `prod-<UTC>` that passed its smoke test), and write it in the issue.
+2. Check that it is a release you could roll back to: it is among the last five in `/var/lib/rws/releases/`, and no migration since it contracted the schema it reads (`docs/runbooks/deploy-rollback.md`, "Migrations").
+3. Do not run `rws-rivers-refresh --tag` during the warning: an install moves `current` to `previous` and a third prunes the oldest, so the rollback is one step deep and a new install replaces the version you would go back to (`docs/runbooks/geo-refresh.md` §11).
+4. Make no registry change and start no replay (`docs/runbooks/replay.md`) while the warning is active: a registry change is a release that restarts capture, and a replay rewrites loaded rows while the surge is being read.
+5. If a release must go out, deploy it by hand (`sudo rws-deploy <tag>`) and watch `scripts/verify-prod.sh <domain> --edge cloudflare` until `surge`, `fresh NL-1 coast` and `owner leak` pass. If one does not, roll back at once to the release of step 1, as the deploy-rollback runbook says.
+
+**The roadmap 2 release checks** (P20b). `scripts/verify-prod.sh <domain> --dry-run` ends with the block `roadmap 2 (P20b):`, one line per entry of `ROADMAP2_CHECKS` in `scripts/verify-prod.ts`, each `live data` or `required PASS offline`. The split is the same in the CI deploy gate, `deploy/tests/e2e/verify-gate.sh` (its `live` array holds the live-data checks, each with a reason; every other name must PASS):
+
+| Needs live data (may FAIL in CI) | Required PASS offline |
+|---|---|
+| `interval NL-1 nl-1-obs-sea`, `-obs-wide`, `-obs-slow` and `nl-1-hwlw`, `fresh NL-1 coast`, `fresh NL-1 lakes`, `astro horizon`, `surge`, `catch-up NL-1` | `rivers manifest`, `rivers tiles`, `rivers layers`, `rivers reaches`, `status specs`, `method uncovered`, `owner leak` |
+
+On production, all of them must pass: the live ones once the data is in (an interval after two days of runs, `astro horizon` after the first monthly run). The owner signs the release in `docs/launch-checklist.md` §8 and sends the notice to Rijkswaterstaat, E7 (the draft is in `docs/legal/requests/`; the E7 row of `docs/permissions.md` links it).
