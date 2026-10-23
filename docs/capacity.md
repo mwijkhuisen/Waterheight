@@ -1,11 +1,11 @@
 # Capacity
 
-Two parts. The year-1 disk and bucket projection is written by `scripts/verify-prod.sh <domain> --capacity --out docs/capacity.md` from production capture data (issue #16) and is not committed until a run has two complete UTC days. The egress budget below belongs to P12a (issue #27); `--capacity` rewrites everything around it and keeps the block between the markers.
+Two parts. The year-1 disk and bucket projection is written by `scripts/verify-prod.sh <domain> --capacity --out docs/capacity.md` from production capture data (issue #16) and is not committed until a run has two complete UTC days. The egress budget below belongs to P12a (issue #27); `--capacity` writes only its own block between the `capacity:begin` and `capacity:end` markers and keeps everything else, the egress block and the narrative sections below included. The narrative outside the generated blocks is edited by hand.
 
 <!-- capacity:begin -->
 ## Capacity projection (year 1; `scripts/verify-prod.sh --capacity`, P20a)
 
-Measured from 2 complete UTC days of production capture (2026-10-21 to 2026-10-22), from the `days[]` block of `/status/capture.json` (generated 2026-10-23T14:04:30.003Z): zstd bytes stored after sha256 deduplication, per spec (issue #16). The partial day is left out. A spec that runs less than daily (monthly, weekly) or once (a catch-up, `cron: null`) is not averaged over the window: its row is the bytes of the day it ran times its runs a year from its cron (a one-shot counts once, and its bytes are those of the window). **Not in the window, so not measured and left out: `ch-3-40d`, `de-7-pegeldaten`, `de-8-hydro`, `fr-3-obs`, `fr-5-stations`, `nl-1-astro`, `nl-1-hwlw-astro`, `nl-1-obs-sea-catchup`, `nl-1-obs-slow-catchup`, `nl-1-obs-wide-catchup`, `nl-4-page`, `nl-4-xlsx`.**
+Measured from 2 complete UTC days of production capture (2026-10-21 to 2026-10-22), from the `days[]` block of `/status/capture.json` (generated 2026-10-23T16:55:30.020Z): zstd bytes stored after sha256 deduplication, per spec (issue #16). The partial day is left out. A spec that runs less than daily (monthly, weekly) or once (a catch-up, `cron: null`) is not averaged over the window: its row is the bytes of the day it ran times its runs a year from its cron (a one-shot counts once, and its bytes are those of the window). **Not in the window, so not measured and left out: `ch-3-40d`, `de-7-pegeldaten`, `de-8-hydro`, `fr-3-obs`, `fr-5-stations`, `nl-1-astro`, `nl-1-hwlw-astro`, `nl-1-obs-sea-catchup`, `nl-1-obs-slow-catchup`, `nl-1-obs-wide-catchup`, `nl-4-page`, `nl-4-xlsx`.**
 Owner-audience specs are not in the public status file and are **not included**; add them with `--owner-bytes-per-day` (docs/runbooks/owner-checks.md).
 
 ### Per spec
@@ -77,9 +77,9 @@ Owner-audience specs are not in the public status file and are **not included**;
 | Database, observations (2108 public series rows, 317783 samples a day, 102.1 B a row, 365 days) | 11.8 | **computed** from the registry's expected steps: ops.json carries no database size, so no trend is measured; an upper bound, as not every row delivers. 102.1 B a row was measured in P14b |
 | Database, rollups and forecasts | 5 | A§11.4 estimate |
 | Database, backfill history (NL-1 12.35 and P14b 2.44) | 14.8 | A§11.4, computed upper bound, not measured |
-| Static files, images, logs | 5 | A§11.4 line, **replace** by the publisher bench figure (`--static-gb-year`, `scripts/bench-q1.ts` publisher phase) |
+| Static files, images, logs | 25.9 | `--static-gb-year`, the publisher bench figure |
 | Basemap, current and previous (A§11.4) | 9 | constant |
-| **Total on the ≥ 200 GB disk** | **53.8** | 27% of the disk; the disk alert fires at 75% (150 GB): PASS |
+| **Total on the ≥ 200 GB disk** | **74.7** | 37% of the disk; the disk alert fires at 75% (150 GB): PASS |
 | Off-site bucket need: every raw object for 12 months (restic keeps 12 monthly snapshots) | 18.4 | against the bucket size **OWNER: A9** |
 
 Measured now: settled/ and frames/ hold 0.92 GB (`/data/v1/status.json` publisher.settledBytes, a point reading, not a growth rate); /srv/rws is 4% full (`/status/ops.json` disk_pct).
@@ -129,6 +129,19 @@ Verdict: not decided until the owner fills in A3.
 
 If the flood-day peak exceeds 50% of the uplink **or** the month exceeds 50% of the traffic quota, arm a CDN pull zone for `/tiles/*` and `/assets/*` only (static, licence-neutral) under the same hostname, following `docs/runbooks/cdn-break-glass.md`, and name the CDN on the privacy page before it goes live. **Never switch to OpenFreeMap or any other third-party tile host**: that adds third-party browser requests (invariant 7) and changes the CSP.
 <!-- egress:end -->
+
+## Publisher (P20a, issue #68)
+
+P20a gave the publisher budgets at 4,000 or more series, measured by the publisher phase of `scripts/bench-q1.ts` (`--series 4000 --days 60`, 23,044,000 rows) and asserted in the CI jobs `bench` (a hard gate at 3,000 series) and `bench-4000` (B1 to B4 and Q1 asserted, the timing limits of the tide reads and the API phase reported; owner decision Q5):
+
+| Budget | Limit | Local clean run | CI run 39970900430 |
+|---|---|---:|---:|
+| B1, per 10-minute bucket (render, validation and canary scan, `.zst`/`.gz`/plain write), p95 | 500 ms | recent 229, settled 238 ms | recent 275, settled 283 ms (max 661) |
+| B2, `latest.json` gzip | 200,000 B | 83,246 B (464,229 plain, 73,433 zstd) | 85,580 B |
+| B3, a recent or settled snapshot, gzip | 150,000 B | recent 53,345, settled 55,388 B | recent 55,581, settled 55,494 B |
+| B4 (derived), one bucket's new values for every series published within one bucket period of 600 s, cycles counted at max(60 s, cycle) | 600 s | drain 300 s (5 cycles, steady cycle 35.1 s) | drain 360 s (6 cycles, steady cycle 35.2 s) |
+
+B4 was derived by the lead from `CYCLE_MS` and `BUCKET_MS`; the owner chose B1 to B3. Machines: the local run is the owner's WSL box (AMD Ryzen 7 5800X, 8 cores, 16 threads, 31.3 GiB, PostgreSQL 18.6, alone, 2026-10-23); the CI run is a GitHub ubuntu-24.04 runner (AMD EPYC 7763, 4 cores, 15.6 GiB, PostgreSQL 18.6, head b40d099). The publisher's station files dominate a steady cycle (about 980 files a cycle at about 33 ms each locally). The A§11.4 static line is re-based on the measurement: 144 settled buckets a day of (392,001 plain + 55,388 gzip + 44,955 zstd) B, 365 days, is **25.9 GB a year at 4,000 series**, 5.18 times the 5 GB line of A§11.4 (and the 9 GB a year at 1,717 series of 2026-10-22); the plain files are about 80 % of the bytes. The production block above uses 25.9 through `--static-gb-year 25.9` (total 74.7 GB, 37 % of the disk, still PASS). KG-462 to KG-471 record what stays open.
 
 ## Tunnel mode (#109, ADR-0021)
 

@@ -212,3 +212,19 @@ curl -s https://<domain>/api/v1/health/sources | jq '.sources[] | select(.id=="N
 4. On the site, the coastal gauge shows its NL-4 class (if "Stormvloed", it is a display class) and the surge as derived. Check that the official link opens the national service, and read the warning there.
 
 **Owner step after merge.** Run `geo.yml` on main (the D27 references enter the reaches file and the tiles), then `rws-rivers-refresh`. Then `verify-prod rivers`. D30 (the crosswalk addendum) must be signed before the merge.
+
+## 9. Storm day (P20a; P20b completes it)
+
+**What the drill proves.** The `drill` job of `.github/workflows/loadtest.yml` runs the storm-surge drill after the flood drill, in the compose e2e stack and in CI only (it needs Docker and sudo). `deploy/tests/storm/run.sh` replays the synthetic Den Helder storm with `scripts/flood-drill --phase storm` on the drill clock, while the k6 `storm` scenario (a static burst, no API) runs. It asserts `deploy/tests/storm/expected.json`: Den Helder is `high` at 333 cm, which is the astronomical 83 plus the surge 250, with the NL-4 class "Stormvloed (> 260cm)", the tidal flag and the surge in `latest.json` and the recent bucket; the publisher keeps up; the API is stopped and the site serves the static `latest.json` with `X-Degraded: 1` (`apps/web/e2e/storm-drill.spec.ts`); and no canary value appears in any public file, compressed ones included, while the owner canary stays in the owner tree. The fixture is synthetic: there is no real storm payload yet (KG-437).
+
+**What to watch on a storm day** (a surge is forecast, or Waterinfo shows "Stormvloed"):
+
+- The surge (section 7) at Den Helder, Harlingen, Delfzijl, Hoek van Holland and Vlissingen, and their NL-4 class. "Stormvloed" is a display class, `high` (D18), never an alert.
+- `meta.json`: `degraded` must stay `false`. `true` means a hot-path publisher step failed this cycle and the data may be stale.
+- `/data/v1/status.json`: `publisher.cycleSeconds`. The cycle budget is 60 s (B4, `docs/capacity.md` § Publisher); a steady cycle took about 35 s in the P20a bench.
+- `curl -sI https://<domain>/api/v1/snapshot` shows `X-Degraded: 1` only when the API is down and the static file answers.
+- `scripts/verify-prod.sh <domain> --edge cloudflare`: `surge` and `fresh NL-1 coast` pass.
+
+**The rule: no hot fix during an active storm-surge warning without a rollback plan.** A deploy, a registry change or a replay on a storm day needs the previous release named, tested and ready to restore first (`docs/runbooks/deploy-rollback.md`); if there is no such plan, wait until the warning is lifted. The drill is not a licence to try changes on production.
+
+P20b completes this section (the full `verify-prod` list and the checklist addendum).

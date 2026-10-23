@@ -4,6 +4,23 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## P20a, capacity and the storm-surge drill (#68)
+
+What P20a (PR #211) leaves (`PHASES.md` P20a reality). The bench numbers are in `docs/capacity.md` § Publisher.
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-462 | perf | **The 4,000-series timing limits are reported, not asserted (owner Q5):** the CI job `bench-4000` (GitHub runner, EPYC 7763, 4 cores) measured the tide read at T at a median of 26.3 ms against 20 ms and `/snapshot` cold at a p95 of 170.3 ms against 150 ms; the owner's WSL box measured tide 19.6 ms (limit 20) and `/series` 14 d raw at a p95 of 58.3 ms against 50 ms. Q1 (median 47.4 ms CI, 40.0 ms local), the backward index scan and B1 to B4 are asserted. The #68 bench criterion stays open. The `bench` job is a hard gate at 3,000 series. | #212: the tide function's tidal lookup CTE (about 10 ms and 20k buffer hits for 200 series) and the cold `/snapshot` path | open [U] |
+| KG-463 | capacity | **The static files project to 25.9 GB a year at 4,000 series, 5.18 times the 5 GB A§11.4 line:** 144 settled buckets a day of 392,001 B plain + 55,388 B gzip + 44,955 B zstd, 365 days (local bench; CI 25.89 GB). The plain files are about 80 % of the bytes. The production block of `docs/capacity.md` now uses 25.9 (total 74.7 GB, 37 % of 200 GB, PASS). The line is re-based (A§11.4); whether to stop publishing the plain copy is not decided here. | A9 and an owner decision on the plain copy, if the disk ever needs it | open [U] |
+| KG-464 | perf | **B4 has a margin of about 1.7 to 2 times, and station files dominate it:** a bucket's new values for every series drained in 300 s locally (5 cycles) and 360 s in CI (6 cycles) against 600 s; about 980 (local) or 700 (CI) station files a cycle, about 33 ms each locally. B4 was derived from `CYCLE_MS` and `BUCKET_MS`, not chosen by the owner. | Fewer station files per cycle, if the series count grows past 4,000 | open [U] |
+| KG-465 | owner | **The k6 production burst in a quiet hour** (`workflow_dispatch`, mode `production`, static only), with its output attached to #68. | [owner] #68 | open [U] |
+| KG-466 | owner | **A9: disk and bucket headroom against the projection:** the bucket need is 18.4 GB for 12 months of raw objects (`OWNER: A9`); /srv/rws is 4 % used and settled+frames hold 0.92 GB now. | [owner] A9 | open [U] |
+| KG-467 | ci | **The storm drill and the egress profile run in CI only (Docker):** the `drill` and `loadtest` jobs of `loadtest.yml` are not required checks (`ci` and `security` only), so a red drill does not block a merge. Locally only `apps/server/test/load/flood-drill.int.test.ts` (storm case) and the unit tests run. | The lead reads the `drill`, `loadtest` and `chaos` results before calling a PR done | open |
+| KG-468 | capacity | **Specs that are not in the 3-day capture window are not in the projection:** the monthly `nl-1-astro` and `nl-1-hwlw-astro` (capture.yaml records about 17 MB a run for nl-1-astro), the three NL-1 catch-ups (one-shot) and the other weekly or monthly specs show "not in the window" and 0 bytes. | A longer window, or a measured run per spec, in P20b or later | open [U] |
+| KG-469 | capacity | **The database term of the projection is computed, not measured:** `/status/ops.json` carries no database size, so 11.8 GB is 2,108 series, 317,783 samples a day and 102.1 B a row (P14b) over 365 days, an upper bound. | A database size in `ops.json` | open [U] |
+| KG-470 | owner | **The egress verdict still waits for A3 (uplink and quota):** the one-page-load session (6c15542) corrects the double count of hashed assets; the budget is a profile, not a verdict. | [owner] A3 | open [U] |
+| KG-471 | test | **The storm-drill screenshot and the egress baseline are redone after #209 (P19b) merges:** P20a is built from main while #209 is open (owner Q2); the new egress baseline is adopted from the next CI artifact. | A follow-up after #209 merges main in | open [U] |
+
 ## #205 Stage 0, the calm opening view
 
 What #205 leaves (`PHASES.md` §58).
@@ -22,7 +39,7 @@ What P19a leaves (`PHASES.md` §54 "P19a as built").
 |---|---|---|---|---|
 | KG-444 | design | **Coast points are hollow during playback:** frames v2 carry no surge (O-1), so the played values show no surge on coast markers. Frames v3 are out of scope. | A reviewed frames v3 | open [U] |
 | KG-445 | design | **Sea and estuary polygons are not drawn:** coast is per station (D26); the basemap water shows the sea. | A reviewed decision to draw them | open |
-| KG-446 | perf | **The settled snapshot is 3.05× the P9 estimate:** 137,322 B plain (2026-10-19, 1,717 series) against about 45 KB; about 9 GB a year projected against the 5 GB static line (T9, 2026-10-22; `settledBytes` 973,317,100). P19a adds no snapshot field. | P20 owns the publisher budgets | open [U] |
+| KG-446 | perf | **The settled snapshot is 3.05× the P9 estimate:** 137,322 B plain (2026-10-19, 1,717 series) against about 45 KB; about 9 GB a year projected against the 5 GB static line (T9, 2026-10-22; `settledBytes` 973,317,100). P19a adds no snapshot field. P20a (#68) set the budgets B1 to B4 and re-based the line on 25.9 GB a year at 4,000 series (KG-463). | P20 owns the publisher budgets; see KG-463 and KG-464 | open [U] |
 | KG-447 | owner | **A look on a phone and a desktop around one high tide** (Action D10). | [owner] after the deploy | open [U] |
 | KG-448 | a11y | **A lake's class is a colour on the map only:** its text (the reference gauge, the class, the spread) is in a popup that opens on a click, and P19a has no keyboard path to a lake (review round 1, CR-4). | P19b's lake panel | open |
 
@@ -54,7 +71,7 @@ What P18a leaves (`PHASES.md` §54 "P18a as built", `docs/runbooks/tide.md` §7)
 | KG-434 | ops | **Recent files written before the deploy carry no tide for up to 7 days;** settled days with tide rows are re-rendered once through the `snapshot_schema:tide` bump. | None; ages out | accepted (owner, 2026-10-22) |
 | KG-435 | ops | **Open tabs need a reload after the deploy:** the old strict web bundle rejects the new optional `tide` key and shows its error state until reloaded (D-8; pages are `no-cache`). | None; the upgrade comment says so | accepted (owner, 2026-10-22) |
 | KG-436 | perf | **File growth:** `/snapshot` +55,468 bytes (+8.6 %, 699,413 against 643,945), about 555 bytes per tidal series; the static `latest`, `recent/` and `settled/` files grow by the same per-series amount (local bench, 2026-10-21, 100 tidal series). | Watch the disk trend (A9); `tide` is omitted when all null | accepted (owner, 2026-10-22) |
-| KG-437 | test | **No real storm golden:** the only storm fixture is the synthetic Den Helder one (+250 cm for six hours). Owner O-3, 2026-10-21. | Action D9: after a real storm surge, export the payloads and import them as a golden | accepted (owner, 2026-10-22) |
+| KG-437 | test | **No real storm golden:** the only storm fixture is the synthetic Den Helder one (+250 cm for six hours). Owner O-3, 2026-10-21. | Action D9: after a real storm surge, export the payloads and import them as a golden. The P20a storm drill uses this synthetic fixture only (Q4: Stormvloed, no Extreem scene) | accepted (owner, 2026-10-22) |
 
 ## P17b water bodies, snapping and tiles (#65)
 

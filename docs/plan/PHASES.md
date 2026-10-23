@@ -4257,7 +4257,7 @@ The station panels explain tide, surge, high and low water and lake set-up. "Fol
   - the degraded mode serves the static `latest.json` with `X-Degraded: 1`;
   - no owner canary appears in any public output.
 - [ ] [CI] The publisher's gzip sizes and run time per bucket stay within the P9 budgets with every new station (test or bench output).
-- [ ] [agent-prod] `docs/capacity.md` shows the measured bytes per day of the new specs and the year-1 projection.
+- [x] [agent-prod] `docs/capacity.md` shows the measured bytes per day of the new specs and the year-1 projection. (Ticked 2026-10-23 from `verify-prod waterradar.io --edge cloudflare --capacity --static-gb-year 25.9`; see P20a reality.)
 
 *P20b: release*
 - [ ] [CI] `verify-prod --dry-run` lists every roadmap 2 check. The CI deploy job requires PASS for every check that needs no live data.
@@ -4274,6 +4274,35 @@ The station panels explain tide, surge, high and low water and lake set-up. "Fol
 | Build (a and b) | `opus` | xhigh | Multi-file ops and test work across the database, publisher, Caddy and compose e2e. The patterns exist from P12, but the numbers must be measured, not assumed. Both PRs use the same settings |
 | Code review (each PR) | `fable` | `/code-review high` | This is the release gate of roadmap 2, ahead of the next storm and flood season. Cache, publisher and drill mistakes would mislead the public at the worst moment (§3.3: Fable, as P12). One prompt for both PRs |
 | Security review (each PR) | `fable` | xhigh | The whole-system gate of roadmap 2. The public surface roughly doubled in series and gained layers, routes and files; one leak of owner data or one relaxed header here is public. §3.4 uses Fable at max for roadmap 1's launch gate; xhigh suits this smaller delta. One prompt for both PRs |
+
+### P20a reality (2026-10-23)
+
+PR #211 (draft, "Part of #68"), built from main while P19b (#209) is open (owner Q2). Reviewers: Sonnet high code and Sonnet high security (the owner overrode #68's Fable/Fable).
+
+**Premises of the plan text that differed from the repository.**
+1. The flood drill is not in `ci.yml`: it is the `drill` job of `.github/workflows/loadtest.yml`, CI only (sudo and Docker), and `loadtest.yml` is not a required check (`ci` and `security` only).
+2. The drill runs the k6 `flood` scenario, not a static burst; P20a adds a `storm` scenario.
+3. The flood drill does not assert the degraded mode (`deploy/tests/e2e/run.sh`, `chaos.sh` and `degraded.spec.ts` do); the storm step does.
+4. The "P9 budgets" had no numbers: only the 35 s recent budget, the 60 s cycle and a 45 KB estimate already 3.05 times exceeded (KG-446). P20a sets them.
+5. The egress budget is not in ARCHITECTURE section 11 (section 11.4 is the disk): it is the generated block of `docs/capacity.md`, built from `docs/capacity-egress.json`.
+6. "The P12 amendment" does not exist as text (the nearest are sections 42 and 44); ADR-0022 does not mention D29.
+7. D29 kept the basemap cut, so the egress recompute has no basemap change.
+8. Water layers are on by default and the compose rivers fixture already has `waterbodies`; nothing needed turning on.
+9. `bench-q1.ts` already had the P18 surge path and the backward-index-scan assertion; its positional arguments were pinned by no test.
+10. There is no real storm payload (Action D9, KG-437).
+Found while building: the publisher's station files dominate a steady cycle; the e2e seed already makes Den Helder high (so the drill waits on the surge); the compose build has no test hook (the scene is DOM-only); the default map mode is not `state` (the scene opens it, e7355cb); the first egress session navigated twice and counted hashed assets again (242 requests, 6,630,038 B), fixed to one page load in 6c15542.
+
+**Owner decisions (2026-10-23).** Q1: budgets B1 (bucket p95 at most 500 ms), B2 (`latest.json` at most 200,000 B gzip), B3 (a snapshot at most 150,000 B gzip); B4 was derived by the lead from `CYCLE_MS` and `BUCKET_MS` (a bucket's new values published within 600 s), not chosen separately. Q2: built from main; after #209 merges, main is merged in and the storm screenshot and the egress baseline are redone (KG-471). Q3: capacity from public status files only; bucket size `OWNER: A9`. Q4: the storm level is NL-4 "Stormvloed" (no Extreem scene). Q5: gate 3,000, report 4,000: `bench` is a hard gate at 3,000 series; `bench-4000` asserts Q1, correctness and B1 to B4 and reports the tide and API timings; the #68 bench criterion stays open (KG-462, follow-up #212).
+
+**Measured** (`docs/capacity.md` section Publisher has machine and method). `bench-q1.ts --series 4000 --days 60`, 23,044,000 rows. Local (owner's WSL box, Ryzen 7 5800X, PostgreSQL 18.6): Q1 median 40.0 ms, tide 19.6 ms, `/snapshot` cold p95 130.6 ms, `/series` 14 d raw p95 58.3 ms; B1 229/238 ms, B2 83,246 B, B3 53,345/55,388 B, B4 drain 300 s. CI run 39970900430 (EPYC 7763, 4 cores; head b40d099): Q1 47.4 ms, tide 26.3 ms, cold p95 170.3 ms, B1 275/283 ms, B2 85,580 B, B4 360 s. Static projection 25.9 GB a year, 5.18 times the A§11.4 line. Production capacity block (waterradar.io, 3 public GETs, 2 complete days): total 74.7 GB, 37 % of 200 GB, largest day 54,096,349 B against 1 GB, PASS. Storm drill on b40d099 (run 39970900491): flood drill passed, the storm reached `latest.json` 22 s after the replay, `storm-check.mjs` PASS; the Playwright scene failed on the map mode and is fixed. The 3,000-series gate and `bench-4000` on 6c15542: {{CI}}. The storm drill on 6c15542: {{CI}}. The new egress baseline: {{CI}}.
+
+**P20a criteria and evidence.**
+- [ ] [CI] `bench-q1.ts` at 4,000 series: Q1 median under 50 ms with the backward index scan passes in both environments; the `/snapshot`, `/series` and tide limits are over in at least one (Q5, KG-462, #212). Stays open.
+- [ ] [CI] The storm-surge drill passes on the final head. Evidence: {{CI}}
+- [ ] [CI] The publisher's gzip sizes and run time per bucket stay within B1 to B4. Evidence: {{CI}} (local run and run 39970900430 within all four).
+- [x] [agent-prod] `docs/capacity.md` shows the bytes per day of the new specs and the year-1 projection (2026-10-23).
+
+Open [U]: KG-462 to KG-471.
 
 ---
 
