@@ -6,10 +6,10 @@ export default function About() {
     <>
       <h1>Over deze site</h1>
       <p>
-        Deze site toont bijna in real time de waterstanden, de afvoer, officiële verwachtingen en alarmniveaus van de
-        rivieren die Nederland binnenstromen. De gegevens komen uit open bronnen in Nederland, Duitsland, België,
-        Frankrijk, Luxemburg en Zwitserland en staan op een zelf gehoste kaart. Met de datum- en tijdkiezer kijk je
-        terug in de tijd en, waar een bron een verwachting publiceert, ook vooruit.
+        Waterstanden van Nederland en de rivieren die het binnenstromen: deze site toont ze bijna in real time, met de
+        afvoer, officiële verwachtingen en alarmniveaus. De gegevens komen uit open bronnen in Nederland, Duitsland,
+        België, Frankrijk, Luxemburg en Zwitserland en staan op een zelf gehoste kaart. Met de datum- en tijdkiezer kijk
+        je terug in de tijd en, waar een bron een verwachting publiceert, ook vooruit.
       </p>
       <p>De site is in bèta: gegevens kunnen ontbreken of onjuist zijn.</p>
 

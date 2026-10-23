@@ -25,8 +25,8 @@ export const GAP_KM = 120;
 /** A gap shorter than this, cut off by a tributary, is not worth a row. */
 const MIN_PIECE_KM = 1;
 /** Reaches walked per chain and tributary levels: a cycle or a huge delta ends the walk instead of the tab. */
-const REACH_CAP = 20_000;
-const GROUP_DEPTH_CAP = 12;
+export const REACH_CAP = 20_000;
+export const GROUP_DEPTH_CAP = 12;
 
 interface Item {
   node: ChainNode;
@@ -49,7 +49,7 @@ interface Walk {
 
 export const placeKey = (s: GStation) => `${s.reach_id}|${s.km_graph}`;
 
-const lengthOf = (r: GReach): number =>
+export const lengthOf = (r: GReach): number =>
   r.length_km ?? (r.km_graph_from !== null && r.km_graph_to !== null ? Math.abs(r.km_graph_to - r.km_graph_from) : 0);
 
 /** The main stem at a confluence: the reach on the same river, else on the river this one flows into, else the first. */
@@ -62,8 +62,15 @@ function pickMain(w: Walk, cands: readonly GReach[], river: string): GReach {
   );
 }
 
-/** The row of the station a reach starts at: it and its co-located stations that the page knows, the file's one first. */
-function rowAt(w: Walk, id: string | null, dist: number): ChainNode | undefined {
+/**
+ * The row of the station at a reach end: it and its co-located stations that the page knows, the file's one first
+ * (P19b: the downstream chain reads it too).
+ */
+export function rowAt(
+  w: Pick<Walk, 'ix' | 'known' | 'target' | 'places'>,
+  id: string | null,
+  dist: number,
+): Extract<ChainNode, { kind: 'station' }> | undefined {
   const s = id === null ? undefined : w.ix.stations.get(id);
   if (s === undefined || s.reach_id === null || s.km_graph === null) return undefined;
   const ids = [s, ...(w.places.get(placeKey(s)) ?? []).filter((o) => o !== s)]
@@ -154,6 +161,17 @@ function withGaps(items: readonly Item[]): ChainNode[] {
   return out;
 }
 
+/** The graph's stations by place (reach and chainage), for the co-location of `rowAt`. */
+export function placesOf(graph: ReachGraph): Map<string, GStation[]> {
+  const places = new Map<string, GStation[]>();
+  for (const s of graph.stations) {
+    if (s.reach_id === null || s.km_graph === null) continue;
+    const k = placeKey(s);
+    places.set(k, [...(places.get(k) ?? []), s]);
+  }
+  return places;
+}
+
 /** The upstream chain of `targetId`, nearest first; empty for a station the file does not place. */
 export function chain(
   graph: ReachGraph,
@@ -166,12 +184,6 @@ export function chain(
   if (target === undefined || target.reach_id === null || target.km_graph === null) return [];
   const own = ix.reaches.get(target.reach_id);
   if (own === undefined) return [];
-  const places = new Map<string, GStation[]>();
-  for (const s of graph.stations) {
-    if (s.reach_id === null || s.km_graph === null) continue;
-    const k = placeKey(s);
-    places.set(k, [...(places.get(k) ?? []), s]);
-  }
   const w: Walk = {
     ix,
     rivers: new Map(rivers.map((r) => [r.id, r])),
@@ -179,7 +191,7 @@ export function chain(
     target,
     seen: new Set(),
     budget: REACH_CAP,
-    places,
+    places: placesOf(graph),
   };
   const { starts, sink } = upstreamStarts(ix, target, own);
   // Past a station that is not at a sink the target's own reach lies downstream: a cycle must not walk it.

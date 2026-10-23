@@ -152,6 +152,41 @@ describe('e2e build', () => {
     }
   });
 
+  // P19b (issue #67): the tide, lake and downstream sections, the tide helpers and the Method page's board list are lazy.
+  // The build once leaked the board list (method.gen.ts, imported eagerly by station/thresholds.ts) and tide.ts into the
+  // entry; only the 250 KiB line caught it. Each marker is a string only that code holds (a message text compiled into
+  // the chunk, the board name in the generated list, the tide helpers' event key); it must be in some built file (so the
+  // test cannot go vacuous when a text changes) and in no file of any initial load.
+  it('keeps the tide, lake and downstream sections and the board list out of every initial load', () => {
+    const sections = [
+      'src/features/station/TideSection.tsx',
+      'src/features/station/LakeSection.tsx',
+      'src/features/flow/DownstreamChain.tsx',
+    ];
+    for (const key of sections) expect(manifest[key]?.isDynamicEntry, key).toBe(true);
+    const markers: Record<string, RegExp> = {
+      'Method board list': /Waterschap Limburg/,
+      TideSection: /Geen astronomisch getij op dit tijdstip/,
+      'tide helpers': /\.kind\}\|\$\{\w+\.hilo\}/,
+      LakeSection: /Andere meetpunten in dit water/,
+      DownstreamChain: /Einde van het rivierennet op de kaart/,
+    };
+    const built = readdirSync(join(out, 'assets')).flatMap((f) => (f.endsWith('.js') ? [`assets/${f}`] : []));
+    for (const [name, marker] of Object.entries(markers))
+      expect(
+        built.some((f) => marker.test(read(f))),
+        `${name} is in the build`,
+      ).toBe(true);
+    for (const page of pages) {
+      for (const file of initialLoad(page)) {
+        const code = read(file);
+        for (const [name, marker] of Object.entries(markers))
+          expect(code, `${page} → ${file}: ${name}`).not.toMatch(marker);
+        for (const key of sections) expect(file, `${page} → ${file}`).not.toBe(manifest[key]?.file);
+      }
+    }
+  });
+
   // P11c (issue #26): a second lazy ECharts importer (the Hovmöller chart) hoists ECharts core into a chunk both share,
   // so the station chart's markers are asserted on the entry's static closure, not on its own file.
   it('keeps ECharts in lazy chunks, away from every initial load and from the map chunk', () => {

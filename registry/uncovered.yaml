@@ -1,0 +1,112 @@
+# The Method page's table of Dutch water boards without data on the map (P19b, D32; catalogue §2.8).
+# One entry per board whose source is `audience: "off"` in registry/sources.yaml. `rivers` are curated plain names (nl
+# and en, same order; each en name occurs in the catalogue's Rivers cell of that board). `gauges` are 1-2 public primary
+# stations (registry/stations/*.yaml) on or near the board's waters: the page links them. The comments are the reasons;
+# there is no reason field. Read by scripts/gen-web-method.ts (which refuses an unknown, owner or non-primary gauge, a
+# stale entry or a missing one); a board that goes public leaves this file in the same change. Owner reviews the picks.
+boards:
+  - source: NL-7 # Limburg: Geul at Epen (a Geul gauge), Maas at Roermond (the Roer joins there)
+    rivers:
+      nl: [Roer, Niers, Geul, Swalm, Worm, Jeker, Geleenbeek]
+      en: [Roer, Niers, Geul, Swalm, Worm, Jeker, Geleenbeek]
+    gauges: [nl.rws.epen.geul.cottessen, nl.rws.roermond.boven]
+  - source: NL-5 # Rijn en IJssel: the IJssel receives the Oude IJssel at Doesburg and the Berkel at Zutphen
+    rivers:
+      nl: [Oude IJssel, Berkel, Bocholter Aa, Slinge, Baakse Beek, Schipbeek]
+      en: [Oude IJssel, Berkel, Bocholter Aa, Slinge, Baakse Beek, Schipbeek]
+    gauges: [nl.rws.doesburg.ijssel, nl.rws.zutphen.ijssel]
+  - source: NL-8 # Vechtstromen: the Vecht itself at Ommen and Holtheme
+    rivers:
+      nl: [Vecht, Dinkel, Regge]
+      en: [Vecht, Dinkel, Regge]
+    gauges: [nl.rws.ommen.vecht, nl.rws.holtheme.vecht]
+  - source: NL-9 # De Dommel: Dommel at Eindhoven (Blaarthem) and the Dieze at 's-Hertogenbosch
+    rivers:
+      nl: [Dommel, Tongelreep, Keersop, Reusel, Beerze, Run]
+      en: [Dommel, Tongelreep, Keersop, Reusel, Beerze, Run]
+    gauges: [nl.rws.blaarthem.dommel, nl.rws.shertogenbosch.engelen.dieze]
+  - source: NL-10 # Brabantse Delta: Breda (Mark) and the Volkerak at Dinteloord (the Dintel runs out there)
+    rivers:
+      nl: [Mark, Aa of Weerijs, Donge, Dintel]
+      en: [Mark, Aa of Weerijs, Donge, Dintel]
+    gauges: [nl.rws.breda, nl.rws.dinteloord.volkerak]
+  - source: NL-11 # Aa en Maas: the Aa at Helmond and at Poeldonk
+    rivers:
+      nl: [Aa, Raam, Hertogswetering, Leijgraaf, Peelse Loop]
+      en: [Aa, Raam, Hertogswetering, Leijgraaf, Peelse Loop]
+    gauges: [nl.rws.aa.helmond, nl.rws.shertogenbosch.poeldonk.aa]
+  - source: NL-12 # Hunze en Aa's: the Westerwoldse Aa runs out at Nieuwe Statenzijl; Groningen takes the Drentsche Aa
+    rivers:
+      nl: [Westerwoldse Aa, Hunze, Drentsche Aa]
+      en: [Westerwoldse Aa, Hunze, Drentsche Aa]
+    gauges: [nl.rws.nieuwestatenzijl.dollard, nl.rws.groningen]
+  - source: NL-13 # Drents Overijsselse Delta: the lower Vecht at Dalfsen and the Zwarte Water at Hasselt
+    rivers:
+      nl: [Vecht, Reest, Sallandse Weteringen]
+      en: [Vecht, Reest, Sallandse Weteringen]
+    gauges: [nl.rws.dalfsen.vechterweerd, nl.rws.hasselt.zwartewater]
+  - source: NL-14 # HDSR: the Hollandse IJssel at Gouda; Wijk bij Duurstede lies at the Kromme Rijn
+    rivers:
+      nl: [Kromme Rijn, Hollandse IJssel, Leidsche Rijn]
+      en: [Kromme Rijn, Hollandse IJssel, Leidsche Rijn]
+    gauges: [nl.rws.gouda.hollandscheijssel, nl.rws.wijkbijduurstede.amsterdamrijnkanaal]
+  - source: NL-15 # Rivierenland: the Lek at Culemborg and Schoonhoven bracket the Linge, Giessen and Alblas
+    rivers:
+      nl: [Linge, Giessen, Alblas]
+      en: [Linge, Giessen, Alblas]
+    gauges: [nl.rws.culemborg, nl.rws.schoonhoven]
+  - source: NL-16 # Vallei en Veluwe: the Eem at Eemdijk; the Veluwe streams reach the IJssel at Deventer
+    rivers:
+      nl: [Eem, Grift, Valleikanaal, Veluwebeken naar de IJssel]
+      en: [Eem, Grift, Valleikanaal, Veluwe streams to the IJssel]
+    gauges: [nl.rws.eemdijk, nl.rws.deventer]
+  - source: NL-17 # Noorderzijlvest: the Reitdiep at Dorkwerd
+    rivers:
+      nl: [Reitdiep, Winsumerdiep]
+      en: [Reitdiep, Winsumerdiep]
+    gauges: [nl.rws.dorkwerd.reitdiep]
+  - source: NL-18 # Wetterskip Fryslan: a boezem gauge near Burgum
+    rivers:
+      nl: [Friese boezem]
+      en: [Frisian boezem]
+    gauges: [nl.rws.burgum.burgumerdaam.boezem]
+  - source: NL-19 # Zuiderzeeland: the lake edges of Flevoland (Dronten, Almere)
+    rivers:
+      nl: [Flevolandse polders]
+      en: [Flevoland polders]
+    gauges: [nl.rws.dronten.reevesluis.drontermeer, nl.rws.almere.hollandsebrug]
+  - source: NL-20 # HHNK: Edam on the Markermeer and Den Oever on the IJsselmeer bound the area
+    rivers:
+      nl: [Noord-Hollandse boezem]
+      en: [Noord-Holland boezem]
+    gauges: [nl.rws.edam, nl.rws.denoever.ijsselmeer.binnenhaven]
+  - source: NL-21 # AGV: the Amsterdam-Rijnkanaal at Weesp (the Vecht joins nearby) and Amsterdam city
+    rivers:
+      nl: [Amstel, Utrechtse Vecht]
+      en: [Amstel, Utrechtse Vecht]
+    gauges: [nl.rws.weesp.amsterdamrijnkanaal, nl.rws.amsterdam.surinamekade]
+  - source: NL-22 # Rijnland: the Oude Rijn runs out at Katwijk; Scheveningen is the nearest public gauge
+    rivers:
+      nl: [Oude Rijn, Rijnlandse boezem]
+      en: [Oude Rijn, Rijnland boezem]
+    gauges: [nl.rws.scheveningen]
+  - source: NL-23 # Delfland: the coast between Scheveningen and Hoek van Holland
+    rivers:
+      nl: [Delflandse boezem]
+      en: [Delfland boezem]
+    gauges: [nl.rws.scheveningen, nl.rws.hoekvanholland]
+  - source: NL-24 # HHSK: the Rotte joins the Nieuwe Maas at Rotterdam; the Hollandse IJssel runs at Krimpen
+    rivers:
+      nl: [Rotte]
+      en: [Rotte]
+    gauges: [nl.rws.rotterdam.nieuwemaas.boerengat, nl.rws.krimpenaandeijssel.hollandscheijssel]
+  - source: NL-25 # Hollandse Delta: the Oude Maas at Spijkenisse and the Spui at Zuidland
+    rivers:
+      nl: [wateren van de Zuid-Hollandse eilanden]
+      en: [waters of the Zuid-Hollandse islands]
+    gauges: [nl.rws.spijkenisse.oudemaas, nl.rws.zuidland.spui]
+  - source: NL-26 # Scheldestromen: the Western Scheldt at Vlissingen and Terneuzen
+    rivers:
+      nl: [Zeeuwse wateren]
+      en: [Zeeland waters]
+    gauges: [nl.rws.vlissingen, nl.rws.terneuzen]

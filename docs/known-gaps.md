@@ -4,6 +4,23 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## P19b panels, pages and "to the sea" (#67)
+
+What P19b leaves (`PHASES.md` §54 "P19b as built"; ids renumber on merge).
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-452 | design | **The forecast surge is a number at t, with no curve** (owner O-3): the snapshot carries it for one instant; the static forecast files carry none (KG-439). | A decision to read a forecast surge series | open |
+| KG-453 | resilience | **A brownout drops the chart's tide and the high and low water table:** both come from raw `/series`, which is not requested in a brownout. | Accepted; a static tide source if wanted | accepted |
+| KG-454 | design | **The day's high and low water table is incomplete for a future day:** it holds the measured and astronomical extremes up to now + 10 min plus at most one next astronomical extreme per high/low from the snapshot (`pub_tide_at`), so a future day's later extremes are missing. | A range read of astronomical extremes | open |
+| KG-455 | content | **"Haringvliet sluices" reads "Haringvliet → Noordzee":** the reaches file has no structure names. | Structure names in the reaches file | open |
+| KG-456 | design | **The delta exits are a set, not a path:** the tidal zone has no flow direction (D31), so the chain lists the exits once. | Accepted by D31 | accepted |
+| KG-457 | design | **Downstream rows have no travel times** (only the order); the upstream chain has them. | A downstream travel-time model | open |
+| KG-458 | agent-prod | **The IJsselmeer → Waddenzee outflow reaches production after the next `geo.yml` release and `rws-rivers-refresh`;** until then the IJssel chain ends at the IJsselmeer. | [agent-prod] after the release | open |
+| KG-459 | owner | **The gauges of `registry/uncovered.yaml` are a proposal:** the picks rest on coordinates and station names (weak: HHNK, Rijnland, Delfland; Breda on the Mark is an assumption). | [owner] review of the file | open [U] |
+| KG-460 | owner | **The IJsselmeer outflow evidence** (the Rijkswaterstaat Afsluitdijk page, `https://www.rijkswaterstaat.nl/water/projectenoverzicht/afsluitdijk`) **was not fetched;** Wikidata (Q4121) gave no outflow. | [owner] check of the page | open [U] |
+| KG-461 | a11y | **A reference gauge hidden as stale (> 25 h) gave "no reference" and no classes** in the lake section, while the map's lake popup still named it (review round 1, CR-2). Settled: the lake section reads every station, the stale ones too, as the popup does; a stale reference shows "geen klasse". | – | closed in review round 1 (CR-2) |
+
 ## #205 Stage 0, the calm opening view
 
 What #205 leaves (`PHASES.md` §58).
@@ -24,7 +41,7 @@ What P19a leaves (`PHASES.md` §54 "P19a as built").
 | KG-445 | design | **Sea and estuary polygons are not drawn:** coast is per station (D26); the basemap water shows the sea. | A reviewed decision to draw them | open |
 | KG-446 | perf | **The settled snapshot is 3.05× the P9 estimate:** 137,322 B plain (2026-10-19, 1,717 series) against about 45 KB; about 9 GB a year projected against the 5 GB static line (T9, 2026-10-22; `settledBytes` 973,317,100). P19a adds no snapshot field. | P20 owns the publisher budgets | open [U] |
 | KG-447 | owner | **A look on a phone and a desktop around one high tide** (Action D10). | [owner] after the deploy | open [U] |
-| KG-448 | a11y | **A lake's class is a colour on the map only:** its text (the reference gauge, the class, the spread) is in a popup that opens on a click, and P19a has no keyboard path to a lake (review round 1, CR-4). | P19b's lake panel | open |
+| KG-448 | a11y | **A lake's class is a colour on the map only:** its text (the reference gauge, the class, the spread) is in a popup that opens on a click, and P19a has no keyboard path to a lake (review round 1, CR-4). | P19b's lake panel | closed in P19b: search → gauge → lake section → reference button |
 
 KG-439 stands: the static P9 forecast files carry no forecast surge; the future surge comes from the API.
 
