@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync, zstdCompressSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
@@ -30,6 +30,7 @@ import {
 } from '../packages/contracts/src/index.ts';
 import type { StaticSources } from '../packages/contracts/src/static-owner.ts';
 import { TILE_FILE_RE, type TileFile, type TilesManifest } from '../packages/core/src/tiles-manifest.ts';
+import { uncoveredBoards } from '../scripts/gen-web-method.ts';
 import {
   API_SOURCES,
   type ApiRead,
@@ -68,6 +69,7 @@ import {
   checkLoaderLag,
   checkMapAsset,
   checkMeta,
+  checkMethodUncovered,
   checkNoindex,
   checkNotFound,
   checkOg,
@@ -108,6 +110,7 @@ import {
   checkStaticStatus,
   checkStaticWarnings,
   checkStations,
+  checkStatusSpecs,
   checkSurge,
   checkTier1,
   checkTileFile,
@@ -131,7 +134,9 @@ import {
   formatResult,
   freshLimit,
   GEOJSON,
+  gateLists,
   INTERVAL_MIN_S,
+  INTERVAL_RULES,
   INTERVAL_SPEC,
   LEGAL_PATHS,
   leaks,
@@ -141,6 +146,7 @@ import {
   META_CACHE,
   NOINDEX_PATHS,
   NOT_FOUND_PATHS,
+  nl1OffIds,
   nl1TideSets,
   noIpv6Here,
   OPENAPI_CACHE,
@@ -159,7 +165,7 @@ import {
   PMTILES_MAGIC,
   PROFILES,
   type Profile,
-  pmtilesLayerIds,
+  pmtilesMetadata,
   pmtilesMetadataSpan,
   pngSize,
   RERENDER_MAX_S,
@@ -173,6 +179,7 @@ import {
   readStatic,
   readTilesManifest,
   recentCandidates,
+  runsPerYear,
   SNAPSHOT_ASKS,
   type SnapshotAsk,
   STATIC_CACHE,
@@ -192,6 +199,7 @@ import {
   TILES_404_PATHS,
   TWIN_IDS,
   tileFiles,
+  uncoveredChunk,
 } from '../scripts/verify-prod.ts';
 import { repoRoot } from './catalogue.ts';
 
@@ -472,16 +480,14 @@ describe('the page checks', () => {
     });
   });
 
-  it('the --dry-run list has one entry for each, and ci.yml requires both', () => {
+  it('the --dry-run list has one entry for each, and the deploy gate requires both', () => {
     expect(CHECKS.filter((c) => c.startsWith('pages <path>:'))).toHaveLength(1);
     expect(CHECKS.filter((c) => c.startsWith('not found:'))).toHaveLength(1);
-    const ci = readFileSync(join(repoRoot, 'deploy/tests/e2e/verify-gate.sh'), 'utf8');
-    const required = /for check in ([^;]*?); do/s.exec(ci.slice(ci.indexOf("'api meta'") - 20))?.[1] ?? '';
-    expect(required.match(/'([^']+)'/g)).toEqual(expect.arrayContaining(["'pages'", "'not found'"]));
-    // The tolerated-FAIL list never excuses them: they must PASS against the CI stack.
-    const tolerated = /grep -vE '\^FAIL \(([^']*)\) '/.exec(ci)?.[1] ?? '';
-    expect(tolerated.length).toBeGreaterThan(100);
-    expect(tolerated.split('|').some((n) => n.startsWith('pages') || n.startsWith('not found'))).toBe(false);
+    const { live, required } = gateLists(readFileSync(join(repoRoot, 'deploy/tests/e2e/verify-gate.sh'), 'utf8'));
+    expect(required).toEqual(expect.arrayContaining(['pages', 'not found']));
+    // The live-data list never excuses them: they must PASS against the CI stack.
+    expect(live.size).toBeGreaterThan(40);
+    expect([...live.keys()].some((n) => n.startsWith('pages') || n.startsWith('not found'))).toBe(false);
   });
 });
 
@@ -662,10 +668,114 @@ describe('freshness, soak and capacity', () => {
     const c = capacity(twoDays, registry, '2026-10-02', 5e6);
     expect(c.ok).toBe(true);
     expect(c.markdown).toContain('from 2 complete UTC days of production capture (2026-09-30 to 2026-10-01)');
-    expect(c.markdown).toMatch(/\| NL-1 \| nl-1-obs-key \| obs \| 2000000 \| 0\.180 \|/);
-    expect(c.markdown).toMatch(/\| NL-1 \| nl-1-fc-1h \| forever \| 1000000 \| 0\.365 \|/);
+    expect(c.markdown).toMatch(
+      /\| NL-1 \| nl-1-obs-key \| obs \| daily or faster, mean of the days \| – \| – \| 2000000 \| 0\.180 \| n\/a \(needs ≥ 3 complete days; 2 available\) \|/,
+    );
+    expect(c.markdown).toMatch(
+      /\| NL-1 \| nl-1-fc-1h \| forever \| daily or faster, mean of the days \| – \| – \| 1000000 \| 0\.365 \| n\/a \(needs ≥ 3 complete days; 2 available\) \|/,
+    );
     expect(c.markdown).toContain('| owner (aggregate) |');
+    // CR-6: with 2 complete days the 2x-median rule cannot fire, so its row is n/a and never a PASS.
+    expect(c.markdown).toContain(
+      '| No spec above 2x its measured median on a complete day | n/a (needs ≥ 3 complete days; 2 available) |',
+    );
     expect(c.markdown).not.toMatch(/BE-3|LU-2|lu-3-percentile/);
+  });
+
+  describe('capacity, P20a', () => {
+    // Complete days 2026-10-01 to 2026-10-03; 2026-10-04 is today and partial (its bytes must not count).
+    const days = ['2026-10-01', '2026-10-02', '2026-10-03', '2026-10-04'];
+    const build = (
+      bytes: Record<string, number[]>,
+      inputs: Parameters<typeof capacity>[4] = {},
+      today = '2026-10-04',
+    ) => {
+      const { pub } = statusCycle();
+      const status = {
+        ...pub,
+        days: days.map((date, i) => ({
+          ...day(date, 'NL-1', 1, {}),
+          bytes: Object.fromEntries(Object.entries(bytes).map(([spec, b]) => [spec, b[i] ?? 0])),
+        })),
+      };
+      return capacity(status, registry, today, null, inputs);
+    };
+    const row = (md: string, spec: string) => md.split('\n').find((l) => l.includes(`| ${spec} |`)) ?? '';
+
+    it('a monthly spec is its bytes a run x 12 runs, a catch-up counts once, a spec outside the window is not measured', () => {
+      const c = build({
+        'nl-1-obs-key': [1e8, 3e8, 2e8, 9e12],
+        'nl-1-astro': [0, 35e6, 0, 0],
+        'nl-1-obs-sea-catchup': [2e6, 3e6, 0, 0],
+      });
+      expect(c.ok).toBe(true);
+      // Monthly (cron 30 0 20 1 * *): 35 MB a run x 12 runs, forever: 0.420 GB, and not the 3-day mean (35 MB / 3).
+      expect(row(c.markdown, 'nl-1-astro')).toBe(
+        '| NL-1 | nl-1-astro | forever | per run x runs a year | 12 | 35000000 | 1150685 | 0.420 | – |',
+      );
+      // One-shot (cron null): the window's 5 MB once, not x 365 and not x 90 days.
+      expect(row(c.markdown, 'nl-1-obs-sea-catchup')).toBe(
+        '| NL-1 | nl-1-obs-sea-catchup | obs | one-shot, once | 1 | 5000000 | 13699 | 0.005 | – |',
+      );
+      // The partial day (9e12) is left out: the mean of the three complete days is 2e8, 90 days on disk = 18 GB.
+      expect(row(c.markdown, 'nl-1-obs-key')).toContain('| 200000000 | 18.000 | 400000000 PASS |');
+      // Weekly nl-4-page ran in none of the days: said, and not counted as 0 bytes measured.
+      expect(row(c.markdown, 'nl-4-page')).toContain(
+        '| per run x runs a year | 52 | not in the window | 0 | 0.000 | – |',
+      );
+      expect(c.markdown).toMatch(/Not in the window, so not measured and left out: [^.]*`nl-4-page`/);
+    });
+
+    it('the A§7.3 rules: a spec above 2x its median and a total above 1 GB a day are WARN', () => {
+      const calm = build({ 'nl-1-fc-1h': [1e6, 1e6, 1e6, 0] });
+      expect(calm.markdown).toContain('| No spec above 2x its measured median on a complete day | PASS |');
+      expect(calm.markdown).toContain('(largest complete day: 1000000 B) | PASS |');
+      const loud = build({ 'nl-1-fc-1h': [1e6, 1e6, 9e6, 0], 'nl-1-obs-key': [0, 0, 1.2e9, 0] });
+      expect(loud.markdown).toContain('| No spec above 2x its measured median on a complete day | WARN: `nl-1-fc-1h`');
+      expect(loud.markdown).toContain('(largest complete day: 1209000000 B) | WARN |');
+      expect(row(loud.markdown, 'nl-1-fc-1h')).toContain('| 2000000 WARN |');
+    });
+
+    it('the database is computed from the registry steps and labelled so; the static line is the A§11.4 one unless given', () => {
+      const stations = [
+        { audience: 'public', expected_step: 'PT10M' },
+        { audience: 'public', expected_step: 'PT10M' },
+        { audience: 'public', expected_step: 'PT1H' },
+        { audience: 'owner', expected_step: 'PT10M' },
+      ];
+      const c = build({ 'nl-1-fc-1h': [1e6, 1e6, 1e6, 0] }, { stations, settledBytes: 1.5e9, diskPct: 31 });
+      // 144 + 144 + 24 = 312 samples a day x 365 x 102.1 B = 0.0116 GB: the row says computed and why.
+      expect(c.markdown).toMatch(
+        /\| Database, observations \(3 public series rows, 312 samples a day, 102\.1 B a row, 365 days\) \| 0\.0 \| \*\*computed\*\* /,
+      );
+      expect(c.markdown).toContain(
+        '| Static files, images, logs | 5 | A§11.4 line, **replace** by the publisher bench figure',
+      );
+      expect(c.markdown).toContain('settled/ and frames/ hold 1.50 GB');
+      expect(c.markdown).toContain('/srv/rws is 31% full');
+      expect(c.markdown).toContain('against the bucket size **OWNER: A9**');
+      expect(c.markdown).toMatch(
+        /\| \*\*Total on the ≥ 200 GB disk\*\* \| \*\*\d+\.\d\*\* \| \d+% of the disk; the disk alert fires at 75% \(150 GB\): PASS \|/,
+      );
+      const given = build({ 'nl-1-fc-1h': [1e6, 1e6, 1e6, 0] }, { staticGbYear: 9 });
+      expect(given.markdown).toContain(
+        '| Static files, images, logs | 9 | `--static-gb-year`, the publisher bench figure |',
+      );
+      expect(build({}, {}).markdown).toContain('the bytes of settled/ and frames/ were not read');
+    });
+
+    it('runsPerYear counts a UTC cron in a calendar year (5 or 6 fields)', () => {
+      expect(runsPerYear('30 0 20 1 * *')).toBe(12);
+      expect(runsPerYear('30 30 4 2 * *')).toBe(12);
+      expect(runsPerYear('30 0 0 * * *')).toBe(365);
+      expect(runsPerYear('5 4 * * 1')).toBe(52);
+      expect(runsPerYear('40 2 * * 0')).toBe(runsPerYear('40 2 * * 7'));
+      expect(runsPerYear('20,50 * * * *')).toBe(2 * 24 * 365);
+      expect(runsPerYear('45 0-21/3 * * *')).toBe(8 * 365);
+      expect(runsPerYear('*/5 * * * *')).toBe(288 * 365);
+      expect(() => runsPerYear('61 * * * *')).toThrow('bad cron');
+      expect(() => runsPerYear('* * *')).toThrow('bad cron');
+    });
   });
 
   it('verify-prod.sh --dry-run lists the checks without touching the network', () => {
@@ -1269,6 +1379,31 @@ describe('DE-7 and LU-1 health, tier-1, coverage, interval, bytes and label offs
         detail: /not listed/,
       });
     }
+  });
+
+  it('interval NL-1 nl-1-hwlw (P20b): the daily spec has a 23 h floor, not its cadence less 5 s', () => {
+    const id = 'NL-1 nl-1-hwlw';
+    expect(INTERVAL_RULES[id]).toMatchObject({ source: 'NL-1', spec: 'nl-1-hwlw', minS: 82_800 });
+    // The floor is under the daily cadence by more than the day-to-day drift of its start (about 80 s).
+    expect(loadRegistry().specs.find((x) => x.id === 'nl-1-hwlw')?.cadence_s).toBe(86_400);
+    const at = (...entries: { spec: string; seconds: number }[]) =>
+      checkInterval(s(sourcesDoc({ sources: [nl1({ min_interval_s: entries })] })).data, id);
+    expect(at({ spec: 'nl-1-hwlw', seconds: 82_800 })).toMatchObject({ check: `interval ${id}`, ok: true });
+    expect(at({ spec: 'nl-1-hwlw', seconds: 86_330 }).ok).toBe(true);
+    expect(at({ spec: 'nl-1-hwlw', seconds: 82_799 })).toMatchObject({
+      ok: false,
+      detail: expect.stringMatching(
+        /is 82799 s, under 82800 s \(requested more often than once a day, or a retry of a failed daily run: read the capture log\)$/,
+      ),
+    });
+    expect(at()).toMatchObject({ ok: false, detail: 'no interval measured yet' });
+    // Another NL-1 spec's entry is not this one's.
+    expect(at({ spec: 'nl-1-obs-sea', seconds: 600 })).toMatchObject({ ok: false, detail: 'no interval measured yet' });
+    expect(checkInterval(s(sourcesDoc({ sources: [de1()] })).data, id)).toMatchObject({
+      ok: false,
+      detail: /not listed/,
+    });
+    expect(checkInterval(undefined, id)).toMatchObject({ check: `interval ${id}`, ok: false });
   });
 
   it('bytes DE-7: a day over 90 MB fails, the biggest of the days is named, the spec must be in capture.json', () => {
@@ -3193,6 +3328,150 @@ describe('NL-1 roadmap-2 checks (P16b)', () => {
   });
 });
 
+// P20b (issue #68): the roadmap 2 release checks that need no live data, so the CI deploy gate requires their PASS.
+
+describe('roadmap 2 release checks (P20b)', () => {
+  const scheduled = registry.specs.filter((x) => x.audience === 'public' && x.cadence_s !== null).map((x) => x.id);
+
+  it('status specs: capture.json lists every scheduled public spec, the roadmap 2 NL-1 specs among them', () => {
+    const { pub } = statusCycle();
+    expect(checkStatusSpecs(pub, registry)).toEqual({
+      check: 'status specs',
+      ok: true,
+      detail: `${scheduled.length} of the ${scheduled.length} scheduled public specs of the registry listed`,
+    });
+    for (const id of ['nl-1-obs-sea', 'nl-1-obs-wide', 'nl-1-obs-slow', 'nl-1-hwlw', 'nl-1-astro', 'nl-1-hwlw-astro'])
+      expect(scheduled, id).toContain(id);
+    const without = { ...pub, specs: pub.specs.filter((x) => x.spec !== 'nl-1-astro') };
+    expect(checkStatusSpecs(without, registry)).toMatchObject({
+      ok: false,
+      detail: `${scheduled.length - 1} of the ${scheduled.length} scheduled public specs of the registry listed; missing: nl-1-astro`,
+    });
+  });
+
+  it('status specs: a catch-up (no cadence) or an owner spec is not expected; an extra listed spec is only counted', () => {
+    const { pub } = statusCycle();
+    const base = registry.specs.find((x) => x.id === 'nl-1-obs-sea');
+    if (base === undefined) throw new Error('no nl-1-obs-sea');
+    const wider = {
+      ...registry,
+      specs: [
+        ...registry.specs,
+        { ...base, id: 'nl-1-obs-new-catchup', cadence_s: null },
+        { ...base, id: 'be-3-new', source: 'BE-3', audience: 'owner' as const },
+      ],
+    };
+    expect(registry.specs.some((x) => x.audience === 'public' && x.cadence_s === null)).toBe(true);
+    expect(checkStatusSpecs(pub, wider).ok).toBe(true);
+    const first = pub.specs[0];
+    if (first === undefined) throw new Error('no spec');
+    expect(checkStatusSpecs({ ...pub, specs: [...pub.specs, { ...first, spec: 'nl-1-newer' }] }, registry)).toEqual({
+      check: 'status specs',
+      ok: true,
+      detail: `${scheduled.length} of the ${scheduled.length} scheduled public specs of the registry listed, 1 more that the registry does not know`,
+    });
+  });
+
+  it('status specs: no document or no spec is a FAIL', () => {
+    const { pub } = statusCycle();
+    expect(checkStatusSpecs(undefined, registry)).toEqual({
+      check: 'status specs',
+      ok: false,
+      detail: 'no valid /status/capture.json',
+    });
+    expect(checkStatusSpecs({ ...pub, specs: [] }, registry)).toMatchObject({
+      ok: false,
+      detail: 'capture.json lists no spec',
+    });
+  });
+
+  it('the leak terms hold the 18 NL-1 off station ids, none of which matches inside a listed station id', () => {
+    const rows = readRegistry().stations;
+    const off = nl1OffIds(rows);
+    expect(off).toHaveLength(18);
+    expect(off).toContain('nl.rws.pannerden.regelwerk.boven');
+    for (const terms of [leakTerms(registry), staticLeakTerms(registry)])
+      expect(terms).toEqual(expect.arrayContaining(off));
+    // leaks() lets a `.` follow a term: no off id may be a dotted prefix of a station id the public files name.
+    const listed = [...new Set(rows.filter((r) => r.audience !== 'off').map((r) => r.id))];
+    expect(listed.filter((id) => off.some((o) => id === o || id.startsWith(`${o}.`)))).toEqual([]);
+    expect(leaks(JSON.stringify(listed), off)).toEqual([]);
+    // NL-1 only: another source's off rows (CH-1's numeric ids) and public rows are no term.
+    expect(
+      nl1OffIds([
+        { id: '2009', source: 'CH-1', audience: 'off' },
+        { id: 'nl.rws.a', source: 'NL-1', audience: 'public' },
+        { id: 'nl.rws.b', source: 'NL-1', audience: 'off' },
+      ]),
+    ).toEqual(['nl.rws.b']);
+    expect(leakTerms(registry, [])).not.toContain('nl.rws.pannerden.regelwerk.boven');
+    const body = (id: string) => JSON.stringify({ stations: [{ id }] });
+    expect(
+      checkOwnerLeak({ '/api/v1/stations': body('nl.rws.pannerden.regelwerk.boven') }, leakTerms(registry)),
+    ).toMatchObject({
+      ok: false,
+      detail: 'found in /api/v1/stations: nl.rws.pannerden.regelwerk.boven',
+    });
+    expect(checkOwnerLeak({ '/api/v1/stations': body('nl.rws.haghorst.sluis4.boven') }, leakTerms(registry)).ok).toBe(
+      true,
+    );
+  });
+
+  describe('method uncovered (D32)', () => {
+    const boards = uncoveredBoards(repoRoot).map((b) => b.board);
+    const terms = staticLeakTerms(registry);
+    const js = (body: string, status = 200): Page => ({ status, headers: {}, body });
+    // A built chunk holds the names as template literals, raw UTF-8 (the production build of 2026-10-23).
+    const chunk = (names: readonly string[] = boards) =>
+      js(`var e=[${names.map((n) => `{board:\`${n}\`}`).join(',')}];`);
+
+    it('the board names come from the registry, raw UTF-8; the chunk is named after the component file', () => {
+      expect(boards.length).toBeGreaterThan(0);
+      expect(boards).toEqual(expect.arrayContaining(['Wetterskip Fryslân', "Waterschap Hunze en Aa's"]));
+      expect(existsSync(join(repoRoot, 'apps/web/src/features/pages/parts/UncoveredBoards.tsx'))).toBe(true);
+    });
+
+    it('passes a chunk with every board name and no owner term', () => {
+      expect(checkMethodUncovered(chunk(), boards, terms)).toEqual({
+        check: 'method uncovered',
+        ok: true,
+        detail: `all ${boards.length} water boards of the registry, none of ${terms.length} owner terms`,
+      });
+    });
+
+    it('fails a missing board, no chunk, a failed fetch, a 404, an owner term and no board to look for', () => {
+      expect(checkMethodUncovered(chunk(boards.slice(1)), boards, terms)).toMatchObject({
+        ok: false,
+        detail: `1 of ${boards.length} boards missing: ${boards[0]}`,
+      });
+      expect(checkMethodUncovered(undefined, boards, terms)).toMatchObject({
+        ok: false,
+        detail: "the page's initial load names no UncoveredBoards chunk",
+      });
+      expect(checkMethodUncovered('timeout', boards, terms)).toMatchObject({ ok: false, detail: 'timeout' });
+      expect(checkMethodUncovered(js(chunk().body, 404), boards, terms)).toMatchObject({
+        ok: false,
+        detail: 'status 404',
+      });
+      for (const term of [OWNER_CANARY, 'BE-3', 'nl.rws.zwartsluis.gemaal.pomp1'])
+        expect(checkMethodUncovered(js(`${chunk().body}var o="${term}";`), boards, terms), term).toMatchObject({
+          ok: false,
+          detail: `owner term ${term}`,
+        });
+      expect(checkMethodUncovered(chunk(), [], terms)).toMatchObject({ ok: false, detail: 'no board to look for' });
+    });
+
+    it('finds the chunk in the files of the initial load (the preload list of the lazy Method page)', () => {
+      const main =
+        'const d=["assets/Method-CQXWUBSH.js","assets/UncoveredBoards-CbNoFs0v.js","assets/state-ouyCIIHo.js"]';
+      expect(uncoveredChunk(['import"./main-BhM-mrE6.js";', main])).toBe('/assets/UncoveredBoards-CbNoFs0v.js');
+      expect(uncoveredChunk(['import{a}from"./UncoveredBoards-x_1.js"'])).toBe('/assets/UncoveredBoards-x_1.js');
+      expect(uncoveredChunk(['"assets/MyUncoveredBoards-x.js"', 'no chunk'])).toBeUndefined();
+      expect(uncoveredChunk([])).toBeUndefined();
+    });
+  });
+});
+
 describe('owner isolation in the data API bodies', () => {
   const terms = leakTerms(registry);
   const bodies = (over: Record<string, string> = {}) => ({
@@ -3435,15 +3714,13 @@ describe('owner sources and owner stations (P5c)', () => {
     expect(CHECKS.find((c) => c.startsWith('owner stations:'))).toContain('be.spw. or lu.age-json.');
   });
 
-  it('ci.yml lets only `owner health` fail in the deploy job: `owner sources`, `owner stations` and `owner leak` must PASS', () => {
-    const ci = readFileSync(join(repoRoot, 'deploy/tests/e2e/verify-gate.sh'), 'utf8');
-    const list = /grep -vE '\^FAIL \(([^)]+)\) '/.exec(ci)?.[1]?.split('|');
-    expect(list).toBeDefined();
-    expect(list).toContain('owner health');
-    expect(list).not.toContain('owner sources');
-    expect(list).not.toContain('owner stations');
-    expect(list).not.toContain('owner leak');
-    for (const name of ['owner leak', 'owner sources', 'owner stations']) expect(ci).toContain(`need '^PASS ${name} '`);
+  it('the deploy gate lets only `owner health` fail: `owner sources`, `owner stations` and `owner leak` must PASS', () => {
+    const { live, required } = gateLists(readFileSync(join(repoRoot, 'deploy/tests/e2e/verify-gate.sh'), 'utf8'));
+    expect(live.has('owner health')).toBe(true);
+    for (const name of ['owner leak', 'owner sources', 'owner stations']) {
+      expect(live.has(name), name).toBe(false);
+      expect(required, name).toContain(name);
+    }
   });
 });
 
@@ -4316,15 +4593,32 @@ describe('verify-prod: the rivers (P6b)', () => {
       bytes,
       ...over,
     });
+    const terms = leakTerms(registry);
     const run = (head: Page | string = headPage(), meta: Page | string = metaPage()) =>
-      checkRiversLayers(mm, path, head, meta, expected, 'direct');
+      checkRiversLayers(mm, path, head, meta, expected, 'direct', terms);
     const gzJson = (doc: unknown) => gzipSync(Buffer.from(JSON.stringify(doc)));
 
-    it('reads the real fixture: offset 9329, length 3227, gzip, the four layers', () => {
+    it('reads the real fixture: offset 9329, length 3227, gzip, the four layers, no leak term', () => {
       expect(span).toEqual({ offset: 9329, length: 3227, compression: 2 });
-      expect(pmtilesLayerIds(metaBytes, 2)).toEqual(['canals', 'reach_bins', 'rivers', 'waterbodies']);
+      const md = pmtilesMetadata(metaBytes, 2);
+      if (typeof md === 'string') throw new Error(md);
+      expect(md.layers).toEqual(['canals', 'reach_bins', 'rivers', 'waterbodies']);
+      expect(JSON.parse(md.json)).toMatchObject({ vector_layers: expect.any(Array) });
       expect(RIVERS_LAYERS).toHaveLength(4);
-      expect(run()).toMatchObject({ check: 'rivers layers', ok: true });
+      expect(run()).toMatchObject({ check: 'rivers layers', ok: true, detail: expect.stringContaining('none of') });
+    });
+
+    it('P20b: an owner term or an NL-1 off station id in the metadata fails it', () => {
+      const md = pmtilesMetadata(metaBytes, 2);
+      if (typeof md === 'string') throw new Error(md);
+      const doc = JSON.parse(md.json) as Record<string, unknown>;
+      for (const term of [OWNER_CANARY, 'BE-3', 'nl.rws.pannerden.regelwerk.boven']) {
+        const r = run(headPage(), metaPage({}, gzJson({ ...doc, description: `from ${term}` })));
+        expect(r, term).toMatchObject({ ok: false, detail: `owner term ${term} in the metadata` });
+      }
+      expect(run(headPage(), metaPage({}, gzJson({ ...doc, description: 'the rivers of the Netherlands' }))).ok).toBe(
+        true,
+      );
     });
 
     it('refuses a bad magic, an oversize or empty length, offsets that do not fit and an unknown compression', () => {
@@ -4363,13 +4657,16 @@ describe('verify-prod: the rivers (P6b)', () => {
       const r = run(headPage(), metaPage({}, three));
       expect(r.ok).toBe(false);
       expect(r.detail).toContain('missing layers canals');
-      expect(pmtilesLayerIds(Buffer.from('plain'), 2)).toBe('metadata is not (gzipped) JSON of at most 8 MiB');
+      expect(pmtilesMetadata(Buffer.from('plain'), 2)).toBe('metadata is not (gzipped) JSON of at most 8 MiB');
       // SR-2: a small blob that expands past 8 MiB is refused, not inflated.
-      expect(pmtilesLayerIds(gzipSync(Buffer.alloc(9 * 1024 * 1024, 0x20)), 2)).toBe(
+      expect(pmtilesMetadata(gzipSync(Buffer.alloc(9 * 1024 * 1024, 0x20)), 2)).toBe(
         'metadata is not (gzipped) JSON of at most 8 MiB',
       );
-      expect(pmtilesLayerIds(gzJson({}), 2)).toBe('metadata has no vector_layers');
-      expect(pmtilesLayerIds(Buffer.from('{"vector_layers":[{"id":"canals"}]}'), 1)).toEqual(['canals']);
+      expect(pmtilesMetadata(gzJson({}), 2)).toBe('metadata has no vector_layers');
+      expect(pmtilesMetadata(Buffer.from('{"vector_layers":[{"id":"canals"}]}'), 1)).toEqual({
+        json: '{"vector_layers":[{"id":"canals"}]}',
+        layers: ['canals'],
+      });
     });
 
     it('refuses the wrong status, missing or extra headers, a wrong Content-Range and no answer', () => {
@@ -4937,7 +5234,7 @@ describe('verify-prod: the static publisher (P9a)', () => {
     });
   });
 
-  it('the --dry-run list names each check once, and every name ci.yml requires is one of them', () => {
+  it('the --dry-run list names each check once, and every static name the deploy gate requires is one of them', () => {
     const names = [
       'static meta',
       'static latest',
@@ -4962,12 +5259,8 @@ describe('verify-prod: the static publisher (P9a)', () => {
         CHECKS.filter((c) => c.startsWith(`${n}:`)),
         n,
       ).toHaveLength(1);
-    const ci = readFileSync(join(repoRoot, 'deploy/tests/e2e/verify-gate.sh'), 'utf8');
-    const required = /for check in ([^;]*?); do/s.exec(ci.slice(ci.indexOf("'api meta'") - 20))?.[1] ?? '';
-    for (const n of required
-      .match(/'([^']+)'/g)
-      ?.map((x) => x.slice(1, -1))
-      .filter((x) => x.startsWith('static') || x === 'runtime config' || x === 'api sweep') ?? [])
+    const { required } = gateLists(readFileSync(join(repoRoot, 'deploy/tests/e2e/verify-gate.sh'), 'utf8'));
+    for (const n of required.filter((x) => x.startsWith('static') || x === 'runtime config' || x === 'api sweep'))
       expect(names).toContain(n);
   });
 
@@ -5582,18 +5875,16 @@ describe('the launch profile (P12b)', () => {
 
   it('the deploy gate requires a PASS for the checks of the default profile, and de-2 credit as PASS or N/A', () => {
     const ci = read('deploy/tests/e2e/verify-gate.sh');
-    const required = /for check in ([^;]*?); do/s.exec(ci.slice(ci.indexOf("'api meta'") - 20))?.[1] ?? '';
-    const names = required.match(/'([^']+)'/g)?.map((x) => x.slice(1, -1)) ?? [];
+    const { live, required } = gateLists(ci);
     for (const n of ['robots', 'sitemap', 'legal pages', 'security.txt', 'og', 'cache-control', 'owner docs']) {
-      expect(names, n).toContain(n);
+      expect(required, n).toContain(n);
       expect(
         CHECKS.some((c) => c.startsWith(`${n} (P12b`)),
         n,
       ).toBe(true);
     }
     expect(ci).toContain("need '^(PASS|N/A) +de-2 credit '");
-    // none of them is in the allow-list of checks that may fail without live data
-    const allow = /grep -vE '\^FAIL \(([^)]*)\) '/.exec(ci)?.[1] ?? '';
+    // none of them is in the list of checks that may fail without live data
     for (const n of [
       'robots',
       'sitemap',
@@ -5604,7 +5895,7 @@ describe('the launch profile (P12b)', () => {
       'owner docs',
       'de-2 credit',
     ])
-      expect(allow.split('|'), n).not.toContain(n);
-    expect(allow.length).toBeGreaterThan(100);
+      expect(live.has(n), n).toBe(false);
+    expect(live.size).toBeGreaterThan(40);
   });
 });

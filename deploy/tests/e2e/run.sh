@@ -286,12 +286,14 @@ install -d -m 0755 -o 0 -g 0 /srv/rws/public/data /srv/rws/public/data/v1 /srv/r
 # P11a (issue #26): one river release installed as rws-rivers-refresh leaves it (root's, 0644, immutable names, then the
 # manifest), from the committed fixtures: the reaches file of the fixture graph and its tiles (tools/geo/fixtures,
 # test/reaches-fixture.test.ts), so the web has a graph to draw the upstream chain from and publish-owner a release
-# to split. The download file is a valid gzip of an empty collection (the manifest names one; nothing here reads it).
+# to split. The download file is a valid gzip of an empty collection with the OSM attribution and the ODbL licence
+# before "features" (P20b: verify-prod's rivers download reads that header and must PASS).
 rivers_ver=20261003
 rivers_dir=/srv/rws/public/data/v1/rivers
 install -m 0644 -o 0 -g 0 "$repo/test/fixtures/reaches-fixture.json" "$rivers_dir/reaches-$rivers_ver.json"
 install -m 0644 -o 0 -g 0 "$repo/tools/geo/fixtures/rivers-fixture.pmtiles" "$rivers_dir/rivers-$rivers_ver.pmtiles"
-printf '{"type":"FeatureCollection","features":[]}\n' | gzip -n >"/srv/rws/public/downloads/rivers-$rivers_ver.geojson.gz"
+printf '{"type":"FeatureCollection","attribution":"© OpenStreetMap contributors","licence":"ODbL-1.0","features":[]}\n' |
+  gzip -n >"/srv/rws/public/downloads/rivers-$rivers_ver.geojson.gz"
 chmod 0644 "/srv/rws/public/downloads/rivers-$rivers_ver.geojson.gz"
 jq -e --arg v "$rivers_ver" '.schema_version == 2 and .version == $v' "$rivers_dir/reaches-$rivers_ver.json" >/dev/null ||
   fail "test/fixtures/reaches-fixture.json is not version $rivers_ver"

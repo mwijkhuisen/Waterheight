@@ -9,7 +9,7 @@
 // would. The real archive of run.sh (every fixture of fixture-archive.ts) is loaded first: the drill's messages carry
 // their own identifiers (shiftAlertId), because the loader remembers which identifiers a Cancel closed.
 //
-//   scripts/flood-drill [--phase main|cancel|all] [--now <UTC instant>] [<raw dir>]     (the sh wrapper; run as root)
+//   scripts/flood-drill [--phase main|cancel|all|storm] [--now <UTC instant>] [<raw dir>]     (the sh wrapper; root)
 //
 // It refuses to run anywhere but the stack of deploy/tests/e2e/run.sh in drill mode: /ci/e2e-stack must exist and say
 // mode drill and the domain rivierstanden.example, RWS_E2E=1 must be set, and the wrapper hands in the domain of
@@ -25,10 +25,19 @@
 //          TEST message of 2026-02-02 (which must store nothing);
 //   CH-4   the storm-Ciaran run of station 2020 (the German layout), a test-only station of the drill registry;
 //   DE-3   the synthetic 14-day quantile file of Kaub (owner audience; DE-2 was this scene until its flip to public).
+//
+// The storm phase (P20a, issue #68; never part of `all`, deploy/tests/storm/run.sh asks for it on its own) is the
+// hand-built Den Helder storm surge of P18a (nl-1-storm-denhelder-*, synthetic): the measurements, the astronomical
+// tide and its high and low waters, one clock for the three. Its anchor is the measured high water of the storm,
+// 333 cm NAP at 2026-12-11T23:00Z (astro 83, surge +250), placed at the drill now; the measurements after it are cut
+// off, so the newest value is that high water (NL-4 Stormvloed, > 260 cm) and nothing is later than the fetch. The
+// tide keeps its next day (an astronomical tide is a prediction: the adapter takes it up to 401 days ahead) and starts
+// 19 hours before the anchor, inside the day before the fetch the adapter accepts.
 
 import { readFileSync } from 'node:fs';
 import type { ManifestLine } from '../apps/server/src/archive/manifest.ts';
 import { Archive } from '../apps/server/src/archive/writer.ts';
+import { loadRegistry } from '../apps/server/src/capture/specs.ts';
 import { writePayload } from './fixture-archive.ts';
 import {
   anchorCap,
@@ -42,6 +51,7 @@ import {
   shiftFr5,
   shiftLu5,
   shiftLu5Url,
+  shiftNl1,
   waybackMs,
 } from './lib/shift-sources.ts';
 
@@ -81,7 +91,7 @@ function load(source: string, name: string): { body: Buffer; meta: Meta } {
   };
 }
 
-export type Phase = 'main' | 'cancel';
+export type Phase = 'main' | 'cancel' | 'storm';
 export type Scene = {
   id: string;
   source: string;
@@ -219,6 +229,35 @@ export const SCENES: readonly Scene[] = [
   },
 ];
 
+/**
+ * The storm is one clock: the three payloads move by the offset of one instant (as the AGE story by its alert's), the
+ * high water of the fixtures' tide, T0 of their meta notes and the hwlw-astro high of 83 cm on local midnight. The
+ * measurement there is 333 cm (+250). Named, not searched: the measured 333 cm is also at 22:50Z (its astro rounds to
+ * 83 too), so "the highest measurement" is not one instant.
+ */
+export const STORM_ANCHOR = Date.parse('2026-12-11T23:00:00Z');
+const stormAnchor = () => STORM_ANCHOR;
+const storm = (kind: 'obs' | 'astro' | 'hwlw-astro', spec: string): Scene => ({
+  id: `nl-1-storm-denhelder-${kind}.synthetic`,
+  source: 'NL-1',
+  spec,
+  fixture: `nl-1-storm-denhelder-${kind}.synthetic`,
+  phase: 'storm',
+  variant: plain,
+  url: recordedUrl,
+  anchor: stormAnchor,
+  leadMs: 0,
+  // The cut is at the anchor of the recorded clock, so it does not depend on the offset.
+  shift: kind === 'obs' ? (body, d) => shiftNl1(body, d, STORM_ANCHOR) : (body, d) => shiftNl1(body, d),
+});
+
+/** The storm phase's scenes (not in SCENES: `all` is the flood drill's main and cancel phases). */
+export const STORM_SCENES: readonly Scene[] = [
+  storm('obs', 'nl-1-obs-sea'),
+  storm('astro', 'nl-1-astro'),
+  storm('hwlw-astro', 'nl-1-hwlw-astro'),
+];
+
 export type Planned = {
   scene: Scene;
   deltaMs: number;
@@ -233,7 +272,8 @@ export type Planned = {
 
 /** The payloads of one phase on the drill clock `now` (UTC ms), shifted but not yet written. */
 export function plan(now: number, phase: Phase | 'all' = 'all'): Planned[] {
-  return SCENES.filter((s) => phase === 'all' || s.phase === phase).map((scene) => {
+  const scenes = phase === 'storm' ? STORM_SCENES : SCENES.filter((s) => phase === 'all' || s.phase === phase);
+  return scenes.map((scene) => {
     const { body: recorded, meta } = load(scene.source, scene.fixture);
     // The derived fixture is checked against its own derivation by the drill's test.
     const body = scene.prepare === undefined ? recorded : scene.prepare(recorded);
@@ -262,16 +302,23 @@ export type WriteOptions = {
   fetchedAt?: number;
 };
 
-/** Writes the objects and the manifest lines through the recorder's own Archive. Returns the lines. */
+/**
+ * Writes the objects and the manifest lines through the recorder's own Archive, with the request method and the
+ * retention of each scene's capture spec (registry/capture.yaml: NL-1 asks by POST, its observations are `obs`, the
+ * tide and every flood spec `forever`). Returns the lines.
+ */
 export async function writeDrill(opts: WriteOptions): Promise<ManifestLine[]> {
   const fetchedAt = opts.fetchedAt ?? opts.now;
   if (fetchedAt < opts.now) throw new Error('flood-drill: lines cannot be fetched before the drill clock');
+  const specs = new Map(loadRegistry().specs.map((s) => [s.id, s]));
   const archive = new Archive(opts.rawDir);
   const lines: ManifestLine[] = [];
   for (const p of plan(opts.now, opts.phase ?? 'all')) {
     // Nothing a payload is about may be later than its fetch (invariant 4); the forecasts' valid times and an alert's
     // expiry are ahead of it by design and are not what the anchor names.
     if (p.placed > fetchedAt) throw new Error(`flood-drill: ${p.scene.id} would be dated after its fetch`);
+    const spec = specs.get(p.scene.spec);
+    if (spec === undefined) throw new Error(`flood-drill: ${p.scene.id}: no capture spec ${p.scene.spec}`);
     lines.push(
       await writePayload(archive, {
         source: p.scene.source,
@@ -280,14 +327,15 @@ export async function writeDrill(opts: WriteOptions): Promise<ManifestLine[]> {
         at: new Date(fetchedAt),
         body: p.body,
         url: p.url,
-        retention: 'forever',
+        method: spec.request.method,
+        retention: spec.retention,
       }),
     );
   }
   return lines;
 }
 
-const USAGE = 'usage: scripts/flood-drill [--phase main|cancel|all] [--now <UTC instant>] [<raw dir>]';
+const USAGE = 'usage: scripts/flood-drill [--phase main|cancel|all|storm] [--now <UTC instant>] [<raw dir>]';
 
 /** The command line: 0, 64 (usage) or 78 (refused). */
 export async function main(
@@ -308,7 +356,7 @@ export async function main(
     const a = argv[i] as string;
     if (a === '--phase') {
       const v = argv[++i];
-      if (v !== 'main' && v !== 'cancel' && v !== 'all') return usage();
+      if (v !== 'main' && v !== 'cancel' && v !== 'all' && v !== 'storm') return usage();
       phase = v;
     } else if (a === '--now') {
       const v = Date.parse(argv[++i] ?? '');
@@ -324,7 +372,7 @@ export async function main(
     console.error('flood-drill: --now is more than 2 hours from the clock');
     return 64;
   }
-  // The main phase is fetched at the drill now; the cancel phase, written minutes later, at the clock then.
+  // The main and storm phases are fetched at the drill now; the cancel phase, written minutes later, at the clock then.
   const lines = await writeDrill({ rawDir, now, phase, fetchedAt: phase === 'cancel' ? Math.max(now, real) : now });
   console.log(
     `flood-drill: ${lines.length} manifest lines (${lines.filter((l) => l.key !== null).length} payloads), phase ${phase}, drill clock ${new Date(now).toISOString()}`,

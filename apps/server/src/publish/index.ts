@@ -16,7 +16,7 @@ import { Output } from './write.ts';
 // rws_publish (pool 3), the owner one as rws_owner_api (pool 2, leaving 2 of its 4 for P9b's api-owner; §9 C20).
 
 export const CYCLE_MS = 60_000;
-const BUDGET_MS = 35_000;
+export const BUDGET_MS = 35_000;
 /** How long the classification's registry and reference rows are kept (as the api's). */
 const STATIC_TTL_MS = 60_000;
 const POOL: Record<ChannelAudience, number> = { public: 3, owner: 2 };

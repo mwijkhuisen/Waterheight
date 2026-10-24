@@ -29,16 +29,24 @@
 //                                                the pinned map assets, the rivers (P6b: the
 //                                                manifest, the overlay by Range, the reaches
 //                                                file, the ODbL download and its attribution
-//                                                in the page's script), and no
-//                                                owner source, spec, host, canary or
-//                                                private_basis in /status/* or any /api/v1
-//                                                body above
+//                                                in the page's script), the Method page's
+//                                                board chunk and the specs of capture.json
+//                                                (P20b), and no owner source, spec, host,
+//                                                canary, NL-1 off station or private_basis
+//                                                in /status/* or any /api/v1 body above
+//                                                (--dry-run ends with the roadmap 2 list:
+//                                                ROADMAP2_CHECKS)
 //   scripts/verify-prod.sh <domain> --soak       + the 72 h soak: >= 99% per source, the
 //                                                seed coverage, the byte baseline, the drill,
 //                                                every twin pair over 7 days (TWIN_IDS)
 //   scripts/verify-prod.sh <domain> --interval   + interval DE-6: 3 samples of capture.json 15 min apart (about 30 min)
-//   scripts/verify-prod.sh <domain> --capacity [--owner-bytes-per-day N] [--out FILE]
-//                                                docs/capacity.md from >= 2 complete days
+//   scripts/verify-prod.sh <domain> --capacity [--owner-bytes-per-day N] [--static-gb-year N] [--out FILE]
+//                                                the year-1 projection (>= 2 complete days) printed, or with --out written
+//                                                as the capacity block of docs/capacity.md (3 public GETs: capture.json,
+//                                                ops.json, /data/v1/status.json). The 2x-median alert rule needs >= 3
+//                                                complete days and says n/a below that. A committed --out run NEVER passes
+//                                                --owner-bytes-per-day: that aggregate is derived from owner rows
+//                                                (invariant 11), so it is for a local, uncommitted run only
 //   scripts/verify-prod.sh <domain> --profile prelaunch|launch   (P12b; default prelaunch, until the launch flip) what the
 //                                                public site is expected to be: prelaunch is noindex everywhere with no
 //                                                robots.txt or sitemap, launch has no noindex on the pages (it stays on /api,
@@ -65,7 +73,7 @@ import { connect as tlsConnect } from 'node:tls';
 import { gunzipSync, constants as zlibConstants, zstdDecompressSync } from 'node:zlib';
 import { parse as parseYaml } from 'yaml';
 import { ROUTES } from '../apps/server/src/api/channels.ts';
-import { loadRegistry, REGISTRY_DIR, type Registry, readSeed } from '../apps/server/src/capture/specs.ts';
+import { durationMs, loadRegistry, REGISTRY_DIR, type Registry, readSeed } from '../apps/server/src/capture/specs.ts';
 import { CaptureStatus } from '../apps/server/src/capture/status.ts';
 import { DATA_EPOCH } from '../apps/server/src/load/dirty.ts';
 import { readRegistry } from '../apps/server/src/load/registry-sync.ts';
@@ -119,7 +127,8 @@ import {
   type TilesManifest,
   TilesManifestError,
 } from '../packages/core/src/tiles-manifest.ts';
-import { keepEgressBlock } from './lib/capacity-egress.ts';
+import { uncoveredBoards } from './gen-web-method.ts';
+import { CAP_BEGIN, CAP_END, withSection } from './lib/capacity-egress.ts';
 import { checkEdge } from './lib/verify-edge.ts';
 import { checkOwnerListener, networkIo } from './lib/verify-owner-listener.ts';
 
@@ -149,8 +158,10 @@ export const DE7_INTERVAL_MIN_S = 895;
 export const DE7_BYTES_MAX = 90_000_000;
 /**
  * P16a: the three NL-1 observation specs by cadence (every 10, 30 and 60 minutes), each never more often than its
- * cadence less 5 s of jitter. The daily and monthly specs get no rule: `min_interval_s` is the gap over 24 h, which
- * never holds two of their runs (the `freshness` check covers them).
+ * cadence less 5 s of jitter. P20b: the daily `nl-1-hwlw` too, once its second run is in the 24 h window of
+ * `min_interval_s`, with a 23 h floor instead of the cadence less 5 s: its rows run one after another with a 179 s
+ * pause, so its start drifts by up to about 80 s from one day to the next. The monthly specs never show two runs in
+ * 24 h (`astro horizon` covers them).
  */
 const NL1_WHY = 'requested more often than its schedule';
 /** The interval rules by check name: the source, the spec, the least gap in seconds, and why. */
@@ -170,6 +181,13 @@ export const INTERVAL_RULES = {
   'NL-1 nl-1-obs-sea': { source: 'NL-1', spec: 'nl-1-obs-sea', minS: 595, why: NL1_WHY },
   'NL-1 nl-1-obs-wide': { source: 'NL-1', spec: 'nl-1-obs-wide', minS: 1795, why: NL1_WHY },
   'NL-1 nl-1-obs-slow': { source: 'NL-1', spec: 'nl-1-obs-slow', minS: 3595, why: NL1_WHY },
+  'NL-1 nl-1-hwlw': {
+    source: 'NL-1',
+    spec: 'nl-1-hwlw',
+    minS: 82_800,
+    // The scheduler retries a failed daily run's variants 1 h later and the loader counts every request.
+    why: 'requested more often than once a day, or a retry of a failed daily run: read the capture log',
+  },
 } as const;
 /**
  * The twin pairs of registry/twins.yaml (test/verify-prod.test.ts keeps the two lists equal): `--soak` asks for
@@ -208,8 +226,14 @@ export const SEED_MIN: Record<string, { days?: number; files?: number }> = {
   'lu-5-cap': { files: 833 },
   'lu-1-csv': { days: 4 },
 };
-/** A§11.4: the database, basemap and static estimates that no capture measurement replaces. */
-export const OTHER_GB = { database: 28, basemap: 9, static: 5 };
+/**
+ * A§11.4: the estimates that no capture measurement replaces. `rollups`: rollups and forecasts in the database (about
+ * 5 GB); `backfill`: the computed upper bound of the backfilled history (NL-1 12.35 GB and P14b 2.44 GB, not measured);
+ * `static`: the static-files line, replaced by the publisher bench figure through `--static-gb-year`.
+ */
+export const OTHER_GB = { rollups: 5, backfill: 14.8, basemap: 9, static: 5 };
+/** The measured cost of one observation row in the database (P14b, the kill -9 test; A§11.4). */
+export const DB_ROW_BYTES = 102.1;
 export const DISK_GB = 200;
 
 export type Result = { check: string; ok: boolean | 'n/a'; detail: string };
@@ -419,6 +443,26 @@ export function checkCapture(status: CaptureStatus, now: Date): Result[] {
   ];
 }
 
+/**
+ * P20b: capture.json lists every public spec the registry schedules (a cadence: the one-shot catch-ups have none and
+ * are not listed), the roadmap 2 NL-1 specs among them. The web /status page lists sources, not specs, so this is
+ * where a spec capture dropped shows. A listed spec the registry does not know is only counted: a newer image against
+ * an older checkout is no fault.
+ */
+export function checkStatusSpecs(status: CaptureStatus | undefined, registry: Registry): Result {
+  const check = 'status specs';
+  if (status === undefined) return miss(check, 'no valid /status/capture.json');
+  if (status.specs.length === 0) return miss(check, 'capture.json lists no spec');
+  const want = registry.specs.filter((s) => s.audience === 'public' && s.cadence_s !== null).map((s) => s.id);
+  const listed = new Set(status.specs.map((s) => s.spec));
+  const missing = want.filter((id) => !listed.has(id));
+  const extra = [...listed].filter((id) => !want.includes(id)).length;
+  const detail =
+    `${want.length - missing.length} of the ${want.length} scheduled public specs of the registry listed` +
+    (extra === 0 ? '' : `, ${extra} more that the registry does not know`);
+  return missing.length === 0 ? pass(check, detail) : miss(check, `${detail}; missing: ${missing.join(', ')}`);
+}
+
 /** The 72 h soak (issue #16): per source >= 99% ok, seed coverage, the byte baseline, the drill. */
 export function soak(status: CaptureStatus, ops: OpsStatus): { results: Result[]; report: string[] } {
   const results: Result[] = [];
@@ -471,76 +515,198 @@ export function soak(status: CaptureStatus, ops: OpsStatus): { results: Result[]
 }
 
 const GB = 1e9;
-/** Writes docs/capacity.md; the marked egress block of the file already there (P12a, capacity-egress.ts) is kept. */
+/**
+ * Writes the capacity projection into docs/capacity.md as its own marked block (P20a): the egress block, the
+ * narrative sections and the intro of the file already there stay byte for byte; a file without the block gets it
+ * appended.
+ */
 export function writeCapacity(file: string, markdown: string): void {
-  let existing: string | null = null;
+  let existing = '';
   try {
     existing = readFileSync(file, 'utf8');
   } catch {
     // no file yet
   }
-  writeFileSync(file, keepEgressBlock(existing, markdown));
+  const block = `${CAP_BEGIN}\n${markdown.trimEnd()}\n${CAP_END}`;
+  writeFileSync(file, existing === '' ? `${block}\n` : withSection(existing, block, CAP_BEGIN, CAP_END));
 }
-/** docs/capacity.md from >= 2 complete UTC days of days[] (issue #16 criterion; gap item 16). */
+
+/**
+ * Runs a year of a UTC cron (5 fields, or 6 with leading seconds, as registry/capture.yaml writes them): numbers, lists,
+ * ranges, steps and `*`. Day-of-month and day-of-week both restricted match either, like croner. Counted over the
+ * calendar year `year`; `scripts/` cannot import croner (a dependency of apps/server only), and the specs this is for
+ * (monthly and weekly) use nothing else.
+ */
+export function runsPerYear(cron: string, year = 2027): number {
+  const f = cron.trim().split(/\s+/);
+  if (f.length !== 5 && f.length !== 6) throw new Error(`bad cron ${cron}`);
+  const [sec, min, hour, dom, mon, dow] = (f.length === 5 ? ['0', ...f] : f) as [
+    string,
+    string,
+    string,
+    string,
+    string,
+    string,
+  ];
+  const values = (field: string, lo: number, hi: number): Set<number> => {
+    const out = new Set<number>();
+    for (const part of field.split(',')) {
+      const [range = '', step] = part.split('/');
+      const [x, y] = range.split('-');
+      const a = range === '*' ? lo : Number(x);
+      const b = range === '*' || (y === undefined && step !== undefined) ? hi : Number(y ?? x);
+      const st = step === undefined ? 1 : Number(step);
+      if (![a, b, st].every(Number.isInteger) || st < 1 || a < lo || b > hi || a > b)
+        throw new Error(`bad cron ${cron}`);
+      for (let v = a; v <= b; v += st) out.add(v);
+    }
+    return out;
+  };
+  const perDay = values(sec, 0, 59).size * values(min, 0, 59).size * values(hour, 0, 23).size;
+  const doms = values(dom, 1, 31);
+  const mons = values(mon, 1, 12);
+  const dows = new Set([...values(dow, 0, 7)].map((d) => d % 7));
+  let days = 0;
+  for (let t = Date.UTC(year, 0, 1); new Date(t).getUTCFullYear() === year; t += DAY_MS) {
+    const d = new Date(t);
+    const byDom = doms.has(d.getUTCDate());
+    const byDow = dows.has(d.getUTCDay());
+    const both = dom !== '*' && dow !== '*';
+    if (mons.has(d.getUTCMonth() + 1) && (both ? byDom || byDow : byDom && byDow)) days += 1;
+  }
+  return days * perDay;
+}
+
+const mean = (xs: readonly number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
+const median = (xs: readonly number[]): number => {
+  const s = [...xs].sort((a, b) => a - b);
+  const m = s.length >> 1;
+  return s.length === 0 ? 0 : s.length % 2 === 1 ? (s[m] as number) : ((s[m - 1] as number) + (s[m] as number)) / 2;
+};
+
+/** What `--capacity` reads besides capture.json (all optional: a missing reading is said so in the block, never invented). */
+export type CapacityInputs = {
+  /** The registry's station rows (audience and expected_step): the public series count and their samples a day. */
+  stations?: readonly { audience: string; expected_step: string }[];
+  /** `/data/v1/status.json` publisher.settledBytes: the bytes of settled/ and frames/ now. */
+  settledBytes?: number | null;
+  /** `/status/ops.json` disk_pct: how full /srv/rws is now. */
+  diskPct?: number | null;
+  /** `--static-gb-year`: the year-1 static files, from the publisher bench (W1); else the A§11.4 line. */
+  staticGbYear?: number | null;
+};
+
+/** docs/capacity.md's projection block from >= 2 complete UTC days of days[] (issue #16 criterion; gap item 16; P20a). */
 export function capacity(
   status: CaptureStatus,
   registry: Registry,
   today: string,
   ownerBytesPerDay: number | null,
+  inputs: CapacityInputs = {},
 ): { ok: boolean; markdown: string } {
   const complete = [...new Set(status.days.map((d) => d.date))].filter((d) => d < today).sort();
   if (complete.length < 2)
     return { ok: false, markdown: `only ${complete.length} complete UTC day(s) in days[]; need 2` };
-  const perSpec = new Map<string, number>();
+  // Bytes per spec and complete UTC day (days[] has one row per source and day; the partial day is left out).
+  const perDay = new Map<string, number[]>();
+  const dayTotal = complete.map(() => 0);
   for (const d of status.days) {
-    if (!complete.includes(d.date)) continue;
-    for (const [spec, bytes] of Object.entries(d.bytes)) perSpec.set(spec, (perSpec.get(spec) ?? 0) + bytes);
+    const i = complete.indexOf(d.date);
+    if (i < 0) continue;
+    for (const [spec, bytes] of Object.entries(d.bytes)) {
+      const row = perDay.get(spec) ?? complete.map(() => 0);
+      row[i] = (row[i] as number) + bytes;
+      perDay.set(spec, row);
+    }
   }
+  // With fewer than 3 complete days the median of a spec is the mean of two days, which no day can exceed twice: the 2x rule
+  // cannot fire, so its PASS would say nothing (review CR-6).
+  const enough = complete.length >= 3;
+  const needs3 = `n/a (needs ≥ 3 complete days; ${complete.length} available)`;
   const rows: string[] = [];
-  let disk = 0;
+  const warn: string[] = [];
+  const unmeasured: string[] = [];
+  let obsDisk = 0;
+  let foreverDisk = 0;
   let bucket = 0;
   for (const s of registry.specs.filter((x) => x.audience === 'public').sort((a, b) => a.id.localeCompare(b.id))) {
-    const daily = (perSpec.get(s.id) ?? 0) / complete.length;
-    const kept = s.retention === 'forever' ? 365 : 90;
-    disk += daily * kept;
-    bucket += daily * 365;
+    const days = perDay.get(s.id) ?? complete.map(() => 0);
+    days.forEach((b, i) => {
+      dayTotal[i] = (dayTotal[i] as number) + b;
+    });
+    const nonzero = days.filter((b) => b > 0);
+    // A spec that runs less than daily (monthly, weekly) or once (cron null: a catch-up) is never averaged over the
+    // window: its bytes are those of the day(s) it ran, times its runs a year.
+    const daily = s.cadence_s !== null && s.cadence_s <= 86_400;
+    const runs = s.cron === null ? 1 : runsPerYear(s.cron);
+    const perRun = nonzero.length === 0 ? null : s.cron === null ? nonzero.reduce((a, b) => a + b, 0) : mean(nonzero);
+    if (!daily && perRun === null) unmeasured.push(s.id);
+    const yearBytes = daily ? (days.reduce((a, b) => a + b, 0) / complete.length) * 365 : (perRun ?? 0) * runs;
+    const kept = s.retention === 'forever' ? 1 : s.cron === null ? 1 : 90 / 365;
+    if (s.retention === 'forever') foreverDisk += yearBytes * kept;
+    else obsDisk += yearBytes * kept;
+    bucket += yearBytes;
+    const med = median(days);
+    const bad = enough && daily && med > 0 && Math.max(...days) > 2 * med;
+    if (bad) warn.push(s.id);
     rows.push(
-      `| ${s.source} | ${s.id} | ${s.retention} | ${Math.round(daily)} | ${((daily * kept) / GB).toFixed(3)} |`,
+      `| ${s.source} | ${s.id} | ${s.retention} | ${daily ? 'daily or faster, mean of the days' : s.cron === null ? 'one-shot, once' : 'per run x runs a year'} | ${daily ? '–' : runs} | ${daily ? '–' : perRun === null ? 'not in the window' : Math.round(perRun)} | ${Math.round(yearBytes / 365)} | ${((yearBytes * kept) / GB).toFixed(3)} | ${daily && med > 0 ? (enough ? `${Math.round(2 * med)} ${bad ? 'WARN' : 'PASS'}` : needs3) : '–'} |`,
     );
   }
   if (ownerBytesPerDay !== null) {
-    disk += ownerBytesPerDay * 365;
+    foreverDisk += ownerBytesPerDay * 365;
     bucket += ownerBytesPerDay * 365;
     rows.push(
-      `| owner (aggregate) | – | forever (upper bound) | ${Math.round(ownerBytesPerDay)} | ${((ownerBytesPerDay * 365) / GB).toFixed(3)} |`,
+      `| owner (aggregate) | – | forever (upper bound) | aggregate | – | – | ${Math.round(ownerBytesPerDay)} | ${((ownerBytesPerDay * 365) / GB).toFixed(3)} | – |`,
     );
   }
-  const other = OTHER_GB.database + OTHER_GB.basemap + OTHER_GB.static;
-  const total = disk / GB + other;
+  const disk = obsDisk + foreverDisk;
+  // The database: no size or trend is published (ops.json has disk_pct only), so the observation rows are computed.
+  const series = (inputs.stations ?? []).filter((x) => x.audience === 'public');
+  const rowsPerDay = series.reduce((n, x) => n + 86_400_000 / durationMs(x.expected_step), 0);
+  const dbObs = (rowsPerDay * 365 * DB_ROW_BYTES) / GB;
+  const staticGb = inputs.staticGbYear ?? OTHER_GB.static;
+  const total = disk / GB + dbObs + OTHER_GB.rollups + OTHER_GB.backfill + staticGb + OTHER_GB.basemap;
+  const peak = Math.max(...dayTotal);
+  const gb = (n: number) => (n / GB).toFixed(1);
   const md = [
-    '# Capacity (year 1)',
+    '## Capacity projection (year 1; `scripts/verify-prod.sh --capacity`, P20a)',
     '',
-    `Measured from ${complete.length} complete UTC days of production capture (${complete[0]} to ${complete.at(-1)}), from the \`days[]\` block of \`/status/capture.json\`: zstd bytes stored after sha256 deduplication, per spec (\`scripts/verify-prod.sh --capacity\`, issue #16).`,
+    `Measured from ${complete.length} complete UTC days of production capture (${complete[0]} to ${complete.at(-1)}), from the \`days[]\` block of \`/status/capture.json\` (generated ${status.generated_at}): zstd bytes stored after sha256 deduplication, per spec (issue #16). The partial day is left out. A spec that runs less than daily (monthly, weekly) or once (a catch-up, \`cron: null\`) is not averaged over the window: its row is the bytes of the day it ran times its runs a year from its cron (a one-shot counts once, and its bytes are those of the window).${unmeasured.length === 0 ? '' : ` **Not in the window, so not measured and left out: ${unmeasured.map((x) => `\`${x}\``).join(', ')}.**`}`,
     ownerBytesPerDay === null
-      ? 'Owner-audience specs are not in the public status file and are **not included**; add them with `--owner-bytes-per-day` (docs/runbooks/owner-checks.md).'
+      ? 'Owner-audience specs are not in the public status file and are **not included**; add them with `--owner-bytes-per-day` (docs/runbooks/owner-checks.md), in a local run only: that aggregate is derived from owner rows and is never committed (invariant 11).'
       : 'Owner-audience specs are included as one aggregate from the owner status file, counted as kept forever (an upper bound).',
     '',
-    '## Per spec',
+    '### Per spec',
     '',
-    '| Source | Spec | Retention | Bytes/day | Year-1 raw on disk (GB) |',
-    '|---|---|---|---:|---:|',
+    '| Source | Spec | Retention | Basis | Runs a year | Bytes/run | Bytes/day | Year-1 raw on disk (GB) | A§7.3 alert at 2x the median (B/day) |',
+    '|---|---|---|---|---:|---:|---:|---:|---|',
     ...rows,
     '',
-    '## Year-1 projection',
+    '### Alert rules (A§7.3)',
     '',
-    '| Item | GB |',
-    '|---|---:|',
-    `| Raw archive on disk (obs: 90-day window; forever: 365 days) | ${(disk / GB).toFixed(1)} |`,
-    `| Database (A§11.4 estimate, replaced in P2) | ${OTHER_GB.database} |`,
-    `| Basemap, current and previous (A§11.4) | ${OTHER_GB.basemap} |`,
-    `| Static files, images, logs (A§11.4) | ${OTHER_GB.static} |`,
-    `| **Total on the ≥ ${DISK_GB} GB disk** | **${total.toFixed(1)}** (${((100 * total) / DISK_GB).toFixed(0)}%; the disk alert fires at 75%) |`,
-    `| Off-site bucket: every raw object for 12 months (restic keeps 12 monthly snapshots) | ${(bucket / GB).toFixed(1)} |`,
+    '| Rule | Result |',
+    '|---|---|',
+    `| No spec above 2x its measured median on a complete day | ${!enough ? needs3 : warn.length === 0 ? 'PASS' : `WARN: ${warn.map((x) => `\`${x}\``).join(', ')}`} |`,
+    `| The public total at most 1 GB a day (largest complete day: ${peak} B) | ${peak <= GB ? 'PASS' : 'WARN'} |`,
+    '',
+    '### Year-1 projection',
+    '',
+    '| Item | GB | Basis |',
+    '|---|---:|---|',
+    `| Raw archive, obs classes (90-day window at its steady state) | ${gb(obsDisk)} | measured |`,
+    `| Raw archive, forever classes (365 days) | ${gb(foreverDisk)} | measured |`,
+    `| Database, observations (${series.length} public series rows, ${Math.round(rowsPerDay)} samples a day, ${DB_ROW_BYTES} B a row, 365 days) | ${dbObs.toFixed(1)} | **computed** from the registry's expected steps: ops.json carries no database size, so no trend is measured; an upper bound, as not every row delivers. ${DB_ROW_BYTES} B a row was measured in P14b |`,
+    `| Database, rollups and forecasts | ${OTHER_GB.rollups} | A§11.4 estimate |`,
+    `| Database, backfill history (NL-1 12.35 and P14b 2.44) | ${OTHER_GB.backfill} | A§11.4, computed upper bound, not measured |`,
+    inputs.staticGbYear == null
+      ? `| Static files, images, logs | ${OTHER_GB.static} | A§11.4 line, **replace** by the publisher bench figure (\`--static-gb-year\`, \`scripts/bench-q1.ts\` publisher phase) |`
+      : `| Static files, images, logs | ${staticGb} | \`--static-gb-year\`, the publisher bench figure |`,
+    `| Basemap, current and previous (A§11.4) | ${OTHER_GB.basemap} | constant |`,
+    `| **Total on the ≥ ${DISK_GB} GB disk** | **${total.toFixed(1)}** | ${((100 * total) / DISK_GB).toFixed(0)}% of the disk; the disk alert fires at 75% (${(0.75 * DISK_GB).toFixed(0)} GB): ${total <= 0.75 * DISK_GB ? 'PASS' : 'WARN'} |`,
+    `| Off-site bucket need: every raw object for 12 months (restic keeps 12 monthly snapshots) | ${gb(bucket)} | against the bucket size **OWNER: A9** |`,
+    '',
+    `Measured now: ${inputs.settledBytes == null ? 'the bytes of settled/ and frames/ were not read' : `settled/ and frames/ hold ${(inputs.settledBytes / GB).toFixed(2)} GB (\`/data/v1/status.json\` publisher.settledBytes, a point reading, not a growth rate)`}; ${inputs.diskPct == null ? 'the disk use was not read' : `/srv/rws is ${inputs.diskPct}% full (\`/status/ops.json\` disk_pct)`}.`,
     '',
   ].join('\n');
   return { ok: true, markdown: md };
@@ -817,9 +983,23 @@ export function checkTwin(r: ApiRead<HealthSources>, now: Date, id = 'eijsden-gr
     : miss(check, problems.join('; '));
 }
 
-/** Every term that must not appear in a public body: owner sources, specs, hosts and both canaries in both renderings. */
-export function leakTerms(registry: Registry): string[] {
-  return [...new Set([...ownerTerms(registry), ...CANARY_RENDERINGS])].sort();
+/**
+ * P20b: the station ids of the NL-1 rows that are `audience: "off"` (the 18 structure-internal locations: lock
+ * chambers, sluice gates, pumps), which no public body may name. NL-1 only: CH-1's off rows have numeric ids that
+ * would match everywhere.
+ */
+export const nl1OffIds = (stations: readonly { id: string; source: string; audience: string }[]): string[] =>
+  [...new Set(stations.filter((st) => st.source === 'NL-1' && st.audience === 'off').map((st) => st.id))].sort();
+let registryOffIds: string[] | undefined;
+/** The registry's NL-1 off ids, read once per run (readRegistry takes about a second). */
+const offIdsOnce = () => (registryOffIds ??= nl1OffIds(readRegistry().stations));
+
+/**
+ * Every term that must not appear in a public body: owner sources, specs, hosts, both canaries in both renderings and
+ * (P20b) the NL-1 off station ids.
+ */
+export function leakTerms(registry: Registry, offIds: readonly string[] = offIdsOnce()): string[] {
+  return [...new Set([...ownerTerms(registry), ...CANARY_RENDERINGS, ...offIds])].sort();
 }
 
 /**
@@ -1204,15 +1384,15 @@ export function pmtilesMetadataSpan(
   return { offset: Number(offset), length: Number(length), compression };
 }
 
-/** The `vector_layers` ids of a PMTiles metadata blob (gunzipped when compression is 2). */
-export function pmtilesLayerIds(blob: Buffer, compression: number): string[] | string {
+/** A PMTiles metadata blob (gunzipped when compression is 2): its JSON text and its `vector_layers` ids. */
+export function pmtilesMetadata(blob: Buffer, compression: number): { json: string; layers: string[] } | string {
   try {
     // At most 8 MiB once gunzipped (review SR-2): a larger output throws and is reported below.
     const plain = compression === 2 ? gunzipSync(blob, { maxOutputLength: 8 * 1024 * 1024 }) : blob;
-    const json: unknown = JSON.parse(plain.toString('utf8'));
-    const layers = (json as { vector_layers?: unknown } | null)?.vector_layers;
+    const json = plain.toString('utf8');
+    const layers = (JSON.parse(json) as { vector_layers?: unknown } | null)?.vector_layers;
     if (!Array.isArray(layers)) return 'metadata has no vector_layers';
-    return layers.map((l) => String((l as { id?: unknown } | null)?.id));
+    return { json, layers: layers.map((l) => String((l as { id?: unknown } | null)?.id)) };
   } catch {
     return 'metadata is not (gzipped) JSON of at most 8 MiB';
   }
@@ -1220,7 +1400,8 @@ export function pmtilesLayerIds(blob: Buffer, compression: number): string[] | s
 
 /**
  * The tile file's layers (P19b): the 127-byte header says where the metadata is, the metadata lists the layers, and
- * both Range answers carry the site headers (`/tiles` stays noindex under the launch profile too).
+ * both Range answers carry the site headers (`/tiles` stays noindex under the launch profile too). P20b: the metadata
+ * JSON holds none of `terms` (the leak terms: the water-body layers are new; the tile blobs are not read).
  */
 export function checkRiversLayers(
   m: RiversManifest | undefined,
@@ -1229,6 +1410,7 @@ export function checkRiversLayers(
   meta: Page | string | undefined,
   expected: Readonly<Record<string, string>>,
   edge: Edge = 'direct',
+  terms: readonly string[] = [],
 ): Result {
   const check = 'rivers layers';
   if (m === undefined) return miss(check, 'no valid manifest');
@@ -1250,16 +1432,18 @@ export function checkRiversLayers(
     problems.push(`content-range ${show(meta.headers['content-range'])}, want ${range}`);
   if (meta.headers['content-encoding'] !== undefined)
     problems.push(`content-encoding ${show(meta.headers['content-encoding'])}`);
-  const ids = pmtilesLayerIds(meta.bytes ?? Buffer.from(meta.body, 'latin1'), span.compression);
-  if (typeof ids === 'string') problems.push(ids);
+  const md = pmtilesMetadata(meta.bytes ?? Buffer.from(meta.body, 'latin1'), span.compression);
+  if (typeof md === 'string') problems.push(md);
   else {
-    const absent = RIVERS_LAYERS.filter((l) => !ids.includes(l));
+    const absent = RIVERS_LAYERS.filter((l) => !md.layers.includes(l));
     if (absent.length > 0) problems.push(`missing layers ${absent.join(', ')}`);
+    const hits = leaks(md.json, terms);
+    if (hits.length > 0) problems.push(`owner term ${hits.join(', ')} in the metadata`);
   }
   return problems.length === 0
     ? pass(
         check,
-        `${path}: metadata ${span.length} bytes at ${span.offset}, layers ${RIVERS_LAYERS.join(', ')}, site headers on both 206s`,
+        `${path}: metadata ${span.length} bytes at ${span.offset}, layers ${RIVERS_LAYERS.join(', ')}, none of ${terms.length} owner terms in it, site headers on both 206s`,
       )
     : miss(check, problems.join('; '));
 }
@@ -1390,6 +1574,40 @@ export function checkRiversAttribution(script: Page | string | undefined, more: 
   return more.some((p) => p.status === 200 && p.body.includes('ODbL'))
     ? pass(check, "a chunk of the page's initial load names the ODbL")
     : miss(check, 'neither the entry script of the page nor its static imports name the ODbL');
+}
+
+/**
+ * The lazy chunk of the Method page's board list (D32): Vite names it after apps/web/src/features/pages/parts/
+ * UncoveredBoards.tsx, and the page's initial load names it (the preload list of the dynamic Method import).
+ */
+export const uncoveredChunk = (bodies: readonly string[]): string | undefined => {
+  const name = /(?<![\w-])UncoveredBoards-[\w-]+\.js/.exec(bodies.join('\n'))?.[0];
+  return name === undefined ? undefined : `/assets/${name}`;
+};
+
+/**
+ * P20b (D32): the Method page lists the Dutch water boards with no data on the map. The pages are SPA shells, so the
+ * names are in the lazy chunk (`uncoveredChunk`): 200, every board name of the registry (`boards`, raw UTF-8 as the
+ * bundle holds them) and none of `terms`.
+ */
+export function checkMethodUncovered(
+  chunk: Page | string | undefined,
+  boards: readonly string[],
+  terms: readonly string[],
+): Result {
+  const check = 'method uncovered';
+  if (chunk === undefined) return miss(check, "the page's initial load names no UncoveredBoards chunk");
+  if (typeof chunk === 'string') return miss(check, chunk);
+  if (chunk.status !== 200) return miss(check, `status ${chunk.status}`);
+  const problems: string[] = [];
+  if (boards.length === 0) problems.push('no board to look for');
+  const absent = boards.filter((b) => !chunk.body.includes(b));
+  if (absent.length > 0) problems.push(`${absent.length} of ${boards.length} boards missing: ${absent.join(', ')}`);
+  const hits = leaks(chunk.body, terms);
+  if (hits.length > 0) problems.push(`owner term ${hits.join(', ')}`);
+  return problems.length === 0
+    ? pass(check, `all ${boards.length} water boards of the registry, none of ${terms.length} owner terms`)
+    : miss(check, problems.join('; '));
 }
 
 // ---------------------------------------------------------------- data API (P4b)
@@ -2375,7 +2593,8 @@ export function grepPage(label: string, page: Page, enc: SweepEncoding, terms: r
   return out;
 }
 
-export type SweepAsk = { label: string; path: string; heavy: boolean };
+/** `strict` (P20b, a tide pick's raw series path): a 404 is a problem there too. */
+export type SweepAsk = { label: string; path: string; heavy: boolean; strict?: boolean };
 export type SweepIo = {
   get: (path: string, headers: Readonly<Record<string, string>>) => Promise<Page | string>;
   sleep: (ms: number) => Promise<void>;
@@ -2414,25 +2633,32 @@ const instantParam = (ms: number) => `${new Date(ms).toISOString().slice(0, 16)}
 
 /**
  * The requests of the api sweep, from the route table: every non-planned GET route of `ROUTES`, with the series ids
- * of `/api/v1/stations` (the first series of each source, at most SWEEP_MAX_SERIES) and the instants of the server's
- * own clock (`meta.now`): now, 6 hours and 3 days back, 6 hours ahead (a forecast-only snapshot), and a short raw span
- * of each series. A route this function does not know is `undefined` in its place, so a new route fails the check
- * until the sweep asks for it.
+ * of `/api/v1/stations` (the first series of each source, at most SWEEP_MAX_SERIES, then the `extra` ones) and the
+ * instants of the server's own clock (`meta.now`): now, 6 hours and 3 days back, 6 hours ahead (a forecast-only
+ * snapshot), and a short raw span of each series. A route this function does not know is `undefined` in its place, so
+ * a new route fails the check until the sweep asks for it.
  */
-export function sweepAsks(stations: Stations, serverNow: string): { asks: SweepAsk[]; unknown: string[] } | undefined {
+export function sweepAsks(
+  stations: Stations,
+  serverNow: string,
+  extra: readonly number[] = [],
+): { asks: SweepAsk[]; unknown: string[] } | undefined {
   const now = Date.parse(serverNow);
   if (Number.isNaN(now)) return undefined;
   const firstOf = new Map<string, number>();
   for (const st of stations.stations)
     for (const s of st.series) if (!firstOf.has(s.source)) firstOf.set(s.source, s.id);
-  const ids = [...firstOf.entries()]
+  const first = [...firstOf.entries()]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([, id]) => id)
     .slice(0, SWEEP_MAX_SERIES);
+  // P20b: and the `extra` series (tideSweepPicks: a roadmap 2 tidal and lake series; the tidal answers carry `tide`).
+  const ids = [...new Set([...first, ...extra])];
   const t = floorBucket(now);
   const asks: SweepAsk[] = [];
   const unknown: string[] = [];
-  const add = (path: string, heavy: boolean) => asks.push({ label: path, path, heavy });
+  const add = (path: string, heavy: boolean, strict = false) =>
+    asks.push({ label: path, path, heavy, ...(strict ? { strict } : {}) });
   for (const route of ROUTES) {
     if (route.planned || route.method !== 'GET') continue;
     switch (route.path) {
@@ -2452,6 +2678,7 @@ export function sweepAsks(stations: Stations, serverNow: string): { asks: SweepA
           add(
             `/api/v1/series/${id}?from=${instantParam(t - 3 * SWEEP_HOUR_MS)}&to=${instantParam(t)}&res=raw`,
             route.rate === 'heavy',
+            extra.includes(id),
           );
         break;
       case '/api/v1/series/:id/forecast':
@@ -2473,9 +2700,32 @@ export function sweepAsks(stations: Stations, serverNow: string): { asks: SweepA
   return { asks, unknown };
 }
 
-/** The statuses a sweep tolerates: 200, and the 404 an api-off series answers on the series routes. */
-const sweepStatusOk = (path: string, status: number) =>
-  status === 200 || (status === 404 && path.startsWith('/api/v1/series/'));
+export type TidePick = { set: string; station: string; series: number };
+/** The registry's tide sets by name (nl1TideSets: coast, lakes) and the picks of tideSweepPicks, for checkApiSweep. */
+export type TideSweep = { sets: Readonly<Record<string, readonly string[]>>; picks: readonly TidePick[] };
+
+/**
+ * P20b: of each set of station ids (nl1TideSets: the coast, the lakes) the first station /api/v1/stations lists with an
+ * H series, and that series. The api sweep asks for the series, the static checks for the station's recent.json.
+ */
+export function tideSweepPicks(stations: Stations, sets: TideSweep['sets']): TidePick[] {
+  const byId = new Map(stations.stations.map((st) => [st.id, st]));
+  return Object.entries(sets).flatMap(([set, ids]) => {
+    for (const id of ids) {
+      const h = byId.get(id)?.series.find((s) => s.quantity === 'H');
+      if (h !== undefined) return [{ set, station: id, series: h.id }];
+    }
+    return [];
+  });
+}
+
+/**
+ * The statuses a sweep tolerates: 200, and the 404 an api-off series answers on the series routes. Not on a tide
+ * pick's raw path (`strict`): /series/{id} answers 404 only for a series outside the api channel (unknown, inactive or
+ * api off), never for a listed NL-1 series without rows in the span (200, no points).
+ */
+const sweepStatusOk = (ask: SweepAsk, status: number) =>
+  status === 200 || (status === 404 && ask.strict !== true && ask.path.startsWith('/api/v1/series/'));
 
 export type SweepOutcome = { requests: number; problems: string[] };
 
@@ -2492,7 +2742,7 @@ export async function runApiSweep(
       out.requests += 1;
       if (typeof page === 'string') out.problems.push(`${ask.label} (${enc}): ${page}`);
       else {
-        if (!sweepStatusOk(ask.path, page.status)) out.problems.push(`${ask.label} (${enc}): status ${page.status}`);
+        if (!sweepStatusOk(ask, page.status)) out.problems.push(`${ask.label} (${enc}): status ${page.status}`);
         out.problems.push(...grepPage(ask.label, page, enc, terms));
       }
     }
@@ -2503,6 +2753,7 @@ export function checkApiSweep(
   asked: ReturnType<typeof sweepAsks> | undefined,
   outcome: SweepOutcome | undefined,
   nTerms: number,
+  tide: TideSweep,
 ): Result {
   const check = 'api sweep';
   if (asked === undefined || outcome === undefined)
@@ -2510,12 +2761,17 @@ export function checkApiSweep(
   const problems = [
     ...asked.unknown.map((p) => `no sweep for the route ${p}`),
     ...(asked.asks.length === 0 ? ['no request to make'] : []),
+    // P20b: a non-empty registry set with no pick means the tide path was never asked.
+    ...Object.entries(tide.sets)
+      .filter(([set, ids]) => ids.length > 0 && !tide.picks.some((p) => p.set === set))
+      .map(([set, ids]) => `no ${set} pick: none of the ${ids.length} NL-1 ${set} stations is listed with an H series`),
     ...outcome.problems,
   ];
+  const picks = tide.picks.map((p) => `${p.set} ${p.station} series ${p.series}`).join(', ');
   return problems.length === 0
     ? pass(
         check,
-        `${asked.asks.length} paths in ${SWEEP_ENCODINGS.join(', ')} (${outcome.requests} requests), none of ${nTerms} owner and canary terms in any decoded body`,
+        `${asked.asks.length} paths in ${SWEEP_ENCODINGS.join(', ')} (${outcome.requests} requests), none of ${nTerms} owner and canary terms in any decoded body; tide picks ${tide.picks.length}${picks === '' ? '' : ` (${picks})`}`,
       )
     : miss(check, problems.slice(0, 12).join('; ') + (problems.length > 12 ? `; ${problems.length - 12} more` : ''));
 }
@@ -3197,6 +3453,7 @@ export const CHECKS = [
   'status capture.json / ops.json: 200, Cache-Control: no-store, the exact contract fields',
   'freshness: every public spec succeeded within 3 × cadence_s',
   'owner_specs: fresh = total',
+  'status specs: /status/capture.json lists every public spec of registry/capture.yaml that has a cadence (P20b: the roadmap 2 NL-1 specs among them; the one-shot catch-ups have no cadence and are not listed); a missing spec is named, one the registry does not know only counted (a newer image); no document or no spec is a FAIL',
   'health: GET /api/v1/health is 200 JSON with Cache-Control max-age=30, the Health contract document, status not down',
   'health params: ?x=1 on /api/v1/health and /api/v1/health/sources is 400 {"error":"unknown_parameter","attribution":[]}; /api/v1/ and /api/v1/x are the api\'s 404 {"error":"not_found","attribution":[]}',
   'health DE-1: /api/v1/health/sources is the contract document and lists DE-1 with status ok',
@@ -3216,6 +3473,7 @@ export const CHECKS = [
   `interval NL-1 nl-1-obs-sea: the min_interval_s of nl-1-obs-sea is >= 595 s (every 10 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
   `interval NL-1 nl-1-obs-wide: the min_interval_s of nl-1-obs-wide is >= 1795 s (every 30 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
   `interval NL-1 nl-1-obs-slow: the min_interval_s of nl-1-obs-slow is >= 3595 s (every 60 minutes, less 5 s for the scheduling jitter of a fetch start); no entry yet is a FAIL`,
+  `interval NL-1 nl-1-hwlw: the min_interval_s of nl-1-hwlw is >= ${INTERVAL_RULES['NL-1 nl-1-hwlw'].minS} s (daily, P20b: a 23 h floor, not the cadence less 5 s, because its rows run one after another with a 179 s pause and its start drifts by up to about 80 s from one day to the next); a FAIL may be a retry of a failed daily run (the scheduler retries its failed variants 1 h later): read the capture log; no entry yet is a FAIL (the first one comes with the second daily run)`,
   `bytes DE-7: the days of /status/capture.json (today, partial, and the two before) each hold at most ${DE7_BYTES_MAX / 1e6} MB of zstd bytes stored for ${DE7_SPEC}; the spec missing from capture.json, or no bytes in any day, is a FAIL`,
   `owner sources: /api/v1/health/sources (the contract document, max-age=30) counts at least ${OWNER_SOURCES_MIN} owner sources (owner_sources.total, which the registry sync writes, captured or not) and lists no owner-audience source of registry/sources.yaml in sources[]; the detail holds counts only`,
   'owner health: /api/v1/health/sources has owner_sources.healthy = owner_sources.total (needs live owner capture; the detail holds counts only)',
@@ -3254,10 +3512,11 @@ export const CHECKS = [
   `map assets: GET ${MAP_ASSET_PATH} (a pinned glyph range of the web image) is 200 with Cache-Control exactly "${TILE_CACHE}"`,
   `rivers manifest: GET ${RIVERS_MANIFEST_PATH} is 200 with Cache-Control exactly "${MANIFEST_CACHE}" and a body the strict RiversManifest contract accepts`,
   `rivers tiles: GET /tiles/<the manifest's tiles file> with Range: ${TILE_HEADERS.range} is 206 with Content-Range bytes 0-15/<manifest bytes>, Cache-Control exactly "${TILE_CACHE}", no Content-Encoding and the PMTiles v3 magic first`,
-  `rivers layers: GET /tiles/<the manifest's tiles file> with Range: ${PMTILES_HEADER_RANGE} (the PMTiles v3 header), then the metadata it points to (at most ${PMTILES_METADATA_MAX} bytes, gunzipped): both 206 with the A§12.2 headers and X-Robots-Tag noindex, and vector_layers include ${RIVERS_LAYERS.join(', ')}`,
+  `rivers layers: GET /tiles/<the manifest's tiles file> with Range: ${PMTILES_HEADER_RANGE} (the PMTiles v3 header), then the metadata it points to (at most ${PMTILES_METADATA_MAX} bytes, gunzipped): both 206 with the A§12.2 headers and X-Robots-Tag noindex, vector_layers include ${RIVERS_LAYERS.join(', ')}, and (P20b) the metadata JSON holds no leak term of owner leak (the tile blobs are not read)`,
   `rivers reaches: GET /data/v1/rivers/<the manifest's reaches file> is 200 JSON with Cache-Control exactly "${TILE_CACHE}", the ReachesFile contract, checkReaches clean, the manifest's version, and every station of it a station of /api/v1/stations (the file's body is also in owner leak)`,
   `rivers download: HEAD /downloads/<the manifest's download file> is 200 application/gzip with no Content-Encoding, ${TILE_CACHE} and the manifest's length; a Range of ${RIVERS_DOWNLOAD_RANGE}, gunzipped (truncation tolerated), shows "attribution": "${OSM_ATTRIBUTION}" and "licence": "${ODBL_LICENCE}" before "features"`,
   'rivers attribution: the entry script that / references, or a chunk of its initial load (its static imports, two levels, at most 10 files), contains the string ODbL (the footer text, P6b)',
+  'method uncovered: the lazy chunk /assets/UncoveredBoards-<hash>.js that the initial load of / names (the files rivers attribution reads; the pages are SPA shells) is 200, holds the name of every water board of registry/uncovered.yaml (D32: the provider names scripts/gen-web-method.ts gives the Method page, raw UTF-8) and no owner source, spec, owner-only host, canary or NL-1 off station id (P20b)',
   `static meta: GET /data/v1/meta.json is 200 application/json with Cache-Control exactly "${STATIC_CACHE.live}", the StaticMeta contract, ${API_SOURCES.join(', ')} among the sources, and no owner term in the body`,
   `static latest: GET /data/v1/latest.json is 200 with "${STATIC_CACHE.live}", the LatestFile contract and the seriesHash of stations.json`,
   `static stations: GET /data/v1/stations.json is 200 with "${STATIC_CACHE.slow}" and the StaticStations contract`,
@@ -3266,16 +3525,16 @@ export const CHECKS = [
   `static settled: a sample of the newest settled day (version from meta.dayVersions, default 1) is 200 with "${STATIC_CACHE.immutable}" and the SnapshotFile contract; none yet (PASS) while version 0, before the display window or while the day is pending`,
   `static frames: frames/recent.json is 200 with "${STATIC_CACHE.slow}" and the FramesFile contract (v2), and the newest settled day's frames file (v1 or v2) with "${STATIC_CACHE.immutable}" (none yet for that part is a PASS)`,
   `static forecast: GET /data/v1/forecast/latest.json is 200 with "${STATIC_CACHE.slow}" and the StaticForecastLatest contract`,
-  `static series: the first station of stations.json has series/<id>/recent.json, 200 with "${STATIC_CACHE.slow}" and the StationRecent contract`,
+  `static series: the first station of stations.json has series/<id>/recent.json, 200 with "${STATIC_CACHE.slow}" and the StationRecent contract (P20b: the recent.json of the tidal and the lake station of the api sweep is fetched too, for owner leak)`,
   `static warnings: warnings/latest.geojson is 200 ${GEOJSON} with "${STATIC_CACHE.warnings}" and the WarningsFile contract; yesterday's dated file, when it exists, with "${STATIC_CACHE.immutable}"; warnings/today.json is 200 with "${STATIC_CACHE.live}", the contract and today's day`,
   `static status: GET /data/v1/status.json is 200 with "${STATIC_CACHE.status}", the public StatusFile contract (public sources, the two ownerSources counts) and no owner term`,
   'static precompressed: meta.json with Accept-Encoding zstd and with gzip: that Content-Encoding, Vary: Accept-Encoding and a decompressed body equal to the identity body',
   `static lag: health.loader.last_commit minus meta.latestFrom is at most ${STATIC_LAG_MAX_S} s (no loader commit yet is a PASS)`,
   `static rerender: status.publisher.lastDayRender.seconds is under ${RERENDER_MAX_S} s (C23; none rendered yet is a PASS)`,
   `runtime config: GET /runtime-config.json is 200 application/json, Cache-Control no-cache and JSON with exactly the keys ${RUNTIME_CONFIG_KEYS.join(', ')}: audience "public", contact an e-mail address, operator a non-empty text (at most 120 characters), cdn a text (at most 80; empty is no CDN), none of them holding { } # " \\ < > or a control character (the operator's name is personal data: a failure names the field, never its value; compose leaves RWS_OPERATOR_NAME empty until the owner sets it, and this FAILs until then)`,
-  `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body, the rivers manifest and the reaches file, and (P9a) every public /data/v1 file fetched by the static checks`,
+  `owner leak: no owner source ID, spec ID, host, canary (${CANARY_RENDERINGS.join(', ')}), NL-1 off station id (P20b: the structure-internal locations of registry/stations/nl-1.yaml) or private_basis key in any /status/* body or /api/v1/health, health/sources, meta, stations and snapshot body, the rivers manifest and the reaches file, and (P9a) every public /data/v1 file fetched by the static checks`,
   'owner ids: no owner-audience source ID of registry/sources.yaml as a whole word in a string value or object key of /api/v1/health or health/sources',
-  `api sweep: every non-planned GET route of the route table (meta, stations, snapshot at now, -6 h, -3 d and +6 h of /meta's now, series over a raw 3 h span and series forecast for the first series of each source, at most ${SWEEP_MAX_SERIES}, health, health/sources, openapi) fetched with Accept-Encoding ${SWEEP_ENCODINGS.join(', ')} (compressed bodies inflated): no owner or withheld canary rendering, nl.canary.owner, CANARY-OWNER, owner source ID, spec ID or owner-only host in any body, no 5xx; heavy routes at least ${SWEEP_PACE_MS} ms apart and one Retry-After honoured per 429 (all of a CI run's requests share one IP)`,
+  `api sweep: every non-planned GET route of the route table (meta, stations, snapshot at now, -6 h, -3 d and +6 h of /meta's now, series over a raw 3 h span and series forecast for the first series of each source, at most ${SWEEP_MAX_SERIES}, and (P20b) the first H series of the first listed NL-1 tier-1 tidal and lake station of the registry, named in the detail; a non-empty set with no listed pick, or a 404 on a pick's raw series path, is a FAIL; health, health/sources, openapi) fetched with Accept-Encoding ${SWEEP_ENCODINGS.join(', ')} (compressed bodies inflated): no owner or withheld canary rendering, nl.canary.owner, CANARY-OWNER, owner source ID, spec ID, owner-only host or NL-1 off station id in any body, no 5xx; heavy routes at least ${SWEEP_PACE_MS} ms apart and one Retry-After honoured per 429 (all of a CI run's requests share one IP)`,
   `settled sweep: ${SWEEP_SETTLED_SNAPSHOTS} settled snapshots and frames files of up to ${SWEEP_SETTLED_FRAMES} days sampled deterministically from meta.dayVersions (absent day = version 1, 0 = skipped), each in ${SWEEP_ENCODINGS.join(', ')} and grepped as the api sweep (a 404 is a file not rendered yet: static settled judges that); N/A while no settled day is complete or none of the files is served`,
   `interval DE-6: (--interval, slow: ${DE6_SAMPLES} samples of /status/capture.json ${DE6_GAP_MS / 60_000} min apart, about 30 min) ${DE6_SPECS.join(' and ')} have a last_success at most ${DE6_MAX_AGE_S} s before that sample's generated_at in every sample (a missing spec or null last_success is a FAIL) and it advanced; without the flag the check is N/A (skipped)`,
   '--soak: >= 99% ok per source (5xx and timeouts listed), seed coverage, byte baseline, drill 100/100',
@@ -3283,12 +3542,59 @@ export const CHECKS = [
     (id) =>
       `twin ${id}: (--soak) listed in /api/v1/health/sources (a pair with no check yet is a FAIL); latest check under ${TWIN_MAX_AGE_MS / 3_600_000} h old, ok, with aligned timestamps and a lag of 0; no failed check in 7 days; >= ${TWIN_MIN_CHECKS_7D} of the 168 hourly checks`,
   ),
-  '--capacity: bytes/day per spec over >= 2 complete days, the year-1 projection vs the disk and the bucket',
+  '--capacity: bytes/day per spec over >= 2 complete days (a spec that runs less than daily, or once, by its bytes a run x runs a year from its cron), the year-1 projection vs the disk (75% alert) and the bucket, the A§7.3 alert rules',
 ];
+
+/**
+ * P20b (issue #68): the roadmap 2 production checks. `live`: it needs live production data, so the CI deploy gate lets
+ * it FAIL (the `live` array of deploy/tests/e2e/verify-gate.sh, which gives each one's reason); otherwise it must PASS
+ * against the CI stack. `--dry-run` ends with this list; test/verify-gate.test.ts holds it and the gate equal.
+ */
+export const ROADMAP2_CHECKS: readonly { check: string; live: boolean }[] = [
+  ...[
+    'interval NL-1 nl-1-obs-sea',
+    'interval NL-1 nl-1-obs-wide',
+    'interval NL-1 nl-1-obs-slow',
+    'interval NL-1 nl-1-hwlw',
+    'fresh NL-1 coast',
+    'fresh NL-1 lakes',
+    'astro horizon',
+    'surge',
+    'catch-up NL-1',
+  ].map((check) => ({ check, live: true })),
+  // The water-body tiles, the capture specs, the new pages and the leak grep over the new files.
+  ...[
+    'rivers manifest',
+    'rivers tiles',
+    'rivers layers',
+    'rivers reaches',
+    'status specs',
+    'method uncovered',
+    'owner leak',
+  ].map((check) => ({ check, live: false })),
+];
+
+/**
+ * The lists of the deploy gate (deploy/tests/e2e/verify-gate.sh), for the tests that hold ROADMAP2_CHECKS and the gate
+ * equal: `live`, the checks that may FAIL in CI, each with the reason on its own line (undefined for the roadmap 1
+ * group, which shares one comment), and `required`, the checks that must PASS (`need '^PASS <name> '` and the
+ * `for check in` loop).
+ */
+export function gateLists(src: string): { live: Map<string, string | undefined>; required: string[] } {
+  const quoted = (s: string) => [...s.matchAll(/'([^']+)'/g)].map((m) => m[1] ?? '');
+  const live = new Map<string, string | undefined>();
+  for (const line of (/^live=\(\n([\s\S]*?)^\)$/m.exec(src)?.[1] ?? '').split('\n')) {
+    const hash = line.indexOf('#');
+    const reason = hash < 0 ? '' : line.slice(hash + 1).trim();
+    for (const name of quoted(hash < 0 ? line : line.slice(0, hash))) live.set(name, reason || undefined);
+  }
+  const needs = [...src.matchAll(/^need '\^PASS ([^'[\]\\]+) '$/gm)].map((m) => m[1] ?? '');
+  return { live, required: [...needs, ...quoted(/for check in ([^;]*?); do/s.exec(src)?.[1] ?? '')] };
+}
 
 function usage(): never {
   console.error(
-    'usage: scripts/verify-prod.sh <domain> [--profile prelaunch|launch] [--site | --soak | --capacity [--owner-bytes-per-day N] [--out FILE]] [--interval] [--edge direct|cloudflare] [--dry-run]',
+    'usage: scripts/verify-prod.sh <domain> [--profile prelaunch|launch] [--site | --soak | --capacity [--owner-bytes-per-day N] [--static-gb-year N] [--out FILE]] [--interval] [--edge direct|cloudflare] [--dry-run]  (--owner-bytes-per-day is derived from owner rows: never with a committed --out)',
   );
   process.exit(64);
 }
@@ -3305,6 +3611,7 @@ async function main(argv: string[]): Promise<number> {
   let interval = false;
   let out: string | undefined;
   let ownerBytes: number | null = null;
+  let staticGbYear: number | null = null;
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     const next = () => argv[++i] ?? usage();
@@ -3323,6 +3630,7 @@ async function main(argv: string[]): Promise<number> {
     else if (a === '--interval') interval = true;
     else if (a === '--out') out = next();
     else if (a === '--owner-bytes-per-day') ownerBytes = Number(next());
+    else if (a === '--static-gb-year') staticGbYear = Number(next());
     else if (a === '--resolve') net.resolve = next();
     else if (a === '--ca') net.ca = readFileSync(next());
     else if (a !== undefined && !a.startsWith('-') && domain === '') domain = a;
@@ -3330,11 +3638,14 @@ async function main(argv: string[]): Promise<number> {
   }
   if (dry) {
     for (const c of CHECKS) console.log(c);
+    console.log('roadmap 2 (P20b):');
+    for (const r of ROADMAP2_CHECKS) console.log(`${r.check}: ${r.live ? 'live data' : 'required PASS offline'}`);
     return 0;
   }
   if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)) usage();
   if (net.resolve !== undefined && isIP(net.resolve) === 0) usage();
   if (ownerBytes !== null && !(ownerBytes >= 0)) usage();
+  if (staticGbYear !== null && !(staticGbYear >= 0)) usage();
 
   const registry = loadRegistry();
   const now = new Date();
@@ -3388,6 +3699,7 @@ async function main(argv: string[]): Promise<number> {
       results.push(miss('http', (e as Error).message));
     }
     if (cap?.success) results.push(...checkCapture(cap.data, now), checkBytes(cap.data));
+    results.push(checkStatusSpecs(cap?.success ? cap.data : undefined, registry));
 
     // The P2a health API (A§9.2). Every request has a fixed path; a network error is a FAIL, never a crash.
     const api = (path: string) => tryGet(`https://${domain}${path}`, net);
@@ -3416,6 +3728,7 @@ async function main(argv: string[]): Promise<number> {
       checkInterval(sources.data, 'NL-1 nl-1-obs-sea'),
       checkInterval(sources.data, 'NL-1 nl-1-obs-wide'),
       checkInterval(sources.data, 'NL-1 nl-1-obs-slow'),
+      checkInterval(sources.data, 'NL-1 nl-1-hwlw'),
       checkOwnerSources(sources, ownerSourceIds(registry)),
       checkOwnerHealth(sources),
       checkOwnerIds(
@@ -3459,6 +3772,9 @@ async function main(argv: string[]): Promise<number> {
       checkBelgianSet(belgianIds(), stationsRead.data, snapReads.get('now')?.data, metaRead.data?.now),
     );
     const tide = nl1TideSets();
+    const tideSets = { coast: tide.coast, lakes: tide.lakes };
+    // P20b: a tidal and a lake station of the API, for the api sweep and the static grep below.
+    const tidePicks = stationsRead.data === undefined ? [] : tideSweepPicks(stationsRead.data, tideSets);
     const nowSnap = snapReads.get('now')?.data;
     results.push(
       checkFreshSet('fresh NL-1 coast', tide.coast, stationsRead.data, nowSnap, metaRead.data?.now),
@@ -3502,6 +3818,26 @@ async function main(argv: string[]): Promise<number> {
       stationsRead.data === undefined ? undefined : new Set(stationsRead.data.stations.map((st) => st.id));
     const entry = entryScript(pageBody(site['/']));
     const expected = expectedHeaders(readFileSync(join(root, 'docs/plan/ARCHITECTURE.md'), 'utf8'), profile);
+    // The entry's static imports and theirs (two levels, at most 10 files): the page's initial load. rivers attribution
+    // and (P20b) method uncovered read it.
+    const first = entry === undefined ? undefined : await tile(entry);
+    const more: Page[] = [];
+    if (entry !== undefined) {
+      const seen = new Set([entry]);
+      let next = typeof first === 'object' ? staticImports(first.body) : [];
+      for (let level = 0; level < 2; level++) {
+        const batch = next.filter((f) => !seen.has(f)).slice(0, 10 - seen.size + 1);
+        next = [];
+        for (const f of batch) {
+          seen.add(f);
+          const page = await tile(f);
+          if (typeof page === 'string') continue;
+          more.push(page);
+          next.push(...staticImports(page.body));
+        }
+      }
+    }
+    const boardsChunk = uncoveredChunk([first, ...more].map(pageBody));
     results.push(
       checkRiversManifest(rivers),
       checkRiversTiles(
@@ -3509,7 +3845,9 @@ async function main(argv: string[]): Promise<number> {
         cur === undefined ? undefined : await tile(`/tiles/${cur.tiles.file}`, TILE_HEADERS),
       ),
       await (async () => {
-        if (cur === undefined) return checkRiversLayers(rivers.manifest, '', undefined, undefined, expected, edge);
+        const terms = leakTerms(registry);
+        if (cur === undefined)
+          return checkRiversLayers(rivers.manifest, '', undefined, undefined, expected, edge, terms);
         const path = `/tiles/${cur.tiles.file}`;
         const enc = { 'accept-encoding': TILE_HEADERS['accept-encoding'] };
         const head = await tile(path, { ...enc, range: PMTILES_HEADER_RANGE });
@@ -3519,7 +3857,7 @@ async function main(argv: string[]): Promise<number> {
           typeof span === 'string'
             ? undefined
             : await tile(path, { ...enc, range: `bytes=${span.offset}-${span.offset + span.length - 1}` });
-        return checkRiversLayers(rivers.manifest, path, head, meta, expected, edge);
+        return checkRiversLayers(rivers.manifest, path, head, meta, expected, edge, terms);
       })(),
       checkRiversReaches(rivers.manifest, reachesPage, stationIds),
       checkRiversDownload(
@@ -3531,26 +3869,12 @@ async function main(argv: string[]): Promise<number> {
           ? undefined
           : await tile(downloadPath, { ...RIVERS_DOWNLOAD_HEADERS, range: RIVERS_DOWNLOAD_RANGE }),
       ),
-      await (async () => {
-        if (entry === undefined) return checkRiversAttribution(undefined);
-        const first = await tile(entry);
-        // The entry's static imports and theirs (two levels, at most 10 files): the page's initial load.
-        const more: Page[] = [];
-        const seen = new Set([entry]);
-        let next = typeof first === 'string' ? [] : staticImports(first.body);
-        for (let level = 0; level < 2; level++) {
-          const now = next.filter((f) => !seen.has(f)).slice(0, 10 - seen.size + 1);
-          next = [];
-          for (const f of now) {
-            seen.add(f);
-            const page = await tile(f);
-            if (typeof page === 'string') continue;
-            more.push(page);
-            next.push(...staticImports(page.body));
-          }
-        }
-        return checkRiversAttribution(first, more);
-      })(),
+      checkRiversAttribution(first, more),
+      checkMethodUncovered(
+        boardsChunk === undefined ? undefined : await tile(boardsChunk),
+        uncoveredBoards(root).map((b) => b.board),
+        staticLeakTerms(registry),
+      ),
     );
 
     // P9a: the static publisher's files through Caddy. The terms are checked per file (readStatic) and in their own
@@ -3600,6 +3924,8 @@ async function main(argv: string[]): Promise<number> {
             undefined,
             terms,
           );
+    // P20b: the roadmap 2 tidal and lake station too, for the owner-leak grep of every static page below.
+    for (const p of tidePicks) await fetchStatic(`series/${p.station}/recent.json`);
     const sforecast = readStatic(
       await fetchStatic('forecast/latest.json'),
       StaticForecastLatest,
@@ -3645,7 +3971,13 @@ async function main(argv: string[]): Promise<number> {
     const sweep = sweepTerms(registry);
     const apiNow = metaRead.data?.now;
     const asked =
-      apiNow === undefined || stationsRead.data === undefined ? undefined : sweepAsks(stationsRead.data, apiNow);
+      apiNow === undefined || stationsRead.data === undefined
+        ? undefined
+        : sweepAsks(
+            stationsRead.data,
+            apiNow,
+            tidePicks.map((p) => p.series),
+          );
     const sweepIo: SweepIo = {
       get: (path, headers) => tryGet(`https://${domain}${path}`, net, headers),
       sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
@@ -3658,7 +3990,7 @@ async function main(argv: string[]): Promise<number> {
         ? undefined
         : await runSettledSweep(sample, (path, enc) => st(`${D}${path}`, { 'accept-encoding': enc }), sweep);
     results.push(
-      checkApiSweep(asked, apiOutcome, sweep.length),
+      checkApiSweep(asked, apiOutcome, sweep.length, { sets: tideSets, picks: tidePicks }),
       checkSettledSweep(sample, settledOutcome, sweep.length),
     );
 
@@ -3724,7 +4056,15 @@ async function main(argv: string[]): Promise<number> {
     const twinSources = readApi(await tryGet(`https://${domain}${HEALTH_PATHS[1]}`, net), HealthSourcesAnswer);
     for (const id of TWIN_IDS) results.push(checkTwin(twinSources, now, id));
   } else if (cap?.success) {
-    const c = capacity(cap.data, registry, now.toISOString().slice(0, 10), ownerBytes);
+    // P20a: the measured settled bytes of the publisher (one more public GET); a read that fails is said in the block.
+    const st = await tryGet(`https://${domain}/data/v1/status.json`, net);
+    const stDoc = typeof st === 'object' && st.status === 200 ? StatusFile.safeParse(parseJson(st.body)) : undefined;
+    const c = capacity(cap.data, registry, now.toISOString().slice(0, 10), ownerBytes, {
+      stations: readRegistry().stations,
+      settledBytes: stDoc?.success ? stDoc.data.publisher.settledBytes : null,
+      diskPct: opsDoc?.success ? opsDoc.data.disk_pct : null,
+      staticGbYear,
+    });
     if (out !== undefined && c.ok) writeCapacity(out, c.markdown);
     else console.log(c.markdown);
     results.push(c.ok ? pass('capacity', out ?? 'printed') : miss('capacity', c.markdown));

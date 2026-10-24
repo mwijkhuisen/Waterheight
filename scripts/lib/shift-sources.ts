@@ -11,7 +11,9 @@
 //   CH-4   every ISO time of the Plotly figure (the traces' x, the layout's shapes, ticks and annotations), rendered in
 //          Europe/Berlin local time as BAFU labels them;
 //   DE-2   `initialized` and `timestamp` of each point (Europe/Berlin, as PEGELONLINE labels them);
-//   DE-3   the `dd.mm.yyyy 00:00` row labels (a fixed +01:00 all year) by whole days, and the header's issue date.
+//   DE-3   the `dd.mm.yyyy 00:00` row labels (a fixed +01:00 all year) by whole days, and the header's issue date;
+//   NL-1   the `Tijdstip` of each measurement of an `OphalenWaarnemingen` answer (ISO, the fixed +01:00 with milliseconds
+//          RWS writes all year: the offset and the digits stay), P20a's storm drill.
 
 import { isIsoOffset, isoMs, shiftCap, shiftEpoch, shiftIso, shiftStamp, shiftWall, wallMs } from './shift.ts';
 
@@ -225,4 +227,34 @@ export function shiftDe3(body: Uint8Array, deltaMs: number): Buffer {
       return l;
     });
   return Buffer.from(out.join('\n'), 'latin1');
+}
+
+// --- NL-1 ---------------------------------------------------------------------------------------------------------
+
+function nl1Lists(body: Uint8Array): { doc: Obj; lists: Obj[] } {
+  const doc = parse(body);
+  if (!isObj(doc) || !Array.isArray(doc.WaarnemingenLijst) || !doc.WaarnemingenLijst.every(isObj))
+    throw new Error('NL-1: not an OphalenWaarnemingen answer');
+  return { doc, lists: doc.WaarnemingenLijst as Obj[] };
+}
+
+const metingen = (list: Obj): Obj[] => (Array.isArray(list.MetingenLijst) ? list.MetingenLijst.filter(isObj) : []);
+
+/**
+ * Every measurement's `Tijdstip` moved by `deltaMs` (the stated offset and the millisecond digits stay). With `until`
+ * (UTC ms, of the recorded clock), the measurements later than that instant are dropped first, whatever the offset:
+ * an observation payload cut at its anchor ends there, so on the drill clock its newest value is the anchor's and none
+ * lies after the fetch. Everything else of the document stays as it is.
+ */
+export function shiftNl1(body: Uint8Array, deltaMs: number, until?: number): Buffer {
+  const { doc, lists } = nl1Lists(body);
+  for (const list of lists) {
+    if (!Array.isArray(list.MetingenLijst)) continue;
+    if (until !== undefined)
+      list.MetingenLijst = list.MetingenLijst.filter(
+        (m) => !(isObj(m) && typeof m.Tijdstip === 'string' && isoMs(m.Tijdstip) > until),
+      );
+    for (const m of metingen(list)) onString(m, 'Tijdstip', (s) => shiftIso(s, deltaMs));
+  }
+  return bytes(doc);
 }

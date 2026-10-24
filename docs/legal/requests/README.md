@@ -2,7 +2,7 @@
 
 ## Permission request e-mails
 
-Before sending: replace `<NAME>`, `<WEBSITE URL>`, `<CONTACT E-MAIL>`, `<version>`/`<versie>`, `<DATUM>` and (RWS) `<X-API-KEY>`; one e-mail per provider (C9 and C13 share one). The drafts assume **D1 = non-commercial** and **D22** (owner view for you alone). Every permission request asks explicitly whether (a) machine-readable redistribution through our public API and exports is allowed and (b) we may keep and republish a history archive (catalogue §0.2, §0.7); record each answer as audience and channel flags in `docs/permissions.md`. **C1 (HIC) and C2 (VMM)** ask for credentials for a personal, non-commercial, private viewer (public display only as an optional question). **C3 (SPW) and C4 (AGE) are optional** public-display requests. "We fetch nothing before your consent" holds only while the registry keeps BE-1, BE-2, DE-9, DE-10, DE-12 and the LfU RLP-origin AGE files `off`, as P0b sets them. C3, C4 and C13 say openly that we already fetch: SPW and AGE for the owner view under their personal-use terms, CH-2/4/5 under the BAFU conditions.
+Before sending: replace `<NAME>`, `<NAAM>`, `<WEBSITE URL>`, `<CONTACT E-MAIL>`, `<version>`/`<versie>`, `<DATUM>` and (RWS) `<X-API-KEY>`; one e-mail per provider (C9 and C13 share one). The drafts assume **D1 = non-commercial** and **D22** (owner view for you alone). Every permission request asks explicitly whether (a) machine-readable redistribution through our public API and exports is allowed and (b) we may keep and republish a history archive (catalogue §0.2, §0.7); record each answer as audience and channel flags in `docs/permissions.md`. **C1 (HIC) and C2 (VMM)** ask for credentials for a personal, non-commercial, private viewer (public display only as an optional question). **C3 (SPW) and C4 (AGE) are optional** public-display requests. "We fetch nothing before your consent" holds only while the registry keeps BE-1, BE-2, DE-9, DE-10, DE-12 and the LfU RLP-origin AGE files `off`, as P0b sets them. C3, C4 and C13 say openly that we already fetch: SPW and AGE for the owner view under their personal-use terms, CH-2/4/5 under the BAFU conditions.
 
 ## Drafts
 
@@ -22,6 +22,7 @@ Before sending: replace `<NAME>`, `<WEBSITE URL>`, `<CONTACT E-MAIL>`, `<version
 - [E1 · BfG Belegexemplar (at launch, by 12-03): German](e1-bfg-belegexemplar.md)
 - [E2 · Go-live notice (12-04): Dutch for RWS, German for ITZBund and BAFU](e2-go-live.md)
 - [C14 · Rijkswaterstaat: wider scope and request budget](c14-rws-roadmap-2.md)
+- [E7 · Rijkswaterstaat: the wider map is live: Dutch](e7-rws-roadmap-2-live.md)
 - [C15 · Het Waterschapshuis and the Unie van Waterschappen: a national route?](c15-umbrella.md)
 - [C16–C36 · Water boards: one template, filled in per board](c16-c36-water-boards.md)
 

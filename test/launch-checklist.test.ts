@@ -122,6 +122,43 @@ describe('table (c): owner sources', () => {
   });
 });
 
+describe('table (d): the new NL-1 specs (roadmap 2 release addendum, E6)', () => {
+  const rows = docTable('### (d) New NL-1 specs');
+  const nl1 = byId.get('NL-1');
+  const specs = (parse(read('registry/capture.yaml')) as { specs: { id: string; source: string }[] }).specs;
+  /** The NL-1 specs of roadmap 1; any other nl-1-* spec must be in table (d), so a new one forces an update. */
+  const ROADMAP1_NL1 = [
+    'nl-1-fc-1h',
+    'nl-1-fc-3h-0',
+    'nl-1-fc-3h-1',
+    'nl-1-fc-3h-2',
+    'nl-1-obs-key',
+    'nl-1-obs-other',
+    'nl-1-obs-twin',
+    'nl-1-catalogue',
+  ];
+
+  it('has a row per new NL-1 spec, with the source, audience, channels and licence of NL-1', () => {
+    expect(rows).toHaveLength(9);
+    for (const [spec, source, , , audience, channels, licence] of rows) {
+      const entry = specs.find((x) => x.id === spec);
+      expect([spec, entry?.source]).toEqual([spec, 'NL-1']);
+      expect([spec, source]).toEqual([spec, nl1?.id]);
+      expect([spec, audience]).toEqual([spec, nl1?.audience]);
+      expect([spec, channels]).toEqual([spec, nl1 ? flags(nl1) : undefined]);
+      expect([spec, licence]).toEqual([spec, nl1?.licence_kind]);
+    }
+    expect([nl1?.audience, nl1 ? flags(nl1) : '', nl1?.licence_kind]).toEqual(['public', 'DABH', 'cc0']);
+  });
+
+  it('covers every nl-1-* spec of the registry: roadmap 1 (ROADMAP1_NL1) or a row', () => {
+    const ids = specs.map((x) => x.id).filter((id) => id.startsWith('nl-1-'));
+    const listed = new Set([...ROADMAP1_NL1, ...rows.map((r) => r[0] ?? '')]);
+    expect(ids.filter((id) => !listed.has(id))).toEqual([]);
+    expect([...listed].filter((id) => !ids.includes(id))).toEqual([]);
+  });
+});
+
 describe('the registry state the C-fallbacks lead to (docs/permissions.md C13, C4, C5, C11 and C12)', () => {
   it('silence: CH-1 to CH-5 public with no record, DE-9/10/12/13 and BE-1/2 off, LU-1 withholding two gauges', () => {
     for (const id of ['CH-1', 'CH-2', 'CH-4', 'CH-5']) {
@@ -215,8 +252,9 @@ describe('docs/launch-checklist.md itself', () => {
     expect(doc).not.toMatch(/\[[xX]\]/);
   });
 
-  it('has the E1, E2, E3, E4 and E5 lines', () => {
-    for (const e of ['E1', 'E2', 'E3', 'E4', 'E5']) expect(doc, e).toMatch(new RegExp(`\\*\\*${e}\\*\\*|\\(${e}\\)`));
+  it('has the E1 to E7 lines', () => {
+    for (const e of ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7'])
+      expect(doc, e).toMatch(new RegExp(`\\*\\*${e}\\*\\*|\\(${e}\\)`));
   });
 
   it('links the tracker instead of repeating it', () => {

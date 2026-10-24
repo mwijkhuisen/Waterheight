@@ -286,6 +286,10 @@ jobs:
     env:
       # How long the k6 flood scenario runs: it must outlast the drill (deploy/tests/flood/run.sh).
       FLOOD_DURATION: 12m
+      # How long the k6 storm scenario runs (P20a): it should outlast the storm drill (deploy/tests/storm/run.sh), whose wait
+      # for the storm row is the distance to the next 10-minute boundary (0 to 10 min) plus a publisher cycle, then about
+      # 4 min of checks, Playwright and the degraded mode.
+      STORM_DURATION: 15m
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
@@ -336,6 +340,25 @@ jobs:
           wait "$k6pid" || k6_rc=$?
           echo "::group::k6 flood"; cat "$OUT/flood-k6.log"; echo "::endgroup::"
           echo "flood drill exit $drill_rc, k6 flood exit $k6_rc"
+          ((drill_rc == 0 && k6_rc == 0))
+      # The storm-surge drill (P20a): the k6 storm scenario (a static-only burst, no API thresholds) starts first and keeps
+      # running while the drill replays the Den Helder storm, waits for it in latest.json, checks the files and the UI,
+      # stops the api (degraded mode) and starts it again. Both must pass.
+      - name: Storm drill with the k6 storm scenario running at the same time
+        run: |
+          set -euo pipefail
+          assets="/assets/map/$(awk '$1 == "commit:" { print substr($2, 1, 7); exit }' registry/basemap.yaml)"
+          mkdir -p "$OUT"
+          sudo deploy/tests/loadtest/run-k6.sh "$RUNNER_TEMP/k6" "$OUT/storm" SCENARIO=storm "DURATION=$STORM_DURATION" "MAP_ASSETS=$assets" \
+            >"$OUT/storm-k6.log" 2>&1 &
+          k6pid=$!
+          sleep 30
+          drill_rc=0
+          sudo --preserve-env=PLAYWRIGHT_IMAGE deploy/tests/storm/run.sh || drill_rc=$?
+          k6_rc=0
+          wait "$k6pid" || k6_rc=$?
+          echo "::group::k6 storm"; cat "$OUT/storm-k6.log"; echo "::endgroup::"
+          echo "storm drill exit $drill_rc, k6 storm exit $k6_rc"
           ((drill_rc == 0 && k6_rc == 0))
       - name: No container OOM-killed or restarted
         run: sudo deploy/tests/loadtest/oom-restart.sh

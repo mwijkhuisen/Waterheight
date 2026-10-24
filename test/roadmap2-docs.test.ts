@@ -13,6 +13,7 @@ const permissions = read('docs/permissions.md');
 const providersYaml = read('registry/providers.yaml');
 const DRAFTS = [
   'docs/legal/requests/c14-rws-roadmap-2.md',
+  'docs/legal/requests/e7-rws-roadmap-2-live.md',
   'docs/legal/requests/c15-umbrella.md',
   'docs/legal/requests/c16-c36-water-boards.md',
 ];

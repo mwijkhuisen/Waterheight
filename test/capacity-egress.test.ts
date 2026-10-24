@@ -6,11 +6,12 @@ import {
   type Baseline,
   BEGIN,
   buildProfile,
+  CAP_BEGIN,
+  CAP_END,
   CLASSES,
   classify,
   compare,
   END,
-  keepEgressBlock,
   parseBaseline,
   renderSection,
   withSection,
@@ -128,24 +129,34 @@ describe('egress section', () => {
   });
 });
 
-describe('the capacity.md writer keeps the egress block', () => {
-  const block = `${BEGIN}\nkept\n${END}`;
-  it('carries the block over a regenerated document and appends it when the new text has no markers', () => {
-    expect(keepEgressBlock(`# old\n${block}\ntail`, '# new\n')).toBe(`# new\n\n${block}\n`);
-    expect(keepEgressBlock(`# old\n${block}`, `# new\n${BEGIN}fresh${END}\nz`)).toBe(`# new\n${block}\nz`);
-    expect(keepEgressBlock(null, '# new\n')).toBe('# new\n');
-    expect(keepEgressBlock('# old, no block', '# new\n')).toBe('# new\n');
+describe('the capacity.md writer owns its own block only', () => {
+  const block = `${BEGIN}\negress\n${END}`;
+  const cap = (body: string) => `${CAP_BEGIN}\n${body}\n${CAP_END}`;
+  it('withSection replaces the block between the given markers and leaves the rest byte for byte', () => {
     expect(withSection(`a\n${block}\nb`, `${BEGIN}x${END}`)).toBe(`a\n${BEGIN}x${END}\nb`);
+    expect(withSection(`a\n${block}\nb`, cap('p'), CAP_BEGIN, CAP_END)).toBe(`a\n${block}\nb\n\n${cap('p')}\n`);
+    expect(withSection(`a\n${cap('old')}\n${block}`, cap('new'), CAP_BEGIN, CAP_END)).toBe(
+      `a\n${cap('new')}\n${block}`,
+    );
   });
 
-  it('writeCapacity (verify-prod --capacity --out) rewrites the file but not the block', () => {
+  it('writeCapacity (verify-prod --capacity --out) writes its block and keeps every other part of the file', () => {
     const file = join(mkdtempSync(join(tmpdir(), 'cap-')), 'capacity.md');
-    writeCapacity(file, '# first\n');
-    expect(readFileSync(file, 'utf8')).toBe('# first\n');
-    writeFileSync(file, `# first\n\n${block}\n`);
-    writeCapacity(file, '# second\n');
-    expect(readFileSync(file, 'utf8')).toBe(`# second\n\n${block}\n`);
-    writeCapacity(file, '# third\n');
-    expect(readFileSync(file, 'utf8')).toBe(`# third\n\n${block}\n`);
+    writeCapacity(file, '## first\n');
+    expect(readFileSync(file, 'utf8')).toBe(`${cap('## first')}\n`);
+    const rest = `# Capacity\n\nintro\n\n${block}\n\n## Tunnel mode (#109)\n\ntext\n\n## RWS capture archive growth until P16b\n\n| a | b |\n`;
+    writeFileSync(file, rest.replace('intro\n', `intro\n\n${cap('stale')}\n`));
+    writeCapacity(file, '## second\n');
+    expect(readFileSync(file, 'utf8')).toBe(rest.replace('intro\n', `intro\n\n${cap('## second')}\n`));
+    writeCapacity(file, '## third\n');
+    expect(readFileSync(file, 'utf8')).toBe(rest.replace('intro\n', `intro\n\n${cap('## third')}\n`));
+  });
+
+  it('a file without the capacity block gets it appended after every section', () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'cap-')), 'capacity.md');
+    const rest = `# Capacity\n\n${block}\n\n## Tunnel mode (#109)\n\ntext\n`;
+    writeFileSync(file, rest);
+    writeCapacity(file, '## new\n');
+    expect(readFileSync(file, 'utf8')).toBe(`${rest}\n${cap('## new')}\n`);
   });
 });
