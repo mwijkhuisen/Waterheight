@@ -153,7 +153,7 @@ NL-1 is `public`, licence `cc0`, with all four channels (table (a)); every spec 
 - [ ] [agent-prod] `scripts/verify-prod.sh <domain> --edge cloudflare` passes every `ROADMAP2_CHECKS` entry (the `roadmap 2 (P20b):` block of `--dry-run`; `scripts/verify-prod.ts`). The live-data ones need production data: an interval after two days of runs, `astro horizon` after the first monthly run, `catch-up NL-1` after the catch-up; the CI gate (`deploy/tests/e2e/verify-gate.sh`) requires only the offline ones. [`tide`](runbooks/tide.md) §9 has the split.
 - [ ] [owner] A9 is done (the bucket and disk headroom of [`docs/capacity.md`](capacity.md)), and the k6 production burst ran in a quiet hour with its output attached to #68 (section 3).
 - [ ] [owner] **E7**: the notice to Rijkswaterstaat that the wider map is live is sent ([`e7-rws-roadmap-2-live`](legal/requests/e7-rws-roadmap-2-live.md)), after this section is signed; date: ____-__-__.
-- [ ] [owner] The open known gaps of the release (KG-472 to KG-475 and any other the PR lists) are accepted, or each is written below with its reason.
+- [ ] [owner] The open known gaps of the release (KG-473 to KG-476 and any other the PR lists) are accepted, or each is written below with its reason.
 
 Open boxes accepted: ______________________________________________
 
