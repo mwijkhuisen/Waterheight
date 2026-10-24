@@ -49,7 +49,10 @@ test('Den Helder on the storm day: the popup says the surge, derived; the panel 
   const facts = panel.getByRole('region', { name: nl('quantity_H') }).locator('dl');
   await expect(fact(facts, nl('panel_state'))).toContainText(nl('state_high'));
   await expect(fact(facts, nl('panel_basis'))).toContainText('Stormvloed (> 260cm)');
-  // The state mode's popup holds words only (no clock-dependent value or age).
-  await expect(popup).toHaveScreenshot('storm-drill-denhelder.png', { caret: 'hide' });
+  // The state mode's popup holds words only (no clock-dependent value or age). The pinned image rasterises its glyphs in
+  // two stable variants, 163 px apart on this 240×198 popup (loadtest runs 40077006750 and 40082425357: each run's
+  // actual is the other's expected, byte for byte), chosen by the runner, not the tree. The project's 0.002 (95 px here)
+  // is below that gap, so this one assertion allows 0.005 (about 238 px); the words themselves are asserted above.
+  await expect(popup).toHaveScreenshot('storm-drill-denhelder.png', { caret: 'hide', maxDiffPixelRatio: 0.005 });
   await expectClean(page, log);
 });

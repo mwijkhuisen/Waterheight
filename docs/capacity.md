@@ -90,17 +90,17 @@ Measured now: settled/ and frames/ hold 0.92 GB (`/data/v1/status.json` publishe
 
 Generated from `docs/capacity-egress.json` by `node scripts/lib/capacity-egress.ts`; edit the JSON and re-run it, not this block (`scripts/verify-prod.sh --capacity` keeps it).
 
-Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 5 timebar steps, 1 day of playback, a search for a lake gauge and a zoom onto the lake), measured by `apps/web/e2e/egress.spec.ts` as bytes on the wire (headers and body, compressed, as transferred), at 2026-10-10T20:14:11.902Z. Compose stack: the tiles are a Lobith fixture and the data a synthetic seed, so this is a regression guard, not a production forecast of the bytes.
+Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 5 timebar steps, 1 day of playback, a search for a lake gauge and a zoom onto the lake), measured by `apps/web/e2e/egress.spec.ts` as bytes on the wire (headers and body, compressed, as transferred), at 2026-10-23T18:16:49.420Z. Compose stack: the tiles are a Lobith fixture and the data a synthetic seed, so this is a regression guard, not a production forecast of the bytes.
 
 | Class | Requests | Bytes (MB) |
 |---|---:|---:|
-| tiles | 43 | 2.92 |
-| assets | 53 | 1.12 |
-| data | 14 | 0.43 |
-| api | 4 | 0.00 |
+| tiles | 31 | 1.61 |
+| assets | 66 | 1.12 |
+| data | 15 | 0.50 |
+| api | 6 | 0.01 |
 | html | 1 | 0.00 |
 | other | 1 | 0.00 |
-| **Session** | 116 | **4.47** |
+| **Session** | 120 | **3.24** |
 
 CI fails when the session total grows by more than 20% over the baseline; a class above 20% is reported (WARN), because the classes move with the time of day between runs (`EGRESS_UPDATE=1` rewrites the baseline; the change is reviewed like any other). A cold cache is the worst case: a returning visitor re-fetches no hashed asset. The session has no dwell time, while an open live view re-polls its data every 60 s, so the figures below are a lower bound for long visits (review CR-7).
 
@@ -120,8 +120,8 @@ CI fails when the session total grows by more than 20% over the baseline; a clas
 
 | Item | Value | Against the plan |
 |---|---:|---|
-| Flood-day peak egress | 397.6 Mbit/s | **OWNER: fill in `inputs` of `docs/capacity-egress.json` (A3)** |
-| Worst month | 3.62 TB (810,000 sessions) | **OWNER: fill in `inputs` of `docs/capacity-egress.json` (A3)** |
+| Flood-day peak egress | 288.2 Mbit/s | **OWNER: fill in `inputs` of `docs/capacity-egress.json` (A3)** |
+| Worst month | 2.63 TB (810,000 sessions) | **OWNER: fill in `inputs` of `docs/capacity-egress.json` (A3)** |
 
 Verdict: not decided until the owner fills in A3.
 
@@ -130,9 +130,11 @@ Verdict: not decided until the owner fills in A3.
 If the flood-day peak exceeds 50% of the uplink **or** the month exceeds 50% of the traffic quota, arm a CDN pull zone for `/tiles/*` and `/assets/*` only (static, licence-neutral) under the same hostname, following `docs/runbooks/cdn-break-glass.md`, and name the CDN on the privacy page before it goes live. **Never switch to OpenFreeMap or any other third-party tile host**: that adds third-party browser requests (invariant 7) and changes the CSP.
 <!-- egress:end -->
 
+The egress baseline was re-measured in P20a (CI run 40000647714, head 5a08d06, after the #209 merge, one page load): it fell from 4.47 MB (2026-10-10) to 3.24 MB, mostly because #205's calm opening view requests fewer tiles (43 to 31). The session now also searches for a lake gauge and zooms onto the lake; D29 changed no basemap.
+
 ## Publisher (P20a, issue #68)
 
-P20a gave the publisher budgets at 4,000 or more series, measured by the publisher phase of `scripts/bench-q1.ts` (`--series 4000 --days 60`, 23,044,000 rows) and asserted in the CI jobs `bench` (a hard gate at 3,000 series) and `bench-4000` (the correctness checks and B1 to B4 asserted; the Q1 median, the tide reads and the API-phase timing limits reported; owner decision Q5 and, after round 1 of the review, the Q1 median too, because CI measured 47.4 ms against 50):
+P20a gave the publisher budgets at 4,000 or more series, measured by the publisher phase of `scripts/bench-q1.ts` (`--series 4000 --days 60`, 23,332,000 rows: 100 tidal series of 8,641 rows and 3,900 others of 5,761) and asserted in the CI jobs `bench` (a hard gate at 3,000 series) and `bench-4000` (the correctness checks and B1 to B4 asserted; the Q1 median, the tide reads and the API-phase timing limits reported; owner decision Q5 and, after round 1 of the review, the Q1 median too, because CI measured 47.4 ms against 50):
 
 | Budget | Limit | Local clean run | CI run 39970900430 |
 |---|---|---:|---:|
@@ -141,7 +143,7 @@ P20a gave the publisher budgets at 4,000 or more series, measured by the publish
 | B3, the largest recent or settled snapshot file written, gzip | 150,000 B | recent 53,345, settled 55,388 B | recent 55,581, settled 55,494 B |
 | B4 (derived), one bucket's new values for every series published within one bucket period of 600 s, cycles counted at max(60 s, cycle) | 600 s | drain 300 s (5 cycles, steady cycle 35.1 s) | drain 360 s (6 cycles, steady cycle 35.2 s) |
 
-B4 was derived by the lead from `CYCLE_MS` and `BUCKET_MS`; the owner chose B1 to B3. The 60 s in B4's definition is `CYCLE_MS`, the publisher's cycle period (the storm drill checks it through `publisher.cycleSeconds`); B4 itself is the 600 s drain, and a steady bench cycle stops at the 35 s budget (`BUDGET_MS`), so the cycles are counted at max(60 s, cycle). Machines: the local run is the owner's WSL box (AMD Ryzen 7 5800X, 8 cores, 16 threads, 31.3 GiB, PostgreSQL 18.6, alone, 2026-10-23); the CI run is a GitHub ubuntu-24.04 runner (AMD EPYC 7763, 4 cores, 15.6 GiB, PostgreSQL 18.6, head b40d099). The table and the 23,044,000 rows are from the first seed; since round 1 of the review (CR-4) the tidal 5 % of the series are captured every 10 min, as NL-1 sea series are, so that every tidal value has a surge (23,620,000 rows). A local re-run on the same box after that change (2026-10-23, alone, `--report-timings`): Q1 median 40.2 ms, tide at T 19.1 ms, `/snapshot` cold p95 139.9 ms, `/series` 14 d raw p95 34.1 ms, B1 recent 229 and settled 226 ms, B2 85,797 B, B3 the largest of 307 recent and settled files 55,799 B, B4 drain 300 s (5 cycles), the `/snapshot` body 950,050 B with tide against 837,941 B without. The CI figures above are from before that change. The publisher's station files dominate a steady cycle (about 980 files a cycle at about 33 ms each locally). The A§11.4 static line is re-based on the measurement: 144 settled buckets a day of (392,001 plain + 55,388 gzip + 44,955 zstd) B, 365 days, is **25.9 GB a year at 4,000 series**, 5.18 times the 5 GB line of A§11.4 (and the 9 GB a year at 1,717 series of 2026-10-22); the plain files are about 80 % of the bytes. The projection terms are not on one footing: the database term counts every public series of the registry (all of them store observations), while the static term is the bench's, at 4,000 series, an upper bound for the 2,108 public series of today. The production block above uses 25.9 through `--static-gb-year 25.9` (total 74.7 GB, 37 % of the disk, still PASS). KG-463 to KG-472 record what stays open.
+B4 was derived by the lead from `CYCLE_MS` and `BUCKET_MS`; the owner chose B1 to B3. The 60 s in B4's definition is `CYCLE_MS`, the publisher's cycle period (the storm drill checks it through `publisher.cycleSeconds`); B4 itself is the 600 s drain, and a steady bench cycle stops at the 35 s budget (`BUDGET_MS`), so the cycles are counted at max(60 s, cycle). Machines: the local run is the owner's WSL box (AMD Ryzen 7 5800X, 8 cores, 16 threads, 31.3 GiB, PostgreSQL 18.6, alone, 2026-10-23); the CI run is a GitHub ubuntu-24.04 runner (AMD EPYC 7763, 4 cores, 15.6 GiB, PostgreSQL 18.6, head b40d099). The table and the 23,044,000 rows are from the first seed; since round 1 of the review (CR-4) the tidal series are captured every 10 min, as NL-1 sea series are, so that every tidal value has a surge. Until the mix was fixed at 100 tidal series (the P18a count; production has 70, and tidal gauges do not grow with the river series) the seed had 5 % tidal, 200 at 4,000 and 150 at 3,000 (23,620,000 rows at 4,000); the figures of the earlier runs are labelled with that mix. A local re-run on the same box after that change (2026-10-23, alone, `--report-timings`): Q1 median 40.2 ms, tide at T 19.1 ms, `/snapshot` cold p95 139.9 ms, `/series` 14 d raw p95 34.1 ms, B1 recent 229 and settled 226 ms, B2 85,797 B, B3 the largest of 307 recent and settled files 55,799 B, B4 drain 300 s (5 cycles), the `/snapshot` body 950,050 B with tide against 837,941 B without. The CI figures above are from before that change (the 5 % mix, first seed). Later CI runs on head 5a08d06 (5 % mix, 200 tidal series at 4,000): `bench-4000` (run 40000647775, EPYC 9V45, 4 cores) passed every timing limit: Q1 median 29.9 ms, tide median 15.1 ms, `/snapshot` cold p95 105.4 ms and warm 2.5 ms, `/series` p95 26.2 ms, B1 p95 177 (recent) and 184 ms (settled), B2 85,941 B, B3 max 56,009 B, B4 drain 240 s. The 3,000-series `bench` of the same run (EPYC 9V74, 150 tidal series) measured a tide median of 19.4 ms against the 20 ms limit, Q1 37.1 ms, `/snapshot` cold p95 132.2 ms and `/series` p95 37.6 ms; that is why the tidal count was set back to 100 at every series count (`Math.min(100, SERIES)`). The timings vary with the runner model (EPYC 7763 against 9V74 and 9V45). The publisher's station files dominate a steady cycle (about 980 files a cycle at about 33 ms each locally). The A§11.4 static line is re-based on the measurement: 144 settled buckets a day of (392,001 plain + 55,388 gzip + 44,955 zstd) B, 365 days, is **25.9 GB a year at 4,000 series**, 5.18 times the 5 GB line of A§11.4 (and the 9 GB a year at 1,717 series of 2026-10-22); the plain files are about 80 % of the bytes. The projection terms are not on one footing: the database term counts every public series of the registry (all of them store observations), while the static term is the bench's, at 4,000 series, an upper bound for the 2,108 public series of today. The production block above uses 25.9 through `--static-gb-year 25.9` (total 74.7 GB, 37 % of the disk, still PASS). KG-463 to KG-472 record what stays open.
 
 ## Tunnel mode (#109, ADR-0021)
 

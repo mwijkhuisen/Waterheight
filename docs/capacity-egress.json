@@ -1,24 +1,24 @@
 {
   "version": 1,
   "note": "Compose stack: the tiles are a Lobith fixture and the data a synthetic seed, so this is a regression guard, not a production forecast of the bytes.",
-  "measured_at": "2026-10-10T20:14:11.902Z",
+  "measured_at": "2026-10-23T18:16:49.420Z",
   "requests": {
-    "tiles": 43,
-    "assets": 53,
-    "data": 14,
-    "api": 4,
+    "tiles": 31,
+    "assets": 66,
+    "data": 15,
+    "api": 6,
     "html": 1,
     "other": 1
   },
   "bytes": {
-    "tiles": 2919868,
-    "assets": 1117153,
-    "data": 430659,
-    "api": 3020,
-    "html": 2290,
-    "other": 539
+    "tiles": 1612878,
+    "assets": 1120665,
+    "data": 496853,
+    "api": 8530,
+    "html": 2379,
+    "other": 538
   },
-  "total_bytes": 4473529,
+  "total_bytes": 3241843,
   "inputs": {
     "uplink_mbit_s": null,
     "quota_tb": null,
