@@ -16,7 +16,7 @@ import { createTestDb } from '../apps/server/test/db/testdb.ts';
 import { BUCKET_MS as BUCKET_STEP_MS, dayOf, isSettled } from '../packages/contracts/src/index.ts';
 
 // The Q1 benchmark of issue #17: "all series at T" on the synthetic seed of
-// 4,000 series × 60 days × 15 min (23 M rows; the tidal 5 % are captured every 10 min, as NL-1 sea series are; P20a, issue
+// 4,000 series × 60 days × 15 min (23.3 M rows; the 100 tidal series are captured every 10 min, as NL-1 sea series are; P20a, issue
 // #68: 3,000 until then, roughly twice the public series of roadmap 2) must run in < 50 ms. It runs exactly as production does: a real rws_api login (read-only, 2 s
 // statement timeout), through the public at-T function of audience.ts (A§8 Q1).
 //
@@ -31,7 +31,8 @@ import { BUCKET_MS as BUCKET_STEP_MS, dayOf, isSettled } from '../packages/contr
 // loader would write and no settled day pending, cycled until the new bucket and every station file are published. The budgets B1 to B4 are asserted below; a breach is a finding for the
 // owner and is reported, never tuned away.
 //
-// The seed mixes as production does: about 5 % of the series are tidal, and the fixed counts (NL-4 pairs, day-of-year
+// The seed has 100 tidal series at every series count (the P18a count, 1.4 times the 70 of production: tidal gauges do not grow
+// with the river series; owner decision Q5 keeps the 3,000-series gate as it was), and the fixed counts (NL-4 pairs, day-of-year
 // series, warning areas) grow with the series, from their values at 3,000.
 //
 //   DATABASE_URL=<superuser of a throw-away PostgreSQL 18> node scripts/bench-q1.ts [--series N] [--days N] [--report-timings]
@@ -87,7 +88,7 @@ function timingBreach(msg: string): boolean {
   reported++;
   return false;
 }
-const TIDAL = Math.round(SERIES * 0.05); // P18a: stations flagged tidal, staleness 1 h (the registry's); production has 4.9 %
+const TIDAL = Math.min(100, SERIES); // P18a: stations flagged tidal, staleness 1 h (the registry's); production has 70, so 100 is 1.4 times
 // The fixed counts of the 3,000-series seed, scaled with the series (rounded).
 const scaled = (n: number) => Math.round((n * SERIES) / 3000);
 const NL4_PAIRS = scaled(100);

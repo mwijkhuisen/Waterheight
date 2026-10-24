@@ -277,7 +277,7 @@ describe('the storm drill is wired the way the issue asks', () => {
     expect(run).toContain("jq -r '.canary[]'");
     expect(run).toContain('grep -qF -- "$rendering"');
     // SR-1: the wait is validated before it reaches bash arithmetic.
-    expect(run).toContain('[[ $wait_s =~ ^[0-9]+$ ]]');
+    expect(run).toContain('[[ $wait_s =~ ^[1-9][0-9]{0,5}$ ]]');
     expect(run).toContain('--project=chromium');
     expect(run).toContain('.publisher.cycleSeconds');
     expect(run).toContain('((maxcyc <= 60))');
