@@ -4,6 +4,12 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## #213 NL-1 placeholder values
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-462 | data | **An NL-1 forecast payload with a value `scale` refuses is still quarantined whole** (every location list in it), while observations drop such a value on its own instant (#213). No value is stored either way; one placeholder in one forecast list would set aside every run of that `nl-1-fc-*` payload. | Drop the point per instant as `out_of_range` in the forecast path (a run already tolerates holes from `gap`) | open |
+
 ## P19b panels, pages and "to the sea" (#67)
 
 What P19b leaves (`PHASES.md` §54 "P19b as built"; ids renumber on merge).

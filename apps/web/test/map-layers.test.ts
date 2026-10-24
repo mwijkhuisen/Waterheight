@@ -6,7 +6,15 @@ import { LAPSED_COLOUR, LAPSED_RADIUS, STATE_COLOUR } from '../src/features/lege
 import { hatchAreaIcon, hatchIcon, triangleIcon } from '../src/features/map/icons.ts';
 import { badgeLine, changeLine, surgeLine } from '../src/features/map/popup.ts';
 import { riverFilter, riverUrl, showRivers } from '../src/features/map/rivers.ts';
-import { hollow, layerPaints, stationFilter, stationPoints, TIER2_MINZOOM } from '../src/features/map/stationLayer.ts';
+import {
+  hollow,
+  layerPaints,
+  setSelectedStation,
+  showStations,
+  stationFilter,
+  stationPoints,
+  TIER2_MINZOOM,
+} from '../src/features/map/stationLayer.ts';
 import { warningLayers, warningsGeoJson } from '../src/features/map/warnings.ts';
 import { addWater } from '../src/features/map/waterLayer.ts';
 import type { WarningsAt } from '../src/lib/data/warnings.ts';
@@ -65,19 +73,41 @@ describe('stationPoints', () => {
 });
 
 describe('tier filter (#205)', () => {
-  const TIERED = [
-    'stations',
-    'stations-suspect',
-    'stations-owner',
-    'stations-trend-up',
-    'stations-trend-down',
-    'stations-surge-up',
-    'stations-surge-down',
-    'stations-tidal',
-    'stations-msl',
-  ];
+  // What showStations really adds to the stations source, on a map that records it (not a copy of the list).
+  function fakeStationsMap() {
+    const layers = new Map<string, { id: string; source?: string; minzoom?: number; filter?: unknown }>();
+    const filters: [string, unknown][] = [];
+    const map = {
+      getSource: () => undefined,
+      hasImage: () => false,
+      getLayer: (id: string) => layers.get(id),
+      addLayer: (spec: { id: string; source?: string }) => layers.set(spec.id, spec),
+      setFilter: (id: string, filter: unknown) => filters.push([id, filter]),
+    };
+    // Every other call (addImage, addSource) is a no-op.
+    const fake = new Proxy(map, { get: (t, k) => (k in t ? t[k as keyof typeof t] : () => undefined) });
+    showStations(fake as never, [], 'state', 'stuw', 'MSL');
+    return { fake: fake as never, layers, filters };
+  }
+  const { layers: added } = fakeStationsMap();
+  const stationLayers = [...added.values()].filter((l) => l.source === 'stations');
+  const TIERED = stationLayers.filter((l) => l.id !== 'stations-impounded').map((l) => l.id);
   const shows = (layer: string, zoom: number, props: Record<string, unknown>, selected?: string) =>
     evaluate(stationFilter(layer, selected), 'boolean', {}, zoom, { id: 'b', tidal: true, msl: true, ...props });
+  it('is on every station layer showStations adds, except the impounded word (it has its own minzoom 8)', () => {
+    expect(TIERED.length).toBeGreaterThanOrEqual(9);
+    for (const l of stationLayers)
+      if (l.id === 'stations-impounded') {
+        expect(l.minzoom).toBe(TIER2_MINZOOM);
+        expect(JSON.stringify(l.filter)).not.toContain('step');
+      } else expect(l.filter, l.id).toEqual(stationFilter(l.id));
+  });
+  it('puts the selection into exactly those layers', () => {
+    const { fake, filters } = fakeStationsMap();
+    setSelectedStation(fake, 'x');
+    expect(filters.map(([id]) => id).sort()).toEqual([...TIERED].sort());
+    for (const [id, filter] of filters) expect(filter, id).toEqual(stationFilter(id, 'x'));
+  });
   it('is a valid filter on every thinned layer', () => {
     const layers = TIERED.map((id) =>
       id === 'stations' || id === 'stations-suspect' || id === 'stations-owner'

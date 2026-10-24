@@ -54,9 +54,17 @@ const MAX_CANONICAL = 1e7;
  * as 22003 and be retried as `load_error`; P5a review SR-2): a payload that states one is broken.
  */
 export function scale(factor: number, value: number): number {
+  if (!scalable(factor, value)) throw new SchemaDrift('value_out_of_range');
+  return tidy(value * factor);
+}
+
+/**
+ * Whether `scale` takes the value: a finite product of at most MAX_CANONICAL in magnitude. An adapter whose provider
+ * puts a placeholder number in one instant drops that instant with it, instead of losing the whole payload (#213).
+ */
+export function scalable(factor: number, value: number): boolean {
   const v = value * factor;
-  if (!Number.isFinite(v) || Math.abs(v) > MAX_CANONICAL) throw new SchemaDrift('value_out_of_range');
-  return tidy(v);
+  return Number.isFinite(v) && Math.abs(v) <= MAX_CANONICAL;
 }
 
 export function toCanonical(unit: Unit, value: number): number {

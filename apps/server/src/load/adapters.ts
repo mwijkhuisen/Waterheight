@@ -493,9 +493,9 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
     },
   },
   // Observations and, since P8a, the `verwachting` runs (nl-1-fc-*), since P16b the tide; the catalogue is not a
-  // series payload.
+  // series payload. Version 2 (#213): an observation `scale` refuses is dropped on its instant, not quarantined.
   'NL-1': {
-    version: 1,
+    version: 2,
     specs: {
       'nl-1-fc-1h': nl1Forecasts,
       'nl-1-fc-3h-0': nl1Forecasts,
