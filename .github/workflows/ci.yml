@@ -202,7 +202,7 @@ jobs:
       - name: Q1 and the API (/snapshot cold/warm, /series 14 d raw) on 3,000 series × 60 days, as rws_api, and the publisher (budgets B1 to B4) (hard gate)
         run: node scripts/bench-q1.ts --series 3000
 
-  # Owner decisions 2026-10-23 ("gate 3,000, report 4,000", KG-462; after the round-1 review the Q1 median is reported too): the correctness checks and B1–B4 are asserted, the Q1, tide and API timing limits are reported.
+  # Owner decisions 2026-10-23 ("gate 3,000, report 4,000", KG-463; after the round-1 review the Q1 median is reported too): the correctness checks and B1–B4 are asserted, the Q1, tide and API timing limits are reported.
   bench-4000:
     name: bench-4000
     runs-on: ubuntu-24.04

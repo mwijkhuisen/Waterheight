@@ -10,6 +10,7 @@ import {
   type Registry,
   rangeBit,
   SchemaDrift,
+  scalable,
   scale,
   type TideLabelIn,
   type TideRowIn,
@@ -34,6 +35,12 @@ import type { Waarnemingen } from './parse.ts';
 //  - units: `cm` and `m3/s` (the registry's `m³/s`); factor from the registry;
 //  - gap: Kwaliteitswaardecode 99, served with the value 0.0. Dropped on the
 //    code alone, whatever the value;
+//  - a value `scale` refuses (over 1e7 in canonical units, or not finite) is
+//    dropped as `out_of_range` on its own instant, and the rest of the list
+//    loads: RWS served 99999904 with quality 00 for K14 on 2026-10-22, which
+//    used to quarantine every 6-hour window that held it (#213). Only the
+//    observations: a forecast payload with such a point is still quarantined
+//    whole, every list in it (KG-462);
 //  - quality codes 00, 10, 20, 25, 30 and 40 (the ones Waterinfo shows) are
 //    kept and set no bit: what 25 means is unverified (catalogue §2.1, C7), so
 //    no meaning is invented. Any other code withholds its value (counted, so the
@@ -204,7 +211,9 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
                 ? 'too_old'
                 : series.conflicts.has(ts)
                   ? 'conflict'
-                  : null;
+                  : !scalable(decl.to_canonical, m.Meetwaarde.Waarde_Numeriek)
+                    ? 'out_of_range'
+                    : null;
       if (dropped !== null) {
         count(out, dropped);
         continue;

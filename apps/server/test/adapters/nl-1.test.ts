@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { type Normalised, ObsRow, QC, SchemaDrift, scale } from '@rws/core';
+import { type Normalised, ObsRow, QC, SchemaDrift, scalable, scale } from '@rws/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { type Context, normalise, STALE_SERIES } from '../../src/adapters/nl-1/normalise.ts';
@@ -426,6 +426,25 @@ describe('rules', () => {
     expect(out.obs[0]).toMatchObject({ value: 600_000, qc: QC.RAW | QC.RANGE });
   });
 
+  it('a value scale() refuses is dropped on its own instant, and the rest of the list loads (#213)', () => {
+    // RWS served 99999904 with quality 00, Ongecontroleerd, for K14 (MSL) at 17:50-18:20Z on 2026-10-22: before, each
+    // 6-hour window that held one was quarantined whole as value_out_of_range.
+    const kept = normalise(eijsden, base).obs;
+    for (const huge of [99_999_904, 1e7 + 1, -1e8, Number.MAX_VALUE, Number.POSITIVE_INFINITY]) {
+      const out = normalise(
+        withFirst((m) => ({ ...m, Meetwaarde: { ...m.Meetwaarde, Waarde_Numeriek: huge } })),
+        base,
+      );
+      expect([huge, out.dropped, out.obs]).toEqual([huge, { out_of_range: 1 }, kept.slice(1)]);
+    }
+    // The bound itself is a value (stored with the range bit, as any implausible one).
+    const edge = normalise(
+      withFirst((m) => ({ ...m, Meetwaarde: { ...m.Meetwaarde, Waarde_Numeriek: 1e7 } })),
+      base,
+    );
+    expect([edge.dropped, edge.obs[0]]).toEqual([{}, expect.objectContaining({ value: 1e7, qc: QC.RAW | QC.RANGE })]);
+  });
+
   it('two statements of one instant: the same value is one row; different values are withheld, in any order', () => {
     const [list] = eijsden as [Waarnemingen];
     const first = list.metingen[0] as Waarnemingen['metingen'][number];
@@ -532,6 +551,9 @@ describe('property and fuzz tests', () => {
         fc.integer({ min: -500, max: 6000 }),
         fc.constant(0),
         fc.double({ min: -1e6, max: 1e6, noNaN: true }),
+        // #213: RWS's placeholder and other values scale() refuses (dropped per instant, never stored).
+        fc.constant(99_999_904),
+        fc.double({ min: 1e8, max: 1e12, noNaN: true }),
       ),
       quality: fc.constantFrom('00', '10', '20', '25', '30', '40', '99', '99', '50', '98'),
       status: fc.constantFrom('Ongecontroleerd', 'Gecontroleerd', 'Definitief'),
@@ -563,8 +585,11 @@ describe('property and fuzz tests', () => {
           expect(ms).toBeGreaterThanOrEqual(base.fetchedAt - 45 * 86_400_000);
           // Every stored row is a statement of the payload with a readable quality code, never a 99,
           // and no other value was stated for that instant.
-          const stated = all.filter((x) => x.ms === ms && known.has(x.quality));
+          const stated = all.filter(
+            (x) => x.ms === ms && known.has(x.quality) && scalable(1, x.meting.Meetwaarde.Waarde_Numeriek),
+          );
           expect([...new Set(stated.map((x) => scale(1, x.meting.Meetwaarde.Waarde_Numeriek)))]).toEqual([r.value]);
+          expect(Math.abs(r.value)).toBeLessThanOrEqual(1e7);
         }
         const times = out.obs.map((r) => r.ts);
         expect(times).toEqual([...new Set(times)].sort());

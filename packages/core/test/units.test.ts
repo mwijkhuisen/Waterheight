@@ -7,6 +7,7 @@ import {
   QC,
   rangeBit,
   SchemaDrift,
+  scalable,
   TO_NAP,
   thin,
   toCanonical,
@@ -16,6 +17,17 @@ import {
 } from '../src/index.ts';
 
 describe('units (catalogue §4.5)', () => {
+  it('scalable: the bound scale() keeps (#213)', () => {
+    expect(scalable(1, 1e7)).toBe(true);
+    expect(scalable(1, -1e7)).toBe(true);
+    expect(scalable(1, 1e7 + 1)).toBe(false);
+    expect(scalable(100, 1e6)).toBe(false);
+    expect(scalable(1, 99_999_904)).toBe(false);
+    expect(scalable(1, Number.NaN)).toBe(false);
+    expect(scalable(1, Number.POSITIVE_INFINITY)).toBe(false);
+    expect(scalable(100, 1.8e306)).toBe(false);
+  });
+
   it('a product beyond the double range is drift, never ±Infinity (P5a: 1.8e306 m ×100)', () => {
     expect(() => toCanonical('m', 1.8e306)).toThrow(SchemaDrift);
     expect(() => toCanonical('m', -1.8e306)).toThrow(SchemaDrift);
