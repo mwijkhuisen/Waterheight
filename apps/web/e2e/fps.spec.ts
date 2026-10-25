@@ -132,8 +132,12 @@ interface Run {
   all: Record<string, number>;
   flowTicks: number;
   pixelRatio: number;
-  /** O3: the main thread's busy share of the 10 s (mainBusy). */
+  /** O3: the main thread's busy share of the traced time (mainBusy). */
   busy: number;
+  /** O3: the station charts' `setOption` calls while measured: full (`notMerge`) redraws and merges (the marker). */
+  chartSets: { full: number; merge: number };
+  /** O3: the hours the URL's t moved while measured (playback progress; 0 when scrubbing ends where it began). */
+  hours: number;
 }
 
 /** Opens the map over the fixture rivers in a page, scrubs the timebar for 10 s under a trace, and counts the frames. */
@@ -195,16 +199,21 @@ async function measure(
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
   }
   const framesBefore = await flowFrames(page);
+  await countChartSets(page);
+  const tOf = () => Date.parse(new URL(page.url()).searchParams.get('t') ?? '');
   await slider(page).focus();
   // The map draws every frame while measured (MapLibre's `repaint`): Chromium presents a frame only when something
   // changed, so without it the count follows the key presses (about 26 a second here), not what the page can render.
   await setRepaint(page, true);
   await browser.startTracing(page, { path: tracePath, categories: CATEGORIES });
   const t0 = performance.now();
+  let tStart = Number.NaN;
   if (playing) {
     // P11b: hourly playback from 7 days back at the normal speed, the reach layers painting a new hour about 12 times a second.
     await page.getByRole('button', { name: msg('nl', 'play'), exact: true }).click();
-    await page.waitForTimeout(SCRUB_MS);
+    await page.waitForTimeout(500);
+    tStart = tOf();
+    await page.waitForTimeout(SCRUB_MS - 500);
   } else {
     // Back through the time range, and forth again: every key press changes t, so values and map states change.
     for (let key = 0; performance.now() - t0 < SCRUB_MS; key++) {
@@ -220,7 +229,16 @@ async function measure(
   // Flow stayed on the whole time, at no more than its cap.
   expect(flowTicks, 'flow ticks while scrubbing or playing').toBeGreaterThan(0);
   expect(flowTicks / elapsed, 'flow ticks a second').toBeLessThanOrEqual(25.5);
-  return { fps: frames / (SCRUB_MS / 1000), method, all, flowTicks, pixelRatio, busy: mainBusy(trace) };
+  return {
+    fps: frames / (SCRUB_MS / 1000),
+    method,
+    all,
+    flowTicks,
+    pixelRatio,
+    busy: mainBusy(trace),
+    chartSets: await page.evaluate(() => (window as unknown as SetsW).__o3Sets ?? { full: 0, merge: 0 }),
+    hours: Number.isFinite(tStart) ? (tOf() - tStart) / 3_600_000 : 0,
+  };
 }
 
 /** The threshold fails the test only with FPS_GATE=1; otherwise a shortfall is reported. */
@@ -235,6 +253,28 @@ const setRepaint = (page: Page, on: boolean) =>
     if (!map) throw new Error('no map');
     map.repaint = v;
   }, on);
+
+type SetsW = W & { __o3Sets?: { full: number; merge: number } };
+
+/**
+ * O3: counts the `setOption` calls of the open station charts from now on, full redraws apart (wrapping each ECharts
+ * instance of the e2e hook, so it counts the same on a build before O3).
+ */
+const countChartSets = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as unknown as SetsW;
+    const sets = { full: 0, merge: 0 };
+    w.__o3Sets = sets;
+    for (const chart of w.__rws?.charts ?? []) {
+      const c = chart as unknown as { setOption: (o: unknown, opts?: unknown, lazy?: unknown) => void };
+      const set = c.setOption.bind(c);
+      c.setOption = (o, opts, lazy) => {
+        if (opts === true || (opts as { notMerge?: boolean } | undefined)?.notMerge === true) sets.full++;
+        else sets.merge++;
+        set(o, opts, lazy);
+      };
+    }
+  });
 
 const flowFrames = (page: Page) =>
   page.evaluate(() => (window as unknown as W & { __rwsFlowFrames?: number }).__rwsFlowFrames ?? 0);
@@ -291,7 +331,7 @@ test('desktop: at least 30 frames a second while playing back with the reach lay
     contentType: 'application/json',
   });
   console.log(
-    `fps desktop playing: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks}; main busy ${(run.busy * 100).toFixed(1)} %)`,
+    `fps desktop playing: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks}; main busy ${(run.busy * 100).toFixed(1)} %; hours played ${run.hours})`,
   );
   gate(run.fps, DESKTOP_MIN_FPS, `desktop playing fps (${run.method}) ${JSON.stringify(run.all)}`);
 });
@@ -367,7 +407,7 @@ test('desktop: at least 30 frames a second while playing back with a station pan
     contentType: 'application/json',
   });
   console.log(
-    `fps desktop station: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks}; main busy ${(run.busy * 100).toFixed(1)} %)`,
+    `fps desktop station: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks}; main busy ${(run.busy * 100).toFixed(1)} %; chart setOption ${JSON.stringify(run.chartSets)}; hours played ${run.hours})`,
   );
   gate(run.fps, DESKTOP_MIN_FPS, `desktop station fps (${run.method}) ${JSON.stringify(run.all)}`);
 });
