@@ -251,10 +251,12 @@ export const nl4Stem = (label: string) => {
  * decides nothing.
  */
 function nl4Candidate(refs: readonly RefIn[], v: number, t: number, measure: Measure): Cand | null {
-  const md = monthDay(t);
+  // #212 (F3): the season day (a Temporal conversion) only once an NL-4 row is there; most series have none.
+  let md: number | undefined;
   const bands = new Map<string, { from?: number; to?: number; label: string; priority: number }>();
   for (const r of refs) {
     if (r.source !== 'NL-4' || (r.kind !== 'NL4_FROM' && r.kind !== 'NL4_TO')) continue;
+    md ??= monthDay(t);
     if (!inSeason(md, r.seasonFrom, r.seasonTo) || r.label === null) continue;
     const key = `${r.seasonFrom}/${r.seasonTo}/${r.priority}`;
     const band = bands.get(key) ?? { label: r.label, priority: r.priority };
