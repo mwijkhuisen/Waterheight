@@ -17,6 +17,8 @@ curl -s https://<domain>/api/v1/health | jq '.loader.last_commit'
 sudo docker compose -p rws logs --since 30m publish | tail -n 50    # fixed codes only, never provider text
 ```
 
+`status.json`'s `loader.lastCommit`, its source dates and its `classification` are the reads latest.json made at the start of the cycle (#218: one read a cycle; `lastCommit` then equals `meta.latestFrom`), while its `sources[]`, twins and loader backlog are read when it is written, at the end of the cycle. Under live loads the two can lie up to one cycle apart, longer in a cycle that renders a settled day (`lastDayRender.seconds`); KG-478. Compare `health.loader.last_commit`, not `status.json`, with `meta.latestFrom`.
+
 | You see | Meaning | Do |
 |---|---|---|
 | `publisher.cycleAt` and `meta.generatedAt` older than about 10 minutes | The publisher does not finish cycles (stopped, crashed, or a step fails: the log names the step code) | `sudo docker compose -p rws ps publish`; restart it (`up -d publish`); a repeating code is a bug: keep the log |

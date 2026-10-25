@@ -72,12 +72,15 @@ import type { Output } from './write.ts';
 /** The dirty kinds that change recent frames: their values (obs) and their states (#112). */
 const FRAMES_KINDS: ReadonlySet<string> = new Set(['obs', 'reference', 'class', 'warning']);
 
-/** What a renderer gets: the family's read-only connection, the cycle's clock and the boot-time tables. */
+/**
+ * What a renderer gets: the family's read-only connection, the cycle's clock and the boot-time tables. One per cycle,
+ * never changed: the reads the renderers share are kept on it for that cycle (render/series.ts `once`, #218).
+ */
 export type RenderCtx = {
-  db: Kysely<DB>;
-  family: ChannelAudience;
+  readonly db: Kysely<DB>;
+  readonly family: ChannelAudience;
   /** The cycle's clock (ms); a renderer never reads its own. */
-  now: number;
+  readonly now: number;
   window: Window;
   build: string;
   sections: ReadonlyMap<string, string>;
@@ -460,7 +463,8 @@ export class Publisher {
     const parsed = validated(CONTRACTS[c.family][kind], body);
     const text = JSON.stringify(parsed);
     if (NEVER[c.family].some((s) => text.includes(s))) throw coded('canary_in_output');
-    await this.#d.out.put(rel, parsed, remember);
+    // The very text the canary scan saw is what is written (#218: one stringify a file).
+    await this.#d.out.put(rel, text, remember);
     return parsed;
   }
 

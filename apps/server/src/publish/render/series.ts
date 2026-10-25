@@ -3,8 +3,9 @@ import { MAX_POINTS, pickRun } from '@rws/contracts';
 import { type Kysely, sql } from 'kysely';
 import { valueSources } from '../../api/answer.ts';
 import { readForecastLatest } from '../../api/forecast-latest.ts';
+import { lastCommit } from '../../api/health.ts';
 import { iso } from '../../api/util.ts';
-import { attributionFor } from '../../attribution.ts';
+import { attributionFor, sourceDates } from '../../attribution.ts';
 import { type ChannelAudience, VIEWS } from '../../db/audience.ts';
 import type { DB } from '../../db/generated.ts';
 import type { RenderCtx } from '../cycle.ts';
@@ -29,17 +30,53 @@ export { historyExcluded };
 
 const WEEK_MS = 7 * 86_400_000;
 
-// One forecast read per (database, family, cycle clock): a 1,000-station sweep reads it once.
-let memo: { db: Kysely<DB>; family: ChannelAudience; now: number; read: Promise<ForecastLatest> } | undefined;
-export function forecastOnce(c: RenderCtx): Promise<ForecastLatest> {
-  if (memo?.db === c.db && memo.family === c.family && memo.now === c.now) return memo.read;
-  const read = readForecastLatest(c.db, c.family, c.now);
-  memo = { db: c.db, family: c.family, now: c.now, read };
-  read.catch(() => {
-    if (memo?.read === read) memo = undefined;
+// #218: the reads the renderers of one cycle share are read once a cycle (a 1,000-station sweep and 144 buckets of a
+// settled day read the facts once). The memo hangs on the cycle's RenderCtx, which cycle.ts builds once a cycle and
+// never changes, so it carries the db, the family and the clock: a public render never sees an owner read, nothing
+// outlives the cycle (a test context at a fixed clock is a new cycle too), and a read that fails is not kept.
+const memos = new WeakMap<RenderCtx, Map<string, Promise<unknown>>>();
+export function once<T>(c: RenderCtx, key: string, read: () => Promise<T>): Promise<T> {
+  const m = memos.get(c) ?? new Map<string, Promise<unknown>>();
+  memos.set(c, m);
+  const hit = m.get(key);
+  if (hit !== undefined) return hit as Promise<T>;
+  const p = read();
+  m.set(key, p);
+  p.catch(() => {
+    if (m.get(key) === p) m.delete(key);
   });
-  return read;
+  return p;
 }
+
+/** readFacts, once a cycle. */
+export const factsOf = (c: RenderCtx): Promise<Map<number, SeriesFacts>> =>
+  once(c, 'facts', () => readFacts(c.db, c.family));
+
+/** The facts of every station's series that a file other than latest.json may carry, in id order, grouped once. */
+export const stationFacts = (c: RenderCtx): Promise<Map<string, SeriesFacts[]>> =>
+  once(c, 'stationFacts', async () => {
+    const out = new Map<string, SeriesFacts[]>();
+    for (const f of (await factsOf(c)).values()) {
+      if (historyExcluded(f, 'other')) continue;
+      const list = out.get(f.station) ?? [];
+      list.push(f);
+      out.set(f.station, list);
+    }
+    return out;
+  });
+
+/** The family's forecast document at the cycle's clock, once a cycle (forecast/latest.json and the station files). */
+export const forecastOnce = (c: RenderCtx): Promise<ForecastLatest> =>
+  once(c, 'forecast', () => readForecastLatest(c.db, c.family, c.now));
+
+/** The dated licences' dates (attribution.ts `sourceDates`), once a cycle. */
+export const datesOf = (c: RenderCtx) => once(c, 'dates', () => sourceDates(c.db, c.family, c.attribution));
+
+/**
+ * The newest loaded_at of the family's batches, once a cycle. latest.json reads it before its states (so
+ * meta.latestFrom never claims more than the read saw); status.json shows the same instant.
+ */
+export const commitOf = (c: RenderCtx) => once(c, 'commit', () => lastCommit(c.db, c.family, new Date(c.now)));
 
 type ObsRow = { ts: Date; value: number; qc: number };
 type RefRow = {
@@ -60,9 +97,7 @@ type RefRow = {
  */
 export async function renderStation(c: RenderCtx, id: string): Promise<StationRecent> {
   const v = VIEWS[c.family];
-  const facts = [...(await readFacts(c.db, c.family)).values()].filter(
-    (f) => f.station === id && !historyExcluded(f, 'other'),
-  );
+  const facts = (await stationFacts(c)).get(id) ?? [];
   const ids = facts.map((f) => f.id);
   const from = c.now - WEEK_MS;
   const forecast = await forecastOnce(c);

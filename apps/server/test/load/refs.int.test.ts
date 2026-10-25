@@ -1,7 +1,8 @@
 import type { ClassRow, GaugeZeroRow, WarningRow, Warnings } from '@rws/core';
-import { sql } from 'kysely';
+import { Kysely, PostgresDialect, sql } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { VIEWS } from '../../src/db/audience.ts';
+import type { DB } from '../../src/db/generated.ts';
 import { PROMOTE_PER_DAY, parsedOkIn } from '../../src/load/prune.ts';
 import { applyClasses, applyReferences, applyWarnings, closesKey, type ResolvedRef } from '../../src/load/refs.ts';
 import { applyGaugeZeros, openBatch, readMeta, seriesOf, type Tx } from '../../src/load/store.ts';
@@ -184,6 +185,94 @@ describe('reference_value validity ranges', () => {
     // And its replay that states nothing closes it once more; the same replay again writes nothing.
     expect((await replay(third.batch, '2026-10-04T04:20:00Z', [])).changes).toEqual({ removed: 1 });
     expect((await replay(third.batch, '2026-10-04T04:20:00Z', [])).writes).toBe(0);
+  });
+
+  it('#218: the unchanged keys of a payload are confirmed by one statement; every other path writes as before', async () => {
+    const em = await h.seriesId(EMMERICH_W);
+    const KINDS = ['MHW', 'HHW', 'MNQ', 'MQ', 'HSQ', 'NNQ'];
+    const k = (kind: string, value: number) =>
+      ref({ series: EMMERICH_W, id: em, kind, value, period: null, basis_label: null });
+    // A statement that confirms (moves seen_* only), in either form: one per key before #218, one per payload now.
+    const CONFIRM = /UPDATE reference_value(\s+rv)?\s+SET seen_at/;
+    const counted = async (b: string, at: string, stated: ResolvedRef[]) => {
+      let confirms = 0;
+      // A second Kysely over the loader's pool (never destroyed: it shares the pool).
+      const db = new Kysely<DB>({
+        dialect: new PostgresDialect({ pool: h.load.pool }),
+        log: (e) => {
+          if (e.level === 'query' && CONFIRM.test(e.query.sql)) confirms++;
+        },
+      });
+      const out = await db
+        .transaction()
+        .execute((t) => applyReferences(t, 'DE-1', stated, new Set([em]), b, new Date(at)));
+      return { batch: b, confirms, ...out };
+    };
+    const rows = async () =>
+      (
+        await h.t.admin.query<{
+          kind: string;
+          value: number;
+          lo: Date | null;
+          hi: Date | null;
+          batch: string;
+          seen_at: Date;
+          seen: string;
+        }>(
+          `SELECT kind, value, lower(valid) AS lo, upper(valid) AS hi, batch_id::text AS batch, seen_at,
+                  seen_batch::text AS seen
+           FROM reference_value WHERE series_id = $1 AND source_id = 'DE-1' AND kind = ANY($2)
+           ORDER BY kind, lower(valid) NULLS FIRST`,
+          [em, KINDS],
+        )
+      ).rows.map((r) => [
+        r.kind,
+        r.value,
+        r.lo?.toISOString() ?? null,
+        r.hi?.toISOString() ?? null,
+        r.batch,
+        r.seen_at.toISOString(),
+        r.seen,
+      ]);
+    const [t1, t2, t3] = ['2026-10-12T04:20:00.000Z', '2026-10-13T04:20:00.000Z', '2026-10-14T04:20:00.000Z'];
+
+    // P1 opens A=MHW, B=HHW, C=MNQ, D=MQ: nothing to confirm, no confirming statement.
+    const p1 = await counted(await batch('DE-1', t1), t1, [k('MHW', 1), k('HHW', 2), k('MNQ', 3), k('MQ', 4)]);
+    expect([p1.changes, p1.writes, p1.confirms]).toEqual([{ new: 4 }, 4, 0]);
+    // P2: A and B unchanged, C changed, D no longer stated, E=HSQ new.
+    const p2 = await counted(await batch('DE-1', t2), t2, [k('MHW', 1), k('HHW', 2), k('MNQ', 30), k('HSQ', 5)]);
+    expect([p2.changes, p2.writes, p2.confirms]).toEqual([{ changed: 1, new: 1, removed: 1 }, 5, 1]);
+    // P3: A, B, C and E unchanged, D stated again (re-opens), F=NNQ new.
+    const p3 = await counted(await batch('DE-1', t3), t3, [
+      k('MHW', 1),
+      k('HHW', 2),
+      k('MNQ', 30),
+      k('HSQ', 5),
+      k('MQ', 4),
+      k('NNQ', 6),
+    ]);
+    expect([p3.changes, p3.writes, p3.confirms]).toEqual([{ new: 2 }, 6, 1]);
+    // P3's own replay after a parser fix: E corrected in place; the rest is its own statement, untouched.
+    const fix = await counted(p3.batch, t3, [
+      k('MHW', 1),
+      k('HHW', 2),
+      k('MNQ', 30),
+      k('HSQ', 50),
+      k('MQ', 4),
+      k('NNQ', 6),
+    ]);
+    expect([fix.changes, fix.writes, fix.confirms]).toEqual([{ corrected: 1 }, 1, 0]);
+    const [b1, b2, b3] = [p1.batch, p2.batch, p3.batch];
+    expect(await rows()).toEqual([
+      ['HHW', 2, null, null, b1, t3, b3],
+      ['HSQ', 50, null, null, b2, t3, b3],
+      ['MHW', 1, null, null, b1, t3, b3],
+      ['MNQ', 3, null, t2, b1, t1, b1],
+      ['MNQ', 30, t2, null, b2, t3, b3],
+      ['MQ', 4, null, t2, b1, t2, b2],
+      ['MQ', 4, t3, null, b3, t3, b3],
+      ['NNQ', 6, null, null, b3, t3, b3],
+    ]);
   });
 });
 

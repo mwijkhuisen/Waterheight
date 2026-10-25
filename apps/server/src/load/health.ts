@@ -236,11 +236,11 @@ export async function forecastDetails(db: Kysely<DB>, now: Date): Promise<Map<st
       ).rows[0]?.value ?? null)
     : null;
   const bySource = new Map<string, { issued: number; lastValid: number }[]>();
-  for (const r of rows)
-    bySource.set(r.source_id, [
-      ...(bySource.get(r.source_id) ?? []),
-      { issued: r.issued.getTime(), lastValid: r.last_valid.getTime() },
-    ]);
+  for (const r of rows) {
+    const list = bySource.get(r.source_id) ?? [];
+    list.push({ issued: r.issued.getTime(), lastValid: r.last_valid.getTime() });
+    bySource.set(r.source_id, list);
+  }
   const out = new Map<string, ForecastDetail>();
   for (const [source, runs] of bySource) {
     const issued = Math.max(...runs.map((r) => r.issued));

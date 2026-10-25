@@ -145,9 +145,13 @@ export async function forecastCoverage(
     if (isCurrent(run, now, now, superseded)) current.add(r.series_id);
   }
   const seriesOf = new Map<string, SeriesRow[]>();
-  for (const s of read.series)
-    if (deps.publicSplit !== true || s.audience === 'public')
-      seriesOf.set(s.station_id, [...(seriesOf.get(s.station_id) ?? []), s]);
+  for (const s of read.series) {
+    if (deps.publicSplit !== true || s.audience === 'public') {
+      const list = seriesOf.get(s.station_id) ?? [];
+      list.push(s);
+      seriesOf.set(s.station_id, list);
+    }
+  }
 
   const tally = () => ({ stations: 0, covered: 0 });
   const total = tally();

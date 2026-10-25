@@ -104,7 +104,11 @@ function bandOf(p: Point): SnapshotForecast['band'] {
 /** Pure: the one held row per series that shows at `t`, ordered by series. */
 export function pickHeld(rows: readonly HeldRow[], t: number, rules: ForecastRules): HeldRow[] {
   const bySeries = new Map<number, HeldRow[]>();
-  for (const r of rows) bySeries.set(r.series, [...(bySeries.get(r.series) ?? []), r]);
+  for (const r of rows) {
+    const list = bySeries.get(r.series) ?? [];
+    list.push(r);
+    bySeries.set(r.series, list);
+  }
   return [...bySeries]
     .sort(([a], [b]) => a - b)
     .flatMap(([, list]) => {

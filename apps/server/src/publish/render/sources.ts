@@ -1,8 +1,9 @@
 import { type Kysely, sql } from 'kysely';
-import { attributionFor, sourceDates } from '../../attribution.ts';
+import { attributionFor } from '../../attribution.ts';
 import { OWNER_ONLY_VIEWS, VIEWS } from '../../db/audience.ts';
 import type { DB } from '../../db/generated.ts';
 import type { RenderCtx } from '../cycle.ts';
+import { datesOf, once } from './series.ts';
 
 // P9a (A§9.1, catalogue §1b): sources.json, the family's sources with the registry's attribution rows verbatim, the
 // licence and the date the licence asks for. The owner file adds each source's audience and, for an owner source, its
@@ -26,6 +27,9 @@ export const familySources = (db: Kysely<DB>, family: RenderCtx['family']) =>
     .execute(db)
     .then((r) => r.rows);
 
+/** familySources, once a cycle (sources.json and status.json). */
+export const familySourcesOf = (c: RenderCtx) => once(c, 'sources', () => familySources(c.db, c.family));
+
 /** The owner family's private bases by source id (the owner role only; the public family never asks). */
 const privateBases = (db: Kysely<DB>) =>
   sql<{ source_id: string; private_basis: unknown }>`
@@ -34,8 +38,8 @@ const privateBases = (db: Kysely<DB>) =>
     .then((r) => new Map(r.rows.map((x) => [x.source_id, x.private_basis])));
 
 export async function sources(c: RenderCtx): Promise<unknown> {
-  const rows = await familySources(c.db, c.family);
-  const dates = await sourceDates(c.db, c.family, c.attribution);
+  const rows = await familySourcesOf(c);
+  const dates = await datesOf(c);
   const bases = c.family === 'owner' ? await privateBases(c.db) : new Map<string, unknown>();
   const entries = rows.map((s) => {
     const own = c.attribution.filter((a) => a.source_id === s.id);
