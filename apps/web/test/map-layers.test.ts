@@ -14,10 +14,12 @@ import {
   stationFilter,
   stationPoints,
   TIER2_MINZOOM,
+  writeStates,
 } from '../src/features/map/stationLayer.ts';
 import { warningLayers, warningsGeoJson } from '../src/features/map/warnings.ts';
 import { addWater } from '../src/features/map/waterLayer.ts';
 import type { WarningsAt } from '../src/lib/data/warnings.ts';
+import type { StationState } from '../src/lib/stationStates.ts';
 import { MODES } from '../src/lib/url/url.ts';
 import { WATER_CANALS, WATER_LAKES, WATER_LAKES_LINE, WATER_LAKES_TIDAL } from '../src/lib/water.ts';
 
@@ -435,5 +437,77 @@ describe('water layers (P19a T3)', () => {
     const h = addWater(gone.map, 'rivers');
     gone.remove();
     expect(() => h.dispose()).not.toThrow();
+  });
+});
+
+describe('writeStates (O3)', () => {
+  type Shown = Parameters<typeof writeStates>[1];
+  type Map_ = Parameters<typeof writeStates>[0];
+  const state = (level: number): StationState => ({
+    has: true,
+    stale: false,
+    forecast: false,
+    estimate: false,
+    level,
+    section: false,
+    suspect: false,
+    dhBin: null,
+    qSize: null,
+    owner: false,
+    hidden: false,
+    coast: false,
+    surge: null,
+  });
+  const shown = ['a', 'b', 'c'].map((id) => ({ id })) as unknown as Shown;
+  const fake = () => {
+    const calls: [unknown, Record<string, unknown>][] = [];
+    const map = {
+      setFeatureState: (t: unknown, r: Record<string, unknown>) => void calls.push([t, r]),
+    } as unknown as Map_;
+    return { calls, map };
+  };
+  const ids = (calls: [unknown, unknown][]) => calls.map(([t]) => (t as { id: string }).id);
+  const states = (l: number[]) => new Map(['a', 'b', 'c'].map((id, i) => [id, state(l[i] as number)]));
+
+  it('an empty written map writes every shown station that has a state, with selected', () => {
+    const { calls, map } = fake();
+    const next = writeStates(map, shown, states([1, 2, 3]), 'b', new Map());
+    expect(ids(calls)).toEqual(['a', 'b', 'c']);
+    expect(calls[0]?.[0]).toEqual({ source: 'stations', id: 'a' });
+    expect(calls.map(([, r]) => r.selected)).toEqual([false, true, false]);
+    expect([...next.keys()]).toEqual(['a', 'b', 'c']);
+  });
+  it('the same states again write nothing', () => {
+    const { calls, map } = fake();
+    const first = writeStates(map, shown, states([1, 2, 3]), undefined, new Map());
+    calls.length = 0;
+    const again = writeStates(map, shown, states([1, 2, 3]), undefined, first);
+    expect(calls).toHaveLength(0);
+    expect(again).toEqual(first);
+  });
+  it('one changed state writes exactly that station, with every key of its record', () => {
+    const { calls, map } = fake();
+    const first = writeStates(map, shown, states([1, 2, 3]), undefined, new Map());
+    calls.length = 0;
+    writeStates(map, shown, states([1, 5, 3]), undefined, first);
+    expect(ids(calls)).toEqual(['b']);
+    expect(Object.keys(calls[0]?.[1] ?? {}).sort()).toEqual([...Object.keys(state(0)), 'selected'].sort());
+    expect(calls[0]?.[1].level).toBe(5);
+  });
+  it('a selection change writes exactly the old and the new station', () => {
+    const { calls, map } = fake();
+    const first = writeStates(map, shown, states([1, 2, 3]), 'a', new Map());
+    calls.length = 0;
+    writeStates(map, shown, states([1, 2, 3]), 'c', first);
+    expect(ids(calls)).toEqual(['a', 'c']);
+    expect(calls.map(([, r]) => r.selected)).toEqual([false, true]);
+  });
+  it('a station without a state is skipped and left out; one not shown is never written', () => {
+    const { calls, map } = fake();
+    const all = states([1, 2, 3]);
+    all.delete('b');
+    const next = writeStates(map, [{ id: 'a' }, { id: 'b' }] as unknown as Shown, all, undefined, new Map());
+    expect(ids(calls)).toEqual(['a']);
+    expect([...next.keys()]).toEqual(['a']);
   });
 });
