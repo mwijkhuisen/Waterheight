@@ -1,0 +1,14 @@
+{
+  "spec": "de-1-series",
+  "variant": "c263ea53-ca4d-41f5-b3f5-6178fec302aa/W",
+  "source": "DE-1",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/DE-1/de-1-series/2026/10/25/034006Z-ddcd9643471028d3.zst",
+  "recorded_at": "2026-10-25T03:40:06Z",
+  "status": 200,
+  "url": "https://www.pegelonline.wsv.de/webservices/rest-api/v2/stations/c263ea53-ca4d-41f5-b3f5-6178fec302aa/W/measurements.json?start=PT6H",
+  "bytes": 1778,
+  "source_sha256": "ddcd9643471028d3c44e233d3a5290ecc4f6f2ff5a4088f6ec8e58500c88463a",
+  "trimmed": false
+}
