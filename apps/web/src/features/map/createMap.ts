@@ -9,6 +9,7 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { Protocol } from 'pmtiles';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
+import { styles, tilesManifest } from './preload.ts';
 import { acquireProtocol } from './protocol.ts';
 import { resolveStyle } from './resolveStyle.ts';
 
@@ -16,11 +17,6 @@ import { resolveStyle } from './resolveStyle.ts';
 export { Popup } from 'maplibre-gl';
 
 type Style = Exclude<MapOptions['style'], string | undefined>;
-
-const styles = {
-  nl: () => import('./styles/style-nl.json'),
-  en: () => import('./styles/style-en.json'),
-};
 
 export class MapError extends Error {
   readonly code = 'manifest_unavailable';
@@ -33,7 +29,7 @@ export class MapError extends Error {
 
 /** The manifest names the current extract; it is validated before any URL is built from it. */
 async function loadManifest(signal: AbortSignal) {
-  const res = await fetch('/tiles/manifest.json', { signal, redirect: 'error' });
+  const res = await tilesManifest(signal);
   if (!res.ok) throw new MapError();
   return parseTilesManifest(await res.text());
 }

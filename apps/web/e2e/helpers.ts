@@ -322,8 +322,17 @@ export async function mapReady(page: Page) {
   await expect.poll(() => featureState(page, 'nl.e2e.xss')).toMatchObject({ has: true });
 }
 
+/**
+ * O4 (#220): the station panel is a lazy chunk, so with `s=` in the URL the aside may not exist yet, and "0 charts ===
+ * 0 panels" would hold vacuously. Wait for it (a station the page does not know has no panel: do not call this for it).
+ */
+async function panelMounted(page: Page) {
+  if (new URL(page.url()).searchParams.has('s')) await expect(panelOf(page).first()).toBeAttached();
+}
+
 /** The values on screen are those of the page's t (nothing is marked busy) and every chart has drawn its points. */
 export async function settled(page: Page) {
+  await panelMounted(page);
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   await page.waitForFunction(() => {
     const charts = [...((window as unknown as W).__rws?.charts ?? [])];
@@ -341,6 +350,7 @@ export async function settled(page: Page) {
  * station with a series that has no data (the BE-3 station's discharge).
  */
 export async function idle(page: Page) {
+  await panelMounted(page);
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   await page.waitForFunction(() => {
     const charts = (window as unknown as W).__rws?.charts?.size ?? 0;
