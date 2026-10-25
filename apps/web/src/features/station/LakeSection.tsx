@@ -6,7 +6,7 @@ import type { WebWaterbody } from '../../lib/data/chain.ts';
 import type { PlayedValue } from '../../lib/data/frames.ts';
 import type { WebForecast } from '../../lib/data/static.ts';
 import { intlLocale } from '../../lib/intl.ts';
-import { basisLabel } from '../../lib/labels/labels.ts';
+import { basisLabel } from '../../lib/labels/basis.ts';
 import { lakeView } from '../../lib/lakes.ts';
 import { lakeGauges } from '../../lib/water.ts';
 import { m } from '../../paraglide/messages.js';

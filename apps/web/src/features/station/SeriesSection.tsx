@@ -7,7 +7,7 @@ import type { WebSources } from '../../lib/data/contracts.ts';
 import type { PlayedValue } from '../../lib/data/frames.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import type { WarningsAt } from '../../lib/data/warnings.ts';
-import { basisLabel, referenceLabel, useOwnerLabels } from '../../lib/labels/labels.ts';
+import { basisLabel, referenceLabel, useOwnerLabels } from '../../lib/labels/basis.ts';
 import type { Lapse } from '../../lib/stationStates.ts';
 import { formatAge, formatDay, formatLocal, quantise } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';

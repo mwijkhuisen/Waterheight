@@ -1,7 +1,7 @@
 import { monthDay } from '@rws/core/season';
 import { describe, expect, it } from 'vitest';
 import { type MarkOptions, referenceMarks } from '../src/features/station/thresholds.ts';
-import { basisLabel } from '../src/lib/labels/labels.ts';
+import { basisLabel } from '../src/lib/labels/basis.ts';
 
 // The threshold model (P10d, closes #88): lines for every reference, zones by the registry's role of the kind
 // (METHOD_REFERENCES) and by NL-4 class, one legend row per zone and per zoneless line.
