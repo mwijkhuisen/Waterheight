@@ -262,10 +262,10 @@ async function publisherPhase(): Promise<boolean> {
     ]),
   ) as Renderers;
   class TimedOutput extends Output {
-    override async put(rel: string, body: unknown, remember = true): Promise<number> {
+    override async put(rel: string, text: string, remember = true): Promise<number> {
       const start = process.hrtime.bigint();
       try {
-        return await super.put(rel, body, remember);
+        return await super.put(rel, text, remember);
       } finally {
         const s = step(stepOf(rel));
         s.write += ms(start);

@@ -1,13 +1,12 @@
 import { DAY_MS, floorBucket, type LatestFile, type StaticStations } from '@rws/contracts';
 import { sql } from 'kysely';
-import { lastCommit } from '../../api/health.ts';
 import { iso, snapshot } from '../../api/util.ts';
-import { attributionFor, sourceDates } from '../../attribution.ts';
+import { attributionFor } from '../../attribution.ts';
 import { OBS_AT, VIEWS } from '../../db/audience.ts';
 import type { RenderCtx } from '../cycle.ts';
 import { historyExcluded } from '../plan.ts';
-import { readFacts } from './series.ts';
-import { columns, readValues, sourcesOf } from './snapshot.ts';
+import { commitOf, datesOf, factsOf } from './series.ts';
+import { columns, sourcesOf, statesNow, valuesOf } from './snapshot.ts';
 import { seriesHash } from './stations.ts';
 
 // P9a: latest.json, the current bucket in stations.json's series order (§9 C3: `current: true`), with the hash of that
@@ -24,8 +23,8 @@ export async function renderLatest(
 ): Promise<{ body: LatestFile; latestFrom: string | null }> {
   const t = floorBucket(c.now);
   // Before the states read: whatever the render sees was loaded no later than this commit.
-  const commit = await lastCommit(c.db, c.family, new Date(c.now));
-  const [facts, all] = await Promise.all([readFacts(c.db, c.family), readValues(c, t, true)]);
+  const commit = await commitOf(c);
+  const [facts, all] = await Promise.all([factsOf(c), statesNow(c).then((read) => valuesOf(c, read))]);
   const byId = new Map(all.map((v) => [v.series, v]));
   const values = stations.stations.flatMap((st) =>
     st.series.flatMap((s) => {
@@ -69,7 +68,7 @@ export async function renderLatest(
     return delta(v.value, old);
   };
   const cols = columns(iso(new Date(t)), values);
-  const dates = await sourceDates(c.db, c.family, c.attribution);
+  const dates = await datesOf(c);
   return {
     body: {
       schemaVersion: 1,

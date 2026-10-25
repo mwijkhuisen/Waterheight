@@ -7,7 +7,7 @@ import { attributionFor } from '../../attribution.ts';
 import { VIEWS } from '../../db/audience.ts';
 import type { RenderCtx } from '../cycle.ts';
 import { historyExcluded } from '../plan.ts';
-import { readFacts } from './series.ts';
+import { factsOf } from './series.ts';
 
 // P9a: frames (A§8 Q5): the hourly rollup's last value per series and hour of [from, to), for the playback. One row
 // per display series with at least one value in the span (ids increasing), null where an hour has none; no dates in
@@ -48,7 +48,7 @@ export function assembleFrames(
 }
 
 export async function renderFrames(c: RenderCtx, from: number, to: number): Promise<FramesFile> {
-  const facts = await readFacts(c.db, c.family);
+  const facts = await factsOf(c);
   const { rows } = await sql<FrameRow>`
     SELECT series_id, bucket, vlast, qc_or FROM ${sql.table(VIEWS[c.family].obs1h)}
     WHERE bucket >= ${new Date(from)}::timestamptz AND bucket < ${new Date(to)}::timestamptz`.execute(c.db);

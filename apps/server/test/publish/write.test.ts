@@ -77,7 +77,8 @@ describe('writeAtomic and Output', () => {
     const out = new Output(root);
     await out.start();
     const body = { a: 'x'.repeat(1000) };
-    expect(await out.put('recent/2026-10-04/1210.json', body)).toBeGreaterThan(0);
+    const text = JSON.stringify(body);
+    expect(await out.put('recent/2026-10-04/1210.json', text)).toBeGreaterThan(0);
     const dir = join(root, 'v1/recent/2026-10-04');
     expect(readdirSync(dir).sort()).toEqual(['1210.json', '1210.json.gz', '1210.json.zst']);
     const plain = readFileSync(join(dir, '1210.json'));
@@ -87,11 +88,11 @@ describe('writeAtomic and Output', () => {
     expect(statSync(join(dir, '1210.json')).mode & 0o777).toBe(0o644);
     expect(readdirSync(join(root, '.tmp'))).toEqual([]);
     // Unchanged bytes are not written again; a remembered file is.
-    expect(await out.put('recent/2026-10-04/1210.json', body)).toBe(0);
-    expect(await out.put('recent/2026-10-04/1210.json', { a: 1 })).toBeGreaterThan(0);
+    expect(await out.put('recent/2026-10-04/1210.json', text)).toBe(0);
+    expect(await out.put('recent/2026-10-04/1210.json', JSON.stringify({ a: 1 }))).toBeGreaterThan(0);
     // A file put with remember=false is written every time.
-    expect(await out.put('settled/2026-10-01/v1/0000.json', body, false)).toBeGreaterThan(0);
-    expect(await out.put('settled/2026-10-01/v1/0000.json', body, false)).toBeGreaterThan(0);
+    expect(await out.put('settled/2026-10-01/v1/0000.json', text, false)).toBeGreaterThan(0);
+    expect(await out.put('settled/2026-10-01/v1/0000.json', text, false)).toBeGreaterThan(0);
     const sizes = ['', '.gz', '.zst'].map((x) => statSync(join(root, `v1/settled/2026-10-01/v1/0000.json${x}`)).size);
     expect(await out.size('settled')).toBe(sizes.reduce((a, b) => a + b));
   });
@@ -99,14 +100,14 @@ describe('writeAtomic and Output', () => {
   it('removes a file with its siblings, and a directory', async () => {
     const out = new Output(root);
     await out.start();
-    await out.put('frames/2026-10-01/v1.json', {});
-    await out.put('settled/2026-10-01/v1/0000.json', {});
+    await out.put('frames/2026-10-01/v1.json', '{}');
+    await out.put('settled/2026-10-01/v1/0000.json', '{}');
     await out.remove('frames/2026-10-01/v1.json');
     expect(readdirSync(join(root, 'v1/frames/2026-10-01'))).toEqual([]);
     await out.remove('settled/2026-10-01/v1');
     expect(readdirSync(join(root, 'v1/settled/2026-10-01'))).toEqual([]);
     // Forgotten after removal: the same body is written again.
-    expect(await out.put('frames/2026-10-01/v1.json', {})).toBeGreaterThan(0);
+    expect(await out.put('frames/2026-10-01/v1.json', '{}')).toBeGreaterThan(0);
   });
 
   it('empties .tmp at start and keeps markers in .state, never under v1', async () => {

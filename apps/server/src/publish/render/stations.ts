@@ -3,7 +3,7 @@ import type { StaticStations } from '@rws/contracts';
 import { readStations } from '../../api/data.ts';
 import { attributionFor } from '../../attribution.ts';
 import type { RenderCtx } from '../cycle.ts';
-import { historyExcluded, readFacts } from './series.ts';
+import { factsOf, historyExcluded } from './series.ts';
 
 // P9a: stations.json, the API's /stations with each series' source. A series is listed iff latest.json may carry it
 // (§9 C5: metadata only); schemaVersion 2 (P9b) adds `api` per series, and a station left without a series is dropped.
@@ -13,7 +13,7 @@ export const seriesHash = (ids: readonly number[]): string =>
   createHash('sha256').update(ids.join(',')).digest('hex').slice(0, 16);
 
 export async function renderStations(c: RenderCtx): Promise<StaticStations> {
-  const [all, facts] = await Promise.all([readStations(c.db, c.family), readFacts(c.db, c.family)]);
+  const [all, facts] = await Promise.all([readStations(c.db, c.family), factsOf(c)]);
   const stations = all.stations.flatMap((st) => {
     const series = st.series.flatMap((s) => {
       const f = facts.get(s.id);

@@ -1,11 +1,11 @@
-import type { Snapshot, SnapshotFile, StateBasis } from '@rws/contracts';
+import { floorBucket, type Snapshot, type SnapshotFile, type StateBasis } from '@rws/contracts';
 import { valueSources } from '../../api/answer.ts';
 import { publicSnapshot } from '../../api/data.ts';
-import { readStates, snapshotValues } from '../../api/states.ts';
+import { readStates, type StateRead, snapshotValues } from '../../api/states.ts';
 import { attributionFor } from '../../attribution.ts';
 import type { RenderCtx } from '../cycle.ts';
 import { historyExcluded } from '../plan.ts';
-import { readFacts, type SeriesFacts } from './series.ts';
+import { factsOf, once, type SeriesFacts } from './series.ts';
 
 // P9a: a recent/ or settled/ bucket file (the same function: a settled file is a pure function of the data at t, no
 // generation time, no dates in the attribution) and the columnar form latest.json shares.
@@ -56,21 +56,40 @@ export const sourcesOf = (c: Columns, facts: ReadonlyMap<number, SeriesFacts>): 
     ...c.bases.map((b) => b.source),
   ]);
 
-/** The values of the bucket at `t` as the API's /snapshot gives them (the public family keeps the owner-basis check). */
-export async function readValues(c: RenderCtx, t: number, current: boolean): Promise<Snapshot['values']> {
+/** A read's values as the API's /snapshot gives them (the public family keeps the owner-basis check). */
+export const valuesOf = (c: RenderCtx, read: StateRead): Snapshot['values'] =>
+  c.family === 'public' ? publicSnapshot(read).values : snapshotValues(read);
+
+/**
+ * The states of the current bucket (`current: true`, §9 C3), once a cycle: latest.json's read, which status.json's
+ * classification reuses (#218; it never reads the tide map this read carries).
+ */
+export const statesNow = (c: RenderCtx): Promise<StateRead> =>
+  once(c, 'statesNow', () =>
+    readStates(c.db, c.family, floorBucket(c.now), {
+      now: c.now,
+      current: true,
+      sections: c.sections,
+      cache: c.cache,
+      tide: true,
+    }),
+  );
+
+/** The values of a recent or settled bucket at `t` (`current: false`: the stored rows are the record). */
+export async function readValues(c: RenderCtx, t: number): Promise<Snapshot['values']> {
   const read = await readStates(c.db, c.family, t, {
     now: c.now,
-    current,
+    current: false,
     sections: c.sections,
     cache: c.cache,
     tide: true,
   });
-  return c.family === 'public' ? publicSnapshot(read).values : snapshotValues(read);
+  return valuesOf(c, read);
 }
 
 export async function renderSnapshot(c: RenderCtx, t: number): Promise<SnapshotFile> {
-  const facts = await readFacts(c.db, c.family);
-  const values = (await readValues(c, t, false)).filter((v) => {
+  const facts = await factsOf(c);
+  const values = (await readValues(c, t)).filter((v) => {
     const f = facts.get(v.series);
     return f !== undefined && !historyExcluded(f, 'other');
   });
