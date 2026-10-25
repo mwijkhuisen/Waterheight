@@ -1,6 +1,6 @@
 import { type ApiStation, dayOf, floorBucket, isSettled, RiversManifest } from '@rws/contracts';
 import { keepPreviousData, QueryClient, useQueries, useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadRuntimeConfig, type RuntimeConfig } from '../config/runtime.ts';
 import { stationHorizon } from '../forecast.ts';
 import { quantise, STEP_MS, toUrlT } from '../time/time.ts';
@@ -17,7 +17,7 @@ import {
   loadStations,
   loadStatusMode,
   loadStatusPage,
-  loadWarnings,
+  loadWarningsFile,
   mouthsOf,
   type ReachesRead,
   riversOf,
@@ -39,6 +39,7 @@ import {
 import { snapshotSource, versionKey } from './static.ts';
 
 // The data of the page, read through relative paths only, so the same build serves the public site and the owner
+import { stableWarnings, type WarningsAt, warningsAt, warningsFileKey, warningsSource } from './warnings.ts';
 // site (A§10 owner mode). Every answer is parsed with its site's contract (contracts.ts) before the UI sees it;
 // anything else is an error state. Every key carries the audience, so the two sites' answers never mix.
 
@@ -302,26 +303,38 @@ export function useChanges(
  * The warning areas valid at `t` (P10a T5; warnings.ts picks the file). Live, the latest file is asked again every
  * minute. A failure shows no areas (the map still works); `incomplete` says when earlier areas may be missing.
  */
-export const useWarnings = (t: number | undefined, meta: Pick<WebMeta, 'now'> | undefined, isLive = false) => {
+export function useWarnings(
+  t: number | undefined,
+  meta: Pick<WebMeta, 'now'> | undefined,
+  isLive = false,
+): WarningsAt | undefined {
+ * O3 (#219): one query per file, never per t (warningsFileKey), and the areas at t picked from it here. While a file
+ * is on its way, while playing (no t) and after now, the areas shown last stay, as `keepPreviousData` kept them; an
+ * unchanged set keeps its identity (stableWarnings), so the map does not set its data again.
   const c = useContracts();
-  const bucket = meta === undefined ? undefined : floorBucket(Date.parse(meta.now));
-  return useQuery({
-    // The day of meta.now too: after midnight UTC a fallback cached for t (today.json of the next day) is asked again.
-    queryKey: [
-      'warnings',
-      c?.audience,
-      t,
-      t !== undefined && bucket !== undefined && t >= bucket ? 'latest' : 'at',
-      meta === undefined ? undefined : dayOf(Date.parse(meta.now)),
-    ],
-    queryFn: ({ signal }) => loadWarnings(browserFetch, t ?? 0, meta as WebMeta, signal, c),
-    enabled: c !== undefined && t !== undefined && meta !== undefined && t <= (bucket ?? 0),
-    placeholderData: keepPreviousData,
+  const now = meta === undefined ? undefined : Date.parse(meta.now);
+  const choice = t === undefined || now === undefined || t > floorBucket(now) ? undefined : warningsSource(t, now);
+  const { data, isPending } = useQuery({
+    queryKey: ['warnings', c?.audience, ...(choice === undefined ? ['wait'] : warningsFileKey(choice, now ?? 0))],
+    queryFn: ({ signal }) => loadWarningsFile(browserFetch, choice as NonNullable<typeof choice>, signal, c),
+    enabled: c !== undefined && choice !== undefined,
     staleTime: 60_000,
     retry: false,
     ...live(isLive),
   });
-};
+  // The last areas shown; a failed file shows none, but leaves them for the next wait.
+  const last = useRef<WarningsAt | undefined>(undefined);
+  const shown = useMemo(() => {
+    if (isPending) return last.current;
+    return data === undefined || t === undefined
+      ? undefined
+      : stableWarnings(last.current, warningsAt(data, t, data.incomplete));
+  }, [isPending, data, t]);
+  useEffect(() => {
+    if (shown !== undefined) last.current = shown;
+  }, [shown]);
+  return shown;
+}
 
 /** series/<station>/recent.json of the selected station (7 days, its runs and references); refreshed live. */
 export const useRecent = (station: string | undefined, isLive = false) => {

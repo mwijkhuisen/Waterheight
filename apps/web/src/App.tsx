@@ -298,7 +298,7 @@ function Viewer({ locale }: { locale: Locale }) {
     };
     return { travel, past };
   }, [shiftMax, shiftSeries, shiftT, pastStore, playing, shiftWindow, travel, quantity]);
-  const warnings = useWarnings(asked, meta.data, isLive).data;
+  const warnings = useWarnings(asked, meta.data, isLive);
   // KG-233: latest.json's age of the newest value of a series with none at t; a station with nothing newer than
   // 25 hours is hidden (map, table, search), and the selected one stays open by its link.
   // Live, the previous bucket's latest.json stays on screen while the next one loads (keepPreviousData): its ages go

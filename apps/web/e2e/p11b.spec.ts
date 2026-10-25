@@ -280,6 +280,43 @@ test('B2: playing 7 days back reads at most one frames file per UTC day, no snap
   await finish(page, s);
 });
 
+// O3 (issue #219): the warnings are read once per file, never per t. Paused steps within a day, a short playback and
+// steps after it ask each warnings file at most once (main asked the day file again at every settled t).
+test('O3: paused steps and a playback read each warnings file at most once', async ({ page, context, baseURL }) => {
+  const s = await start(page, context, baseURL, 'dh');
+  // 2026-10-25 has its dated file (the seed starts on 2026-10-24): no 404, so no latest.geojson fallback.
+  await open(page, deep('2026-10-25T08:00Z'));
+  await mapReady(page);
+  const steps = async (key: 'ArrowLeft' | 'ArrowRight', n: number) => {
+    await slider(page).focus();
+    for (let i = 0; i < n; i++) {
+      await page.keyboard.press(key);
+      // past the 150 ms debounce: each step is a settled t that asks what it asks
+      await page.waitForTimeout(400);
+    }
+  };
+  await steps('ArrowRight', 4);
+  await expect.poll(() => param(page, 't')).toBe('2026-10-25T08:40Z');
+  await play(page).click();
+  await expect(pause(page)).toBeVisible();
+  await page.waitForTimeout(1_500);
+  await pause(page).click();
+  await paused(page);
+  await steps('ArrowLeft', 3);
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+  const reads = urlsFrom(s)
+    .map((u) => u.pathname)
+    .filter((p) => p.startsWith('/data/v1/warnings/'));
+  const counts = new Map<string, number>();
+  for (const p of reads) counts.set(p, (counts.get(p) ?? 0) + 1);
+  expect(counts.get('/data/v1/warnings/2026-10-25.json'), 'the day file of the steps').toBe(1);
+  expect(
+    [...counts].filter(([, n]) => n > 1),
+    'no warnings file is read twice',
+  ).toEqual([]);
+  await finish(page, s);
+});
+
 test('B2: a day file that answers 404 is read from the API with exactly one call for its range', async ({
   page,
   context,

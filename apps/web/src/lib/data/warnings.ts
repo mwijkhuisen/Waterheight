@@ -18,6 +18,12 @@ export interface WarningsAt {
   incomplete: boolean;
 }
 
+/** A warnings file as read for every t of it (O3): its rows of the visible sources; `incomplete` for the fallback. */
+export interface WarningsRead {
+  features: WarningFeature[];
+  incomplete: boolean;
+}
+
 /** latest.geojson, or the file of t's UTC day (`path`), whose `day` must be `day`. */
 export type WarningsSource = { kind: 'latest' } | { kind: 'dated'; day: string; path: string };
 
@@ -41,4 +47,25 @@ export function warningsAt(file: Pick<WarningsFile, 'features'>, t: number, inco
     if (held === undefined || Date.parse(f.properties.from) > Date.parse(held.properties.from)) best.set(key, f);
   }
   return { features: [...best.values()], incomplete };
+}
+
+/**
+ * O3 (#219): the query key of the file a t up to now reads, never t itself, so every t of a file shares one read:
+ * latest.geojson per 10-minute bucket (its t is that bucket), a day file per path and day, and the day of now (after
+ * midnight UTC a fallback held for today.json, already of the next day, is read again).
+ */
+export const warningsFileKey = (choice: WarningsSource, now: number): readonly (string | number)[] =>
+  choice.kind === 'latest' ? ['latest', floorBucket(now)] : [choice.path, choice.day, dayOf(now)];
+
+/**
+ * `prev` when `next` holds the same rows in the same order (the same objects, of one file) and the same `incomplete`,
+ * else `next` (O3): an unchanged set keeps its identity, so the map skips its setData.
+ */
+export function stableWarnings(prev: WarningsAt | undefined, next: WarningsAt): WarningsAt {
+  return prev !== undefined &&
+    prev.incomplete === next.incomplete &&
+    prev.features.length === next.features.length &&
+    prev.features.every((f, i) => f === next.features[i])
+    ? prev
+    : next;
 }
