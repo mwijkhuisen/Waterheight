@@ -195,6 +195,16 @@ describe('same rows as the frozen bodies', () => {
     expect(a).toHaveLength(1);
     expect(a).toEqual(await meta('q1_frozen_owner'));
   });
+
+  it('the at-T functions are still owned by rws_owner', async () => {
+    const names = [OBS_AT.public, OBS_AT.owner, TIDE_AT.public, TIDE_AT.owner];
+    const { rows: owners } = await t.admin.query<{ proname: string; owner: string }>(
+      `SELECT proname, pg_get_userbyid(proowner) AS owner FROM pg_proc
+       WHERE proname = ANY($1) AND pronamespace = 'public'::regnamespace ORDER BY proname`,
+      [names],
+    );
+    expect(owners).toEqual([...names].sort().map((proname) => ({ proname, owner: 'rws_owner' })));
+  });
 });
 
 describe('tide rows by audience and flag', () => {
