@@ -44,6 +44,7 @@ import type { WebWaterbody } from './lib/data/chain.ts';
 import { changesAt } from './lib/data/change.ts';
 import type { FrameStore } from './lib/data/frames.ts';
 import { globalEnd, pageT, sliderEnd } from './lib/forecast.ts';
+import { perLocale } from './lib/intl.ts';
 import { pathOf, routeOf } from './lib/routes.ts';
 import { hiddenKey, lapses, stationStates, visibleStations } from './lib/stationStates.ts';
 import { ceilHour, DAY_MS, floorHour, HOUR_MS, quantise } from './lib/time/time.ts';
@@ -61,6 +62,8 @@ import type { Locale } from './paraglide/runtime.js';
 const FETCH_DEBOUNCE_MS = 150;
 const NO_GROUPS: readonly Group[] = [];
 const NO_BODIES: readonly WebWaterbody[] = [];
+/** The station sort's collator: `localeCompare(b, locale)` is defined as this collator's `compare`, made once (O3). */
+const COLLATOR = perLocale((l) => new Intl.Collator(l));
 
 type HovmollerPanel = typeof import('./features/flow/hovmoller/HovmollerPanel.tsx').HovmollerPanel;
 
@@ -117,7 +120,7 @@ function Viewer({ locale }: { locale: Locale }) {
     return { start, now, epoch: Date.parse(meta.data.dataEpoch), serverNow, ahead: meta.data.forecastHorizons };
   }, [meta.data]);
   const sorted = useMemo(
-    () => [...(stations.data?.stations ?? [])].sort((a, b) => a.name.localeCompare(b.name, locale)),
+    () => [...(stations.data?.stations ?? [])].sort((a, b) => COLLATOR(locale).compare(a.name, b.name)),
     [stations.data, locale],
   );
   const selected = url.s === undefined ? undefined : sorted.find((st) => st.id === url.s);

@@ -5,6 +5,7 @@ import { useOwnerSources, useRecent } from '../../lib/data/api.ts';
 import type { WebWaterbody } from '../../lib/data/chain.ts';
 import type { PlayedValue } from '../../lib/data/frames.ts';
 import type { WebForecast } from '../../lib/data/static.ts';
+import { intlLocale } from '../../lib/intl.ts';
 import { basisLabel } from '../../lib/labels/labels.ts';
 import { lakeView } from '../../lib/lakes.ts';
 import { lakeGauges } from '../../lib/water.ts';
@@ -94,7 +95,7 @@ function levelClasses(refs: readonly Ref[], t: number, locale: Locale): LevelCla
 
 /** "12 mei": an MMDD of the NL-4 calendar as a day and month (a leap year, so 29 February exists). */
 const monthDayText = (md: number, locale: Locale) =>
-  new Intl.DateTimeFormat(locale === 'nl' ? 'nl-NL' : 'en-GB', {
+  new Intl.DateTimeFormat(intlLocale(locale), {
     day: 'numeric',
     month: 'long',
     timeZone: 'UTC',

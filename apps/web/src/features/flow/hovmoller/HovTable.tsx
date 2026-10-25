@@ -1,3 +1,4 @@
+import { intlLocale, perLocale } from '../../../lib/intl.ts';
 import { amsterdam, floorHour, formatShort } from '../../../lib/time/time.ts';
 import { m } from '../../../paraglide/messages.js';
 import type { Locale } from '../../../paraglide/runtime.js';
@@ -17,13 +18,14 @@ export const NEWEST_ROWS = 48;
 /** "25 okt 02:00 CEST": Amsterdam time with its own zone label, so the repeated DST hour reads as two rows. */
 export const hourLabel = (ms: number, locale: Locale): string => `${formatShort(ms, locale)} ${amsterdam(ms).label}`;
 
+const WHOLE = perLocale(
+  (l) => new Intl.NumberFormat(intlLocale(l), { maximumFractionDigits: 0, signDisplay: 'exceptZero' }),
+);
+
 /** "+12 cm", "−40 m³/s": the 24-hour change, signed, whole numbers, the unit of its quantity. */
 export function changeText(cell: Cell | undefined, locale: Locale): string {
   if (cell === undefined || cell.change === null || cell.quantity === null) return m.hov_no_data({}, { locale });
-  const n = new Intl.NumberFormat(locale === 'nl' ? 'nl-NL' : 'en-GB', {
-    maximumFractionDigits: 0,
-    signDisplay: 'exceptZero',
-  }).format(cell.change);
+  const n = WHOLE(locale).format(cell.change);
   return `${n.replaceAll('-', '−')} ${cell.quantity === 'H' ? 'cm' : 'm³/s'}`;
 }
 

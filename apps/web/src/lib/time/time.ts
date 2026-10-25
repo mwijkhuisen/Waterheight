@@ -1,5 +1,6 @@
 import { BUCKET_MS, floorBucket } from '@rws/contracts';
 import type { Locale } from '../../paraglide/runtime.js';
+import { intlLocale, perLocale } from '../intl.ts';
 
 // Instants are UTC milliseconds everywhere (A§10: `t` is always UTC in the URL);
 // only display turns them into Europe/Amsterdam wall-clock time. Call
@@ -96,54 +97,70 @@ export function wallInstant(date: string, time: string, near: number): number | 
   );
 }
 
-const intlLocale = (locale: Locale) => (locale === 'nl' ? 'nl-NL' : 'en-GB');
+// O3 (#219): one formatter per language and use (lib/intl.ts), in Amsterdam time; the same output as Temporal's
+// `ZonedDateTime#toLocaleString` with these options, which formats through such a formatter. Temporal still gives the
+// offset of the zone label.
+const LOCAL = perLocale(
+  (l) =>
+    new Intl.DateTimeFormat(intlLocale(l), {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: ZONE,
+    }),
+);
+const SHORT = perLocale(
+  (l) =>
+    new Intl.DateTimeFormat(intlLocale(l), {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: ZONE,
+    }),
+);
+const TICK = perLocale(
+  (l) => new Intl.DateTimeFormat(intlLocale(l), { day: 'numeric', month: 'short', timeZone: ZONE }),
+);
+const day = (timeZone: string) =>
+  perLocale(
+    (l) => new Intl.DateTimeFormat(intlLocale(l), { day: 'numeric', month: 'long', year: 'numeric', timeZone }),
+  );
+const DAY = { UTC: day('UTC'), [ZONE]: day(ZONE) } as const;
+const MINUTES = perLocale(
+  (l) => new Intl.NumberFormat(intlLocale(l), { style: 'unit', unit: 'minute', unitDisplay: 'short' }),
+);
+const HOURS = perLocale(
+  (l) =>
+    new Intl.NumberFormat(intlLocale(l), {
+      style: 'unit',
+      unit: 'hour',
+      unitDisplay: 'long',
+      maximumFractionDigits: 1,
+    }),
+);
 
 /** "zo 25 okt 2026, 02:30 CET": Amsterdam time with the label of its own offset. */
 export function formatLocal(ms: number, locale: Locale): string {
-  const z = Temporal.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(ZONE);
-  const text = z.toLocaleString(intlLocale(locale), {
-    weekday: 'short',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  return `${text} ${zoneLabel(z.offset)}`;
+  const offset = Temporal.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(ZONE).offset;
+  return `${LOCAL(locale).format(ms)} ${zoneLabel(offset)}`;
 }
 
 /** "25 okt 02:30": a short Amsterdam label for chart axes. */
-export function formatShort(ms: number, locale: Locale): string {
-  const z = Temporal.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(ZONE);
-  return z.toLocaleString(intlLocale(locale), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
-}
+export const formatShort = (ms: number, locale: Locale): string => SHORT(locale).format(ms);
 
 /** "25 okt": a day label for the timebar's track. */
-export function formatTick(ms: number, locale: Locale): string {
-  const z = Temporal.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(ZONE);
-  return z.toLocaleString(intlLocale(locale), { day: 'numeric', month: 'short' });
-}
+export const formatTick = (ms: number, locale: Locale): string => TICK(locale).format(ms);
 
 /** A UTC day (a `dataSince`) as a date; with `ZONE`, the Amsterdam day of an instant (the attribution date). */
-export const formatDay = (ms: number, locale: Locale, timeZone = 'UTC'): string =>
-  new Intl.DateTimeFormat(intlLocale(locale), {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-    timeZone,
-  }).format(ms);
+export const formatDay = (ms: number, locale: Locale, timeZone: keyof typeof DAY = 'UTC'): string =>
+  DAY[timeZone](locale).format(ms);
 
 /** "12 min", "3 uur": how old a value is at t. */
 export function formatAge(seconds: number, locale: Locale): string {
   const minutes = Math.round(seconds / 60);
-  if (minutes < 120)
-    return new Intl.NumberFormat(intlLocale(locale), { style: 'unit', unit: 'minute', unitDisplay: 'short' }).format(
-      minutes,
-    );
-  return new Intl.NumberFormat(intlLocale(locale), {
-    style: 'unit',
-    unit: 'hour',
-    unitDisplay: 'long',
-    maximumFractionDigits: 1,
-  }).format(minutes / 60);
+  return minutes < 120 ? MINUTES(locale).format(minutes) : HOURS(locale).format(minutes / 60);
 }

@@ -1,3 +1,5 @@
+import { intlLocale } from '../intl.ts';
+
 /**
  * Temporal, native where the browser has it, otherwise temporal-polyfill
  * (A§3, A§10 lib/time). The polyfill is a lazy chunk that only a browser
@@ -12,14 +14,12 @@ export async function ensureTemporal(): Promise<'native' | 'polyfill'> {
 
 /** An instant shown in the Netherlands' local time with its CET/CEST label (A§10). */
 export function formatAmsterdam(instant: string, locale: 'nl' | 'en'): string {
-  return Temporal.Instant.from(instant)
-    .toZonedDateTimeISO('Europe/Amsterdam')
-    .toLocaleString(locale === 'nl' ? 'nl-NL' : 'en-GB', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZoneName: 'short',
-    });
+  return Temporal.Instant.from(instant).toZonedDateTimeISO('Europe/Amsterdam').toLocaleString(intlLocale(locale), {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  });
 }
