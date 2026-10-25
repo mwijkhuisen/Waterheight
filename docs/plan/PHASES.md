@@ -4600,3 +4600,37 @@ What issue #205 (Stage 0 of the calm map, built on P19a, §54) changed: the map 
 - **Review after the merge (2026-10-23).** Code review: approve (CR-1 to CR-7: three minor findings, four nits); security review: pass (SR-1 is not a defect: `showStations` only calls `setData` when the `stations` source exists, so a locale change or data reload never rebuilds the layers and their filters). The follow-up #210 fixed CR-1 (the z7 specs wait for `idle` and assert the zoom), CR-2 (rotation is off: `dragRotate: false`, touch twist and Shift+arrow disabled, since there is no reset-north), CR-3 (a fake-map unit test of the layers `showStations` adds and the filters `setSelectedStation` sets), CR-4 (`toBeEnabled()` beside `aria-pressed="false"`), CR-5 (the first fit is capped at z7.9), CR-6 (p19a uses the shared helpers; Eijsden at the gauge `nl.rws.eijsden.grens`) and CR-7 (this section, the threat model). Its own review (code: approve; security: pass) added a wait for the end of the Shift+arrow ease before the bearing is read, a source check of the three rotation switches, `TIER2_MINZOOM - 0.1` for the cap, and a shared `jumpTo` that never skips the jump.
 - **[U] items** (also in `docs/known-gaps.md`): KG-449 (below about 1280x720 Eijsden can still fall under the collapsed timebar card); KG-450 (the 12 platforms are drawn only from z8; D29's z0–6 no longer holds); KG-451 [owner] (a look at the opening view on a phone and a desktop after the deploy).
 - **Not in scope.** The Stage 1 follow-up after P19a (control row, quiet-normal state, symbol collision, basemap thinning, header, mobile timebar); #206 (key gauges, dark mode).
+
+## 59. Amendment: O2, publisher and loader reads (#218, 2026-10-25)
+
+What optimisation issue #218 (O2, from the read-only audit at d5cc442; built on e512bec) changed. No migration, no dependency, no published byte and no stored row is different.
+
+- **Built.**
+  - **Publisher, one read a cycle** (`publish/render/series.ts` `once`): a memo on the cycle's `RenderCtx`, which `cycle.ts` builds once a cycle and never changes (`db`, `family` and `now` are `readonly`). It holds `factsOf` (readFacts), `stationFacts` (the facts grouped by station once; `renderStation` filtered every series per station), `forecastOnce` (moved off its module slot), `datesOf`, `commitOf`, `familySourcesOf` and `statesNow` (the current bucket's states, which status.json's classification now shares with latest.json). A failed read is not kept.
+  - **One stringify a file:** `#put` hands the text its canary scan saw to `Output.put`, which takes the text.
+  - **Loader:** `applyReferences` confirms a payload's unchanged keys in one `UPDATE … FROM unnest(...)`; `upsertObs` leaves the provider aggregates out of the rollups by the registry map (no per-row `NOT EXISTS` on `series`), skips both rollups when nothing is left, and builds its staleness and aggregate maps once per map; `applyForecasts` ensures the partitions once a payload. #190's constant bounds and `date_bin` hash key are unchanged.
+  - **Push-based grouping** at the 23 spread-copy sites under `apps/server/src`.
+  - **bench-q1:** statements per publisher cycle, an uncached `/api/v1/stations`, the plan of `dataSince` (a hard check), and the daily rollup's keys in its seed.
+- **Reality against the issue.**
+  1. The memo hangs on the render context, not on a module slot keyed on (db, family, clock) like the old `forecastOnce`: test contexts share one fixed clock across data changes (`ctxFor`), so such a slot would have served stale reads; the context is that key and lives one cycle.
+  2. status.json reuses latest.json's reads (owner, 2026-10-25): its commit, dates and classification are the cycle start's, its source, twin and loader rows the end's (KG-477).
+  3. **dataSince keeps its GROUP BY.** bench-q1 never filled the daily rollup, so the plan met an empty table; seeded, the GROUP BY through the security-barrier view already reads a range of `obs_1d_pkey` per series from `DATA_FLOOR` on (the series drive the join; history before the floor is never read): 122 to 154 ms to execute. The planned `LATERAL` first-bucket probe executed in 241 and 343 ms, because the view stays a subquery and a sort sits above each range. KG-112 stays accepted with the numbers; the registry trigger is dropped.
+  4. `ensure_partitions` over all of a payload's runs may create an empty month between them (KG-478).
+  5. The issue listed 11 grouping sites in `api/`; there were 23 under `apps/server/src`. `MAX_PAYLOAD_RUNS` lives in `packages/core`, not `forecasts.ts`. The recorded `ch-2-pq` fixture holds 8 open ranges, not hundreds.
+- **Measured** (local: Ryzen 7 5800X, 16 threads, 31 GB, WSL2, PostgreSQL 18.6; `node scripts/bench-q1.ts --series 4000 --report-timings`, base = e512bec plus the bench instrumentation and the rollup seed, head = the PR; three runs each, alternated; a fourth head run under another session's load, Q1 102.9 ms against 38 to 48 ms, is left out):
+  - B1 bucket p95: recent 209 to 216 → 193 to 196 ms; settled 204 to 213 → 191 to 198 ms (budget 500).
+  - Cold cycle: 5.35 → 4.31 statements a rendered bucket; 177 to 184 → 193 to 201 recent buckets within the 35 s budget.
+  - Catch-up cycle (4,000 station files): 168.8 to 172.1 → 132.3 to 134.8 s; 12,798 to 12,873 → 8,594 to 8,639 statements.
+  - B4: 947 to 1,004 → 1,234 to 1,311 station files a 35 s cycle; drain 300 → 240 s (budget 600).
+  - B2 and B3 unchanged (about 80 KB and 51 KB gzip).
+  - One `publishOnce` of the canaries seed (the #218 scratch dump): 6,935 → 5,114 statements (public), 7,416 → 5,423 (owner); readFacts 1,812 → 1 and 1,984 → 1; every file byte-identical (1,820 and 1,992, status.json's wall-clock `lastDayRender.seconds` normalised).
+  - Reference confirms: the recorded `ch-2-pq` payload 8 → 1 statements.
+- **Acceptance criteria** (those of #218, in its order).
+  - [x] [CI] Byte-identical files: the publish goldens and integration tests pass unchanged; `canaries.int.test.ts` "every file is byte-identical to the one each render reading for itself writes; both families at once"; the scratch cross-version dump above.
+  - [x] [CI] One read per (db, family, cycle clock), again the next cycle, a failed read not kept: `once.test.ts`; `canaries.int.test.ts` "a cycle reads the facts, dates, last commit and current states once; the next cycle, same clock, again".
+  - [x] [CI] Reference confirms: `refs.int.test.ts` "#218: the unchanged keys of a payload are confirmed by one statement; every other path writes as before"; `p7a.int.test.ts` "#218: a ch-2-pq payload that re-states every reference …"; both, expecting one confirm per key, pass on the base too (same rows); the existing new, changed, corrected and re-opened tests pass.
+  - [x] [CI] `upsertObs` and the forecast store write the same rows: the load integration suite, `obs-pruning.int.test.ts` included, unchanged and green.
+  - [x] [CI] dataSince: the same answer (it is the same read); `routes.int.test.ts` "#218 (KG-112): dataSince counts the days from DATA_FLOOR on only …"; EXPLAIN as `rws_api` through the view shows the `obs_1d_pkey` range per series (bench-q1 fails otherwise); the uncached `/stations` is recorded against 500 ms (above).
+  - [x] [CI] bench-q1 before and after on one machine, B1 and B4 above.
+  - [ ] [agent-prod] `publisher.cycleSeconds` and `lastDayRender.seconds` 24 h either side of the deploy (KG-479).
+- **[U] items** (also in `docs/known-gaps.md`): KG-477 (accepted), KG-478 (accepted), KG-479 [agent-prod].
