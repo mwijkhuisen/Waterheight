@@ -553,41 +553,61 @@ try {
   const Q1 = `SELECT series_id, ts, value, qc, $1::timestamptz - ts AS age FROM ${OBS_AT.public}($1::timestamptz)`;
   const at = (i: number) => new Date(Date.now() - ((i * 37) % (DAYS - 2)) * 86_400_000 - i * 61_000);
 
-  // The plan of the function body, as the object owner sees it (EXPLAIN does not look inside a function).
-  const body = `
-    SELECT e.series_id, o.ts, o.value, o.qc
-    FROM series_eff e JOIN series s ON s.id = e.series_id
-    CROSS JOIN LATERAL (
-      SELECT o.ts, o.value, o.qc FROM obs o
-      WHERE o.series_id = e.series_id AND o.ts <= $1::timestamptz AND o.ts > $1::timestamptz - s.staleness_limit
-        AND (e.lic_history_export OR o.ts >= statement_timestamp() - e.history_window)
-      ORDER BY o.ts DESC LIMIT 1) o
-    WHERE s.active AND e.audience IN ('public') AND e.role = 'primary' AND e.lic_display`;
-  const plan = (
-    await t.admin.query({ text: `EXPLAIN (ANALYZE, BUFFERS) ${body}`, values: [at(3)], rowMode: 'array' })
-  ).rows
-    .map((r: unknown[]) => String(r[0]))
-    .join('\n');
+  // The plan of a function body, as the object owner sees it (EXPLAIN does not look inside a function): the body the
+  // database holds (#212: never a hand copy), with p_t bound as $1.
+  const planOf = async (fn: string) => {
+    const body = (
+      await t.admin.query<{ prosrc: string }>('SELECT prosrc FROM pg_proc WHERE proname = $1', [fn])
+    ).rows[0]?.prosrc.replace(/\bp_t\b/g, '$1::timestamptz');
+    if (body === undefined) throw new Error(`bench-q1: function ${fn} not found`);
+    return (await t.admin.query({ text: `EXPLAIN (ANALYZE, BUFFERS) ${body}`, values: [at(3)], rowMode: 'array' })).rows
+      .map((r: unknown[]) => String(r[0]))
+      .join('\n');
+  };
+  const plan = await planOf(OBS_AT.public);
   console.log(plan);
   if (!/Index Scan Backward using obs_(?:\d{4}_\d{2}|y\d{4})_pkey/.test(plan)) {
     console.error('bench-q1: FAIL: not a backward index scan on (series_id, ts)');
     failed = true;
   }
-  // P18a: the tide rows at T (the snapshot's extra call): the same measurement as Q1, and the plan of a copy of
-  // the function body, whose tide reads must all be index scans.
+  // #212 (F2): an obs partition that ends before the seed's first instant holds nothing Q1 may read, and the
+  // constant lower bound prunes it at executor start-up ("Subplans Removed"). A plan that still lists one (the bound
+  // that depends on each series' limit alone prunes only per rescan, "never executed") pays for every history
+  // partition. For --days under 3 the instants of at() lie too close to the seed's start to tell.
+  if (DAYS >= 3) {
+    const { rows: early } = await t.admin.query<{ name: string }>(
+      `SELECT c.relname AS name
+       FROM pg_partition_tree('obs') pt
+       JOIN pg_class c ON c.oid = pt.relid
+       WHERE pt.isleaf
+         AND (regexp_match(pg_get_expr(c.relpartbound, c.oid), 'TO \\(''([^'']+)''\\)'))[1]::timestamptz
+             <= (SELECT min(ts) FROM obs WHERE series_id = (SELECT min(id) FROM series))`,
+    );
+    const kept = early.map((r) => r.name).filter((name) => new RegExp(`\\bon ${name}\\b`).test(plan));
+    console.log(
+      `Q1 plan: ${early.length} obs partitions end before the seed's first instant, ${kept.length} of them in the plan`,
+    );
+    if (kept.length > 0) {
+      console.error(
+        `bench-q1: FAIL: the Q1 plan keeps ${kept.length} partitions that end before the seed (${kept.slice(0, 3).join(', ')}, …): no start-up pruning`,
+      );
+      failed = true;
+    }
+  } else console.log('Q1 plan: the partition check needs --days 3 or more; skipped');
+  // P18a: the tide rows at T (the snapshot's extra call): the same measurement as Q1, and the plan of the function
+  // body, whose tide reads must all be index scans.
   const TIDE = `SELECT series_id, kind, hilo, ts, value FROM ${TIDE_AT.public}($1::timestamptz)`;
-  const tideBody = (
-    await t.admin.query<{ prosrc: string }>('SELECT prosrc FROM pg_proc WHERE proname = $1', [TIDE_AT.public])
-  ).rows[0]?.prosrc.replace(/\bp_t\b/g, '$1::timestamptz');
-  if (tideBody === undefined) throw new Error(`bench-q1: function ${TIDE_AT.public} not found`);
-  const tidePlan = (
-    await t.admin.query({ text: `EXPLAIN (ANALYZE, BUFFERS) ${tideBody}`, values: [at(3)], rowMode: 'array' })
-  ).rows
-    .map((r: unknown[]) => String(r[0]))
-    .join('\n');
+  const tidePlan = await planOf(TIDE_AT.public);
   console.log(tidePlan);
   if (/Seq Scan on tide\s/.test(tidePlan)) {
     console.error('bench-q1: FAIL: the tide function scans the tide table');
+    failed = true;
+  }
+  // #212 (F1): the tidal series are found from the tidal stations, never by one station_pkey probe per series.
+  if (/\bstation_pkey\b/.test(tidePlan)) {
+    console.error(
+      'bench-q1: FAIL: the tide function probes station_pkey (once per series, not from the tidal stations)',
+    );
     failed = true;
   }
   const tideTimes: number[] = [];
