@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import { availableParallelism, cpus, tmpdir, totalmem } from 'node:os';
 import { join } from 'node:path';
+import { dataSince } from '../apps/server/src/api/data.ts';
 import { StaticCache } from '../apps/server/src/api/states.ts';
 import { DisplayWindow } from '../apps/server/src/api/window.ts';
 import { createApp } from '../apps/server/src/app.ts';
@@ -206,6 +207,16 @@ async function publisherPhase(): Promise<boolean> {
   const cfg = dbConfig({ DATABASE_URL: t.urlFor('rws_publish') }, 'rws_publish');
   if (typeof cfg === 'string') throw new Error(`bench-q1: ${cfg}`);
   const pub = openDb(cfg as DbConfig, { max: 3 }); // the public publisher's pool (publish/index.ts POOL)
+  // #218: the statements a cycle sends. A plugin sees every query, raw `sql` ones and those inside a transaction, but
+  // not the transaction control (BEGIN, COMMIT), which the driver sends itself.
+  let queries = 0;
+  const counted = pub.db.withPlugin({
+    transformQuery: (a) => {
+      queries++;
+      return a.node;
+    },
+    transformResult: async (a) => a.result,
+  });
   const root = mkdtempSync(join(tmpdir(), 'bench-publish-'));
   // Per step: time in the renderer, time in Output.put (JSON, hash, .zst level 19, .gz level 9, plain), files.
   type Step = { render: number; write: number; files: number };
@@ -268,11 +279,11 @@ async function publisherPhase(): Promise<boolean> {
     }
   }
   const deps: CycleDeps = {
-    db: pub.db,
+    db: counted,
     family: 'public',
     out: new TimedOutput(root),
     render,
-    window: new DisplayWindow(pub.db, { error: () => undefined }, 'public'),
+    window: new DisplayWindow(counted, { error: () => undefined }, 'public'),
     now: () => clock,
     build: 'dev',
     sections: vigicruesSections(),
@@ -300,10 +311,11 @@ async function publisherPhase(): Promise<boolean> {
     // Cycle 1: cold start. Production's budget and one settled day.
     const t1 = Date.now();
     clock = t1;
+    queries = 0;
     await publisher.cycle();
     const cold = Date.now() - t1;
     console.log(
-      `publisher cycle 1 (cold start, budget ${secs(BUDGET_MS)} s, 1 settled day): ${secs(cold)} s; ${bucketMs.recent.length} recent buckets and ${bucketMs.settled.length} settled buckets rendered, ${step('station').files} station files`,
+      `publisher cycle 1 (cold start, budget ${secs(BUDGET_MS)} s, 1 settled day): ${secs(cold)} s; ${bucketMs.recent.length} recent buckets and ${bucketMs.settled.length} settled buckets rendered, ${step('station').files} station files; ${queries} queries`,
     );
     for (const l of stepLines(cold)) console.log(l);
     for (const kind of ['recent', 'settled'] as const) {
@@ -366,9 +378,10 @@ async function publisherPhase(): Promise<boolean> {
     deps.budgetMs = Number.POSITIVE_INFINITY;
     deps.settledPerCycle = 0;
     const tc = Date.now();
+    queries = 0;
     await publisher.cycle();
     console.log(
-      `publisher catch-up cycle (no budget, no settled day): ${secs(Date.now() - tc)} s; ${bucketMs.recent.length} recent buckets, ${step('station').files} station files`,
+      `publisher catch-up cycle (no budget, no settled day): ${secs(Date.now() - tc)} s; ${bucketMs.recent.length} recent buckets, ${step('station').files} station files; ${queries} queries`,
     );
 
     // Cycle 2: steady state. Every series gets one new value at the next bucket, and the publish_dirty row the loader
@@ -399,14 +412,17 @@ async function publisherPhase(): Promise<boolean> {
       steps = new Map();
       bucketMs.recent.length = 0;
       const t2 = Date.now();
+      queries = 0;
       await publisher.cycle();
       const took = Date.now() - t2;
       drainMs += Math.max(CYCLE_MS, took);
       recentDone += bucketMs.recent.length;
       stationsDone += step('station').files;
-      perCycle.push(`${bucketMs.recent.length} bucket + ${step('station').files} station files in ${secs(took)} s`);
+      perCycle.push(
+        `${bucketMs.recent.length} bucket + ${step('station').files} station files in ${secs(took)} s, ${queries} queries`,
+      );
       if (n === 1) {
-        console.log(`publisher steady-state cycle 1 (one new value per series): ${secs(took)} s`);
+        console.log(`publisher steady-state cycle 1 (one new value per series): ${secs(took)} s; ${queries} queries`);
         for (const l of stepLines(took)) console.log(l);
       }
     }
@@ -734,6 +750,34 @@ try {
     // Two warm-up requests (the pool's first connection, the code paths), not counted:
     // their instant lies before every measured one, so no measured key is warmed.
     await ask([snapshotPath(lo - BUCKET_MS), seriesPath(ids[0] as number, lo - BUCKET_MS)]);
+
+    // #218 (KG-112): one uncached /stations (this app has answered none yet) and the plan of its first-data-day read
+    // as rws_api through the public view: a bounded probe per series names obs_1d_pkey under no Sort or aggregate.
+    const stationsCall = (await ask(['/api/v1/stations'])).answers[0] as { status: number; ms: number; body: string };
+    console.log(
+      `API /stations uncached: ${stationsCall.ms.toFixed(1)} ms, ${stationsCall.body.length} bytes (KG-112's trigger: 500 ms)`,
+    );
+    if (stationsCall.status !== 200) {
+      console.error(`bench-q1: FAIL: API /stations: status ${stationsCall.status}`);
+      failed = true;
+    }
+    const since = dataSince('public').compile(db.db);
+    const sincePlan = (
+      await api.query({
+        text: `EXPLAIN (ANALYZE, BUFFERS) ${since.sql}`,
+        values: [...since.parameters],
+        rowMode: 'array',
+      })
+    ).rows
+      .map((r: unknown[]) => String(r[0]))
+      .join('\n');
+    console.log(sincePlan);
+    const probe = /obs_1d_pkey/.test(sincePlan) && !/\b(Sort|HashAggregate|GroupAggregate)\b/.test(sincePlan);
+    console.log(
+      probe
+        ? 'dataSince: one bounded probe of obs_1d_pkey per series'
+        : 'dataSince: NOT one bounded probe of obs_1d_pkey per series',
+    );
 
     const cold = await ask(snapshots);
     report('/snapshot cold (LRU miss)', SNAPSHOT_COLD_MS, cold, snapshotProblem);

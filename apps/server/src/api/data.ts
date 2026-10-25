@@ -141,6 +141,12 @@ const flag = (flags: unknown, key: string): boolean | null => {
 // ponytail: dataSince is a GROUP BY over the whole daily rollup, cached 300 s; an uncached /stations took 580 ms at
 // 3,000 series × 365 days. Store the first-data day per series once the registry passes 1,000 active series or an
 // uncached /stations passes 500 ms.
+/** The first day with data of each series from DATA_FLOOR on (readStations; scripts/bench-q1.ts explains it). */
+export const dataSince = (family: ChannelAudience) =>
+  sql<{ series_id: number; since: Date }>`
+    SELECT series_id, min(bucket) AS since FROM ${sql.table(VIEWS[family].obs1d)}
+    WHERE bucket >= ${DATA_FLOOR}::timestamptz GROUP BY series_id`;
+
 export async function readStations(db: Kysely<DB>, family: ChannelAudience): Promise<Stations> {
   const v = VIEWS[family];
   const { stations, series, since } = await snapshot(db, async (tx) => ({
@@ -157,11 +163,7 @@ export async function readStations(db: Kysely<DB>, family: ChannelAudience): Pro
                EXTRACT(EPOCH FROM staleness_limit)::float8 AS staleness_s
         FROM ${sql.table(v.series)} WHERE active ORDER BY station_id, id`.execute(tx)
     ).rows,
-    since: (
-      await sql<{ series_id: number; since: Date }>`
-        SELECT series_id, min(bucket) AS since FROM ${sql.table(v.obs1d)}
-        WHERE bucket >= ${DATA_FLOOR}::timestamptz GROUP BY series_id`.execute(tx)
-    ).rows,
+    since: (await dataSince(family).execute(tx)).rows,
   }));
   const sinceOf = new Map(since.map((r) => [r.series_id, r.since]));
   const byStation = new Map<string, SeriesRow[]>();
