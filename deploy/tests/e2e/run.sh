@@ -204,18 +204,45 @@ echo
 proof "Docker $(docker version --format '{{.Server.Version}}') and Compose $(docker compose version --short) from Docker's repository (key fingerprint 9DC8…CD88); deploy/host/daemon.json accepted: $(docker info --format 'live-restore={{.LiveRestoreEnabled}} logging={{.LoggingDriver}} firewall={{.FirewallBackend.Driver}}')"
 
 # ------------------------------------------------------------------ images
-step "Build the server, web and backup images"
+step "Build the server, web and backup images (at once), and pull the other images meanwhile"
+readonly CADDY_PROBE_IMAGE=caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+# #217: the third-party images of the stack (every digest-pinned image line of the compose files), the other images this
+# script and the degraded spec run, pulled while the three images build; each pull and each build has its own log, and
+# every one is waited for and its exit status checked.
+mapfile -t pulls < <({
+  sed -nE 's/^ +image: ([^$ ]+@sha256:[0-9a-f]{64})$/\1/p' "$repo/deploy/compose.yaml" "$e2e/compose.ci.yaml"
+  printf '%s\n' "$CADDY_PROBE_IMAGE" "$NODE_IMAGE" "$MC_IMAGE" ${PLAYWRIGHT_IMAGE:+"$PLAYWRIGHT_IMAGE"}
+} | sort -u)
+pull_pids=()
+for i in "${!pulls[@]}"; do
+  docker pull -q "${pulls[$i]}" >"/tmp/pull-$i.log" 2>&1 &
+  pull_pids+=($!)
+done
 # A container on the default bridge must reach the internet under deploy/host/daemon.json.
-docker run --rm --entrypoint /bin/sh caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f \
+docker run --rm --entrypoint /bin/sh "$CADDY_PROBE_IMAGE" \
   -c 'cat /etc/resolv.conf; wget -q -T 20 -O /dev/null https://deb.debian.org/ && echo "container egress ok"' ||
   echo "::warning::a container on the default bridge cannot reach deb.debian.org"
-for image in server web backup; do
-  if ! docker build --progress=plain -f "$repo/deploy/$image/Dockerfile" -t "rws-$image:ci" "$repo" >"/tmp/build-$image.log" 2>&1; then
+images=(server web backup)
+build_pids=()
+for image in "${images[@]}"; do
+  docker build --progress=plain -f "$repo/deploy/$image/Dockerfile" -t "rws-$image:ci" "$repo" >"/tmp/build-$image.log" 2>&1 &
+  build_pids+=($!)
+done
+for i in "${!images[@]}"; do
+  image=${images[$i]}
+  if ! wait "${build_pids[$i]}"; then
     tail -n 60 "/tmp/build-$image.log"
     fail "docker build of $image"
   fi
   echo "rws-$image:ci $(docker image inspect -f '{{.Id}} {{.Size}}' "rws-$image:ci")"
 done
+for i in "${!pulls[@]}"; do
+  if ! wait "${pull_pids[$i]}"; then
+    cat "/tmp/pull-$i.log"
+    fail "docker pull of ${pulls[$i]}"
+  fi
+done
+echo "pulled: ${pulls[*]}"
 docker run --rm -e RWS_DOMAIN=$DOMAIN -e RWS_CONTACT_EMAIL=contact@$DOMAIN rws-web:ci \
   caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null
 # P12b: both phases of the go-public switch are valid, and a value that names no phase file stops Caddy.
@@ -619,9 +646,26 @@ probe_on() {
 # The backup network exists once the backup job has run (profile "jobs"): restic version is offline.
 rws_compose run --rm --no-deps -T backup version
 probe_on rws_egress wget -q -O /dev/null https://www.example.com || fail "egress: https blocked"
-if probe_on rws_egress wget -q -O /dev/null http://www.example.com; then fail "egress: port 80 open"; fi
-if probe_on rws_egress nslookup www.example.com 9.9.9.9; then fail "egress: DNS to a foreign resolver open"; fi
-if probe_on rws_backup nc -z -w 5 1.1.1.1 443; then fail "backup network: an address outside the bucket set is reachable"; fi
+# #217: the three that must not get out run at once (each container waits up to its own timeout), then each one's
+# output is printed and its exit status asserted, in this order.
+probe_on rws_egress wget -q -O /dev/null http://www.example.com >/tmp/egress-80.log 2>&1 &
+p80=$!
+probe_on rws_egress nslookup www.example.com 9.9.9.9 >/tmp/egress-dns.log 2>&1 &
+pdns=$!
+probe_on rws_backup nc -z -w 5 1.1.1.1 443 >/tmp/egress-backup.log 2>&1 &
+pbackup=$!
+blocked() { # <pid> <log> <failure>: the probe must have run and failed
+  local rc=0
+  wait "$1" || rc=$?
+  cat "$2"
+  ((rc != 0)) || fail "$3"
+  # Review SR-1: 125 to 127 are docker run's own (the probe never ran), never a blocked connection; a timeout ends
+  # the program with SIGTERM (143).
+  ((rc < 125 || rc > 127)) || fail "$3: the probe did not run (docker run exit $rc)"
+}
+blocked "$p80" /tmp/egress-80.log "egress: port 80 open"
+blocked "$pdns" /tmp/egress-dns.log "egress: DNS to a foreign resolver open"
+blocked "$pbackup" /tmp/egress-backup.log "backup network: an address outside the bucket set is reachable"
 nft add element inet rws backup4 '{ 1.1.1.1 }'
 probe_on rws_backup nc -z -w 5 1.1.1.1 443 || fail "backup network: an address in the bucket set is blocked"
 nft flush set inet rws backup4
@@ -1203,10 +1247,15 @@ if [[ $ipv6_result == ok ]]; then
   c7_expect+=("/c7-probe-ns6 fd99::")
 fi
 # From a container on a Docker bridge (informational: its peer is whatever Docker shows Caddy; nothing fails here).
+# #217: `timeout` only emits an event; without the handler the request waited for the kernel's connect timeout (about
+# 130 s). Every CI run so far printed a timeout here. It is an idle timeout (connect, then the TLS handshake), so a
+# stalled handshake can take up to about twice the 10 s (review CR-4).
 docker run --rm --network rws_public -e "C7_IP=$IP4" -e "C7_DOMAIN=$DOMAIN" -v /ci/pki/pebble-root.pem:/pebble-root.pem:ro \
-  --entrypoint /nodejs/bin/node rws-server:ci -e 'require("https").get({ host: process.env.C7_IP, servername: process.env.C7_DOMAIN,
+  --entrypoint /nodejs/bin/node rws-server:ci -e 'const req = require("https").get({ host: process.env.C7_IP, servername: process.env.C7_DOMAIN,
   headers: { host: process.env.C7_DOMAIN }, path: "/c7-probe-ctr", ca: require("fs").readFileSync("/pebble-root.pem"), timeout: 10000 },
-  (r) => { r.resume(); r.on("end", () => console.log("container probe: HTTP " + r.statusCode)); }).on("error", (e) => console.log("container probe: " + e.code));' ||
+  (r) => { r.resume(); r.on("end", () => console.log("container probe: HTTP " + r.statusCode)); });
+  req.on("timeout", () => req.destroy(Object.assign(new Error("timeout"), { code: "TIMEOUT" })));
+  req.on("error", (e) => console.log("container probe: " + e.code));' ||
   true
 sleep 2
 docker exec rws-caddy-1 cat /data/access/access.log >/ci/access-c7.log

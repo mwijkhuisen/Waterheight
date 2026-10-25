@@ -82,11 +82,34 @@ const targets = SPECS.map((id) => {
   };
 });
 
+// A messwerte.zip of our own: the real header and 10,050 rows (the validity wants 10,000 lines).
+const STATIONS = ['2768898001', '2829100000100', '2869500000200', '9286455000200', '2847500000100'];
+const messwerte = (rows: string[] = [], header = 'station_no;time;value(cm)', member = 'messwerte.txt') =>
+  zip({
+    [member]: Buffer.from(
+      [
+        header,
+        // Five stations, one row every 5 minutes for 7 days each (a real member: 252 stations and 2,016 times,
+        // within the parser's caps of 1,000 and 4,000), a varying value: repeated rows would trip the ZIP ratio guard.
+        ...Array.from({ length: 10_050 }, (_, i) => {
+          const at = new Date(Date.UTC(2026, 8, 22, 13, 0, 0) + (i % 2_010) * 300_000 + 3_600_000).toISOString();
+          const no = STATIONS[Math.floor(i / 2_010)];
+          return `${no};${at.slice(0, 19)}.000+01:00;${(((i * 7919) % 19_000) / 100).toFixed(2)}`;
+        }),
+        ...rows,
+        '2768898001;',
+        '',
+      ].join('\r\n'),
+    ),
+  });
+
 type Answer = () => Response;
 const answer =
   (body: Buffer | string, status = 200, type = 'application/json'): Answer =>
   () =>
     new HttpResponse(body, { status, headers: { 'content-type': type } });
+/** The real DE-7 recording: 881 KB that cost about 0.7 s of each run, so only the recorded-payload tests answer it. */
+const DE7_RECORDED = { 'de-7-messwerte': answer(BODY['de-7-messwerte'], 200, 'application/zip') };
 const GOOD: Record<Spec, Answer> = {
   'de-1-basin': answer(BODY['de-1-basin']),
   'nl-1-obs-key': answer(BODY['nl-1-obs-key']),
@@ -95,7 +118,8 @@ const GOOD: Record<Spec, Answer> = {
   'fr-1-obs': answer(BODY['fr-1-obs']),
   'ch-1-lindas': answer(BODY['ch-1-lindas'], 200, 'text/csv;charset=UTF-8'),
   'ch-2-pq': answer(BODY['ch-2-pq'], 200, 'application/octet-stream'),
-  'de-7-messwerte': answer(BODY['de-7-messwerte'], 200, 'application/zip'),
+  // #217: our own messwerte.zip, which passes the same validity and parse; the recording runs in its own describe.
+  'de-7-messwerte': answer(messwerte(), 200, 'application/zip'),
   'lu-1-csv': answer(BODY['lu-1-csv'], 200, 'text/csv'),
   'ch-4-forecast': answer(BODY['ch-4-forecast']),
   'fr-4': answer(BODY['fr-4'], 200, 'application/json;charset=UTF-8'),
@@ -139,7 +163,16 @@ async function run(answers: Partial<Record<Spec, Answer>> = {}, now = NOW) {
       });
     }),
   );
-  const client = testClient(Object.fromEntries(capture.hosts), { userAgent: UA });
+  // A clock of its own that the client's waits advance (a host in backoff after a 5xx or a transport error, the RWS
+  // and hydrodaten specs sharing a host): the same decisions, without the seconds (#217).
+  let clock = Date.now();
+  const client = testClient(Object.fromEntries(capture.hosts), {
+    userAgent: UA,
+    now: () => clock,
+    sleep: async (ms) => {
+      clock += ms;
+    },
+  });
   const report = await check({ fetch: (source, req, opts) => client.fetch(source, req, opts), now });
   return {
     report,
@@ -157,10 +190,11 @@ const nl1 = (change: (doc: { WaarnemingenLijst: Record<string, unknown>[] }) => 
   return answer(JSON.stringify(doc));
 };
 
-// Each run parses the whole registry (about 2,000 series since P5b) and twelve payloads: seconds on a CI runner.
+// Each run parses twelve payloads, here every one of them the recording, the 881 KB DE-7 ZIP included (the registry is
+// parsed once per process since #217).
 describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
   it('passes DE-1, NL-1 (observations, forecasts and, since P16b, the astro tide), NL-2, FR-1, CH-1, CH-2, DE-7, LU-1, the CH-4 figure and the FR-4 list through the loader parse: all twelve ok', async () => {
-    const { codes, report } = await run();
+    const { codes, report } = await run(DE7_RECORDED);
     expect(codes).toEqual({
       'de-1-basin': 'ok',
       'nl-1-obs-key': 'ok',
@@ -182,7 +216,7 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
   });
 
   it('sends exactly the twelve registry targets, with the contact User-Agent and no API key', async () => {
-    const { seen } = await run();
+    const { seen } = await run(DE7_RECORDED);
     expect(seen).toEqual(
       targets.map((t) => ({ method: t.method, host: t.host, path: t.path, userAgent: UA, apiKey: false })),
     );
@@ -218,7 +252,7 @@ describe('the live check on the recorded payloads', { timeout: 30_000 }, () => {
   it('checks the first FR-1 page only: a `next` link in the payload is never followed', async () => {
     const doc = JSON.parse(BODY['fr-1-obs'].toString('utf8'));
     doc.next = `${doc.first}&page=2`;
-    const { codes, seen } = await run({ 'fr-1-obs': answer(JSON.stringify(doc)) });
+    const { codes, seen } = await run({ ...DE7_RECORDED, 'fr-1-obs': answer(JSON.stringify(doc)) });
     expect(codes['fr-1-obs']).toBe('ok');
     expect(seen.filter((r) => r.host === 'hubeau.eaufrance.fr')).toHaveLength(1);
     expect(seen).toHaveLength(12);
@@ -557,27 +591,6 @@ describe('what a drifted provider turns into', { timeout: 30_000 }, () => {
     expect(codes['ch-2-pq']).toMatch(/^unrecognized_keys at /);
     expect(JSON.stringify(report)).not.toContain('EVIL_PROVIDER_KEY');
   });
-
-  // A messwerte.zip of our own: the real header and 10,050 rows (the validity wants 10,000 lines).
-  const STATIONS = ['2768898001', '2829100000100', '2869500000200', '9286455000200', '2847500000100'];
-  const messwerte = (rows: string[] = [], header = 'station_no;time;value(cm)', member = 'messwerte.txt') =>
-    zip({
-      [member]: Buffer.from(
-        [
-          header,
-          // Five stations, one row every 5 minutes for 7 days each (a real member: 252 stations and 2,016 times,
-          // within the parser's caps of 1,000 and 4,000), a varying value: repeated rows would trip the ZIP ratio guard.
-          ...Array.from({ length: 10_050 }, (_, i) => {
-            const at = new Date(Date.UTC(2026, 8, 22, 13, 0, 0) + (i % 2_010) * 300_000 + 3_600_000).toISOString();
-            const no = STATIONS[Math.floor(i / 2_010)];
-            return `${no};${at.slice(0, 19)}.000+01:00;${(((i * 7919) % 19_000) / 100).toFixed(2)}`;
-          }),
-          ...rows,
-          '2768898001;',
-          '',
-        ].join('\r\n'),
-      ),
-    });
 
   it('a DE-7 ZIP of the right shape passes, one with another header, member or value is a fixed code', async () => {
     const zipped = (body: Buffer) => answer(body, 200, 'application/zip');

@@ -4,6 +4,12 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## O1, the CI gate and the dev loop (#217)
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-477 | ci | **The O1 targets are only partly met (measured, CI run 40173880746 on d7dd54a):** the longest job is now the webkit leg (19.8 min; its Playwright step 945 s for the one `webkit` project, about 1,850 test-s on 2 workers), so the ≤ 19 min gate target is missed on a slow runner; `test/contract-check.test.ts` takes 26.8–29.5 s in CI against the 20 s target (CLI spawns and the real recordings, about 16 s locally); and that run's gate was 29.3 min because its jobs queued 2 to 13 min at the account's concurrent-job limit (a Dependabot PR's ci, loadtest and release runs at the same time), which the two extra jobs (`deploy-host`, the fourth e2e leg) add to. | A sharded webkit leg, Playwright workers 2 → 3 or Vitest's worker count (measure first; out of #217's scope); the owner accepts the residuals | open [U] |
+
 ## #213 NL-1 placeholder values
 
 | ID | Area | Gap | What closes it / who | Status |
@@ -284,7 +290,7 @@ What P10f leaves (PHASES §47). It closes KG-326 and rewrites KG-245.
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-338 | web, ci | **The four visual baselines show the old top bar.** `dst-0000z`, `dst-0100z`, `flood-q` and `lowwater-delta` of `apps/web/e2e/visual.spec.ts` include the name and the mark, so the `visual` project fails until they are regenerated: CI writes the new PNGs on the first run (artifact `e2e-test-results`) | The owner looks at the four PNGs, then they are committed to `apps/web/e2e/visual/__screenshots__/` (the CLAUDE.md rule for baselines) | open |
+| KG-338 | web, ci | **The four visual baselines show the old top bar.** `dst-0000z`, `dst-0100z`, `flood-q` and `lowwater-delta` of `apps/web/e2e/visual.spec.ts` include the name and the mark, so the `visual` project fails until they are regenerated: CI writes the new PNGs on the first run (artifact `e2e-visual-baselines`; the diffs in `e2e-test-results-chromium` since #217, `e2e-test-results` before) | The owner looks at the four PNGs, then they are committed to `apps/web/e2e/visual/__screenshots__/` (the CLAUDE.md rule for baselines) | open |
 
 ## #132 Caddy memory and the per-source connection cap
 
