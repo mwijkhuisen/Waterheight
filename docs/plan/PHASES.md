@@ -4722,3 +4722,44 @@ Two more runs of the new case counted the station charts' `setOption` calls in t
 
 - **[U] items** (KG-269, KG-481 to KG-483): the owner GPU run of `fps.spec.ts` with `FPS_GATE=1` now covers the new case too; the owner decides on KG-481.
 - **Not in scope** (#219): per-language bundles, `strictExecutionOrder`, a `React.memo` sweep, sharing `spansOf`, the load path and the bundle (O4), deduplicating helpers.
+
+## 62. Amendment: O4 (#220), the web load path (2026-10-25)
+
+What optimisation issue #220 changed: the web app starts its boot requests earlier and loads less in the entry, and what is shown stays identical. Web only: no change to the CSP, Caddy, any request target, any HTML sink, contracts, dependencies, the server or deploy. Stacked on PR #226 (O3, #219) by the owner (2026-10-25); the O4 PR targets `claude/opt-web-playback`.
+
+- **Built** (paths under `apps/web/src/`).
+  1. Boot fetches (f58eb58): the runtime config and the home route's boot files (`prefetchStatic(bootFiles(location.search))`, `lib/data/chain.ts`) start before `ensureTemporal`; `browserFetch` hands the early answer to the first read of its path once, and the site's contract still parses it. Nothing that needs Temporal runs before it (never `readSearch`).
+  2. Map preload (04b977d): `features/map/preload.ts` starts the map chunk, the style and the tiles manifest at the map view's mount (keyed on `onMap`); `createMap` takes the early manifest once while it is under 60 s old and parses it in the map chunk.
+  3. Lazy station panel (04b977d): `StationPanel` is a lazy chunk with the Hovmöller pattern (a `div.panelPending` box, never an `<aside>`, while it loads or failed); the e2e `settled()`/`idle()` wait for the `aside` when the URL has `s=`.
+  4. Label split (d139029): the basis labels live in `lib/labels/basis.ts` + `labels-public.gen.ts` (lazy only); `labels.ts`/`labels-index.gen.ts` keep what the eager legend and river chips use.
+  The baseline (c82c2af) added the `rws:map-idle` mark in `createMap.ts` and `e2e/time-to-map.spec.ts`.
+- **Reality against the plan.**
+  1. #219 was not merged when this was planned; the owner stacked O4 on PR #226.
+  2. A `?s=` deep link does not move focus today (`focusPanel` is set only by `open()`); "with focus as before" means this, unchanged.
+  3. The label catalogue is in the entry independently of the panel (through `Legend.tsx`, `RiverChip.tsx` and `flow/rows.ts`).
+  4. The entry-size numbers in the older docs disagree; the baseline is what `map-build.test.ts` logs on the base commit. The budget is 250 KiB.
+  5. No test asserted that information pages make no data requests; one is added.
+  6. `docs/agent-reference.md` does not exist on this branch; the web gotchas are in CLAUDE.md § Gotchas.
+  7. On home, `status.json` is read only by `useMode`, and only without a valid `?mode=`.
+  8. `/tiles/manifest.json` is not the rivers manifest, so the rivers manifest dedupe stays out of scope.
+  9. Only the fetch of the tiles manifest moves; its parse stays in the map chunk.
+  10. The time-to-map mark is the base map's first `idle` (style and first tiles); `StationsMap` adds the station layers after `ready`.
+  11. The request-order criterion: the home route reads no `latest.json` (the snapshot is `/data/v1/recent/<day>/<hhmm>.json`), and the boot files finish around the moment `Viewer` mounts, so their order against the map chunk is a race. The spec asserts that the createMap chunk starts before the first snapshot read.
+  12. The baseline CI run of c82c2af failed `p19b.spec.ts:118` (tidal panel) on all three public legs. It was inherited from 6c60b86 and fixed in O3's f913595, merged here in 12e3e33.
+- **Numbers observed** (initial JavaScript is gzip per shell; the same on all four shells).
+
+| Measure | Base (6c60b86 + mark) | After boot fetches, preload, lazy panel (04b977d) | After label split (d139029) |
+|---|---|---|---|
+| Entry JS, gzip | 208,842 B | 196,879 B | 191,274 B |
+
+  Base and head carry the same O3 app code: the merge 12e3e33 brought only O3's e2e and docs fix (f913595: `p11b.spec.ts`, `p19b.spec.ts`, known-gaps, PHASES). The `StationPanel` chunk is 37.63 kB, 12.59 kB gzip. The label split saves 5,605 B, at or over the 2,048 B threshold, so it is kept (owner Q2).
+- **Time to the first map idle** (report-only; fresh context, 3 runs, CDP: 150 ms latency, 1.6 Mbps down, 750 kbps up, CPU x4): CI is the `owner-perf` leg on GitHub's runner, WSL is Chromium headless shell 1248 = Chromium 156.0.8078.4 on WSL2, Ryzen 7 5800X, software GL; CI against the real Caddy serving dist-e2e, WSL against the HTTP/1.1 Node stand-in; neither is production (KG-484).
+
+| Run | Base median | Head median |
+|---|---|---|
+| CI (run 40194043809, c82c2af) | 12,469 ms (12,442, 12,469, 12,783) | 13,374 ms (13,207, 13,374, 14,387; run 40197763942, 12e3e33) and 13,151 ms (13,151, 13,253, 13,134; run 40201416612, cdc3e6d) |
+| WSL | 13,785, 13,706, 13,858 ms (three sets: 13,896 13,785 13,666 / 14,046 13,697 13,706 / 13,861 13,858 13,809) | 13,109, 13,534, 13,496, 12,966 ms (19406eb); alternating on one box with the base (cdc3e6d against c82c2af): 12,896 and 12,935 against 13,795 and 13,886 ms |
+
+- **Lighthouse** (the CI `owner-perf` leg, 3 runs, report-only, KG-237), the TBT watch of the plan (MapLibre now evaluates at the map view's mount): base (c82c2af) performance 46, 66, 67, TBT 2,990, 2,400, 2,188 ms, LCP 5,392, 2,251, 2,286 ms; head (12e3e33) performance 47, 48, 65, TBT 5,350, 7,002, 5,480 ms, LCP 5,020, 4,569, 2,111 ms, and (cdc3e6d) performance 44, 49, 65, TBT 7,004, 6,280, 4,801 ms, LCP 5,452, 4,653, 2,103 ms. Each CI run had its own runner: the scripting of the untouched `temporal` chunk rose 1.42 to 1.84× too. On one box (WSL, the stand-in, alternating base and head, 2 × 3 runs each), TBT median went from about 2,450 to 1,980 ms, LCP median from about 4,775 to 6,501 ms, and performance from about 46 to 42. The LCP element is the timebar's time text, which paints after meta and stations, and the 302 kB map chunk now shares the link with them. A variant that starts the chunk once meta and stations are in (style and manifest still at mount) measured an LCP median of about 5,503 ms against 4,225 ms for the base, and time-to-map 13,499 and 13,407 against 13,982 and 13,739 ms. By the owner's rule (adopt it only if LCP is back to base) it was not adopted (KG-487).
+- **[U] items:** time-to-map is measured on Chromium only (CDP) and the CI runner varies by about 50 % (report-only, KG-120, KG-237); the gain on Safari's polyfill wait is not measured (Playwright WebKit has native Temporal); production (Cloudflare edge) is not measured, and the owner may run Lighthouse on waterradar.io after the deploy (KG-484). New rows: KG-484 to KG-487.
+- **Not in scope** (#220): a router, `React.lazy`, a new dependency, the rivers manifest dedupe, per-language bundles.
