@@ -48,6 +48,13 @@ describe('e2e job pins', () => {
     expect(legs.flatMap((leg) => words(leg.alone)).sort()).toEqual(['fps', 'lighthouse']);
     expect(ci).toContain('--no-deps --workers=1 --output=test-results/alone || rc=$?');
   });
+
+  it('hands each leg its projects and its alone projects (review CR-1)', () => {
+    expect(ci).toMatch(/^ {6}E2E_PROJECTS: \$\{\{ matrix\.projects \}\}$/m);
+    expect(ci).toMatch(/^ {6}E2E_ALONE: \$\{\{ matrix\.alone \}\}$/m);
+    expect(ci).toContain('for p in $E2E_PROJECTS; do args+=(--project="$p"); done');
+    expect(ci).toContain('for p in $E2E_ALONE; do alone+=(--project="$p"); done');
+  });
 });
 
 describe('the ci gate', () => {

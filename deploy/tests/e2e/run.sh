@@ -654,11 +654,14 @@ probe_on rws_egress nslookup www.example.com 9.9.9.9 >/tmp/egress-dns.log 2>&1 &
 pdns=$!
 probe_on rws_backup nc -z -w 5 1.1.1.1 443 >/tmp/egress-backup.log 2>&1 &
 pbackup=$!
-blocked() { # <pid> <log> <failure>: the probe must have failed
+blocked() { # <pid> <log> <failure>: the probe must have run and failed
   local rc=0
   wait "$1" || rc=$?
   cat "$2"
   ((rc != 0)) || fail "$3"
+  # Review SR-1: 125 to 127 are docker run's own (the probe never ran), never a blocked connection; a timeout ends
+  # the program with SIGTERM (143).
+  ((rc < 125 || rc > 127)) || fail "$3: the probe did not run (docker run exit $rc)"
 }
 blocked "$p80" /tmp/egress-80.log "egress: port 80 open"
 blocked "$pdns" /tmp/egress-dns.log "egress: DNS to a foreign resolver open"
@@ -1245,7 +1248,8 @@ if [[ $ipv6_result == ok ]]; then
 fi
 # From a container on a Docker bridge (informational: its peer is whatever Docker shows Caddy; nothing fails here).
 # #217: `timeout` only emits an event; without the handler the request waited for the kernel's connect timeout (about
-# 130 s). Every CI run so far printed a timeout here.
+# 130 s). Every CI run so far printed a timeout here. It is an idle timeout (connect, then the TLS handshake), so a
+# stalled handshake can take up to about twice the 10 s (review CR-4).
 docker run --rm --network rws_public -e "C7_IP=$IP4" -e "C7_DOMAIN=$DOMAIN" -v /ci/pki/pebble-root.pem:/pebble-root.pem:ro \
   --entrypoint /nodejs/bin/node rws-server:ci -e 'const req = require("https").get({ host: process.env.C7_IP, servername: process.env.C7_DOMAIN,
   headers: { host: process.env.C7_DOMAIN }, path: "/c7-probe-ctr", ca: require("fs").readFileSync("/pebble-root.pem"), timeout: 10000 },

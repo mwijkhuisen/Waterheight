@@ -172,7 +172,8 @@ async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRe
 
 /**
  * The registry, parsed once per process (#217): about 2 s of YAML and schema checks that the CLI needs once and the
- * tests, which run `check()` about 55 times on the same registry, would otherwise pay each time.
+ * tests, which run `check()` about 55 times on the same registry, would otherwise pay each time. A test that needs
+ * another registry needs its own module instance, i.e. its own file (test/contract-check-once.test.ts).
  */
 let parsed: { capture: ReturnType<typeof loadRegistry>; stations: Stations } | undefined;
 const registries = () => (parsed ??= { capture: loadRegistry(), stations: readRegistry().stations });
