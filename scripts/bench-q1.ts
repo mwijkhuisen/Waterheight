@@ -19,7 +19,8 @@ import { BUCKET_MS as BUCKET_STEP_MS, dayOf, isSettled } from '../packages/contr
 // The Q1 benchmark of issue #17: "all series at T" on the synthetic seed of
 // 4,000 series × 60 days × 15 min (23.3 M rows; the 100 tidal series are captured every 10 min, as NL-1 sea series are; P20a, issue
 // #68: 3,000 until then, roughly twice the public series of roadmap 2) must run in < 50 ms. It runs exactly as production does: a real rws_api login (read-only, 2 s
-// statement timeout), through the public at-T function of audience.ts (A§8 Q1).
+// statement timeout), through the public at-T function of audience.ts (A§8 Q1). The database also holds production's
+// empty yearly history partitions of obs from 1950 on (#212, D-2).
 //
 // It then benchmarks the API on the same seed (issue #19): "/snapshot p95 is
 // < 50 ms warm and < 150 ms cold; /series over 14 days raw is < 50 ms". The
@@ -467,7 +468,13 @@ try {
      FROM generate_series(1, $1) g`,
     [SERIES, TIDAL],
   );
+  // #212 (D-2): production holds empty history partitions back to the 1950s (DE-8's backfill, #190), and every one
+  // of them is in a plan that cannot prune at plan time. The bench creates them too, so it times what production runs.
+  await t.admin.query(`SELECT ensure_history_partitions('1950-01-01', now() - make_interval(days => $1))`, [DAYS + 1]);
   await t.admin.query(`SELECT ensure_partitions(now() - make_interval(days => $1), now())`, [DAYS + 1]);
+  const leaves = (await t.admin.query<{ n: string }>(`SELECT count(*) AS n FROM pg_partition_tree('obs') WHERE isleaf`))
+    .rows[0]?.n;
+  console.log(`obs leaf partitions: ${leaves} (history partitions from 1950 on, as production has)`);
   // Time-major, as the loader inserts: every series at each step. The tidal series (the first TIDAL) are captured every
   // 10 min, as the NL-1 sea series are, so that every one of their values has an astronomical row at exactly its ts
   // (the snapshot's surge is value - astro at that instant; CR-4); the rest every 15 min.
