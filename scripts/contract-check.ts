@@ -170,10 +170,16 @@ async function outcome(id: string, deps: Deps, capture: ReturnType<typeof loadRe
   }
 }
 
+/**
+ * The registry, parsed once per process (#217): about 2 s of YAML and schema checks that the CLI needs once and the
+ * tests, which run `check()` about 55 times on the same registry, would otherwise pay each time.
+ */
+let parsed: { capture: ReturnType<typeof loadRegistry>; stations: Stations } | undefined;
+const registries = () => (parsed ??= { capture: loadRegistry(), stations: readRegistry().stations });
+
 /** One request per spec, one after the other. Pure apart from `deps.fetch`; never carries a URL, header or provider text. */
 export async function check(deps: Deps): Promise<Report> {
-  const capture = loadRegistry();
-  const { stations } = readRegistry();
+  const { capture, stations } = registries();
   const results: Report['results'] = [];
   for (const spec of SPECS) {
     const code = await outcome(spec, deps, capture, stations).catch(() => 'check_error');
@@ -203,9 +209,8 @@ async function main(argv: string[]): Promise<number> {
     console.error(`contract-check: ${env}`);
     return EXIT_CONFIG;
   }
-  const registry = loadRegistry();
   // No sourceHeaders: the optional RWS x-api-key is never sent from CI.
-  const client = new Client({ hosts: registry.hosts, userAgent: captureUserAgent(env) });
+  const client = new Client({ hosts: registries().capture.hosts, userAgent: captureUserAgent(env) });
   const report = await check({ fetch: (source, req, opts) => client.fetch(source, req, opts), now: new Date() });
   const lines = reportLines(report);
   const failed = report.results.filter((r) => r.code !== 'ok').length;
