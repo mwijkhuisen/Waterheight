@@ -111,6 +111,12 @@ export const StationsFile = z.strictObject({ stations: z.array(Station).min(1) }
 
 const DAY_MS = 86_400_000;
 
+/**
+ * #212 (D-1): no registry row's staleness_limit exceeds two days. The public at-T function bounds its scan by this
+ * cap (STALENESS_CAP in scripts/gen-views.ts), which removes no value only while every public series stays within it.
+ */
+export const STALENESS_CAP_MS = 2 * DAY_MS;
+
 /** An ISO duration of days, hours, minutes and seconds in ms; NaN for anything else (years, months, weeks). */
 function dayMs(iso: string): number {
   const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(iso);
@@ -174,6 +180,10 @@ export function validateStations(
       if (!(dayMs(row.staleness_limit) <= DAY_MS))
         problems.push(`${at}: an aggregate row's staleness_limit exceeds P1D`);
     }
+    // #212: every row, owner rows too (the sync stores an audience equal to its source's as NULL, so the database
+    // cannot tell such a row from a public one); weeks, months and years are NaN, so refused.
+    if (!(dayMs(row.staleness_limit) <= STALENESS_CAP_MS))
+      problems.push(`${at}: staleness_limit exceeds P2D (the cap of the public at-T bound)`);
     const source = byId.get(row.source);
     if (source === undefined) problems.push(`${at}: unknown source ${row.source}`);
     else if (!audienceWithin(row.audience, source.audience)) {
