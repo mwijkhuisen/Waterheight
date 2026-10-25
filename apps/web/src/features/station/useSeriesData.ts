@@ -116,10 +116,10 @@ export function useSeriesData({ series, t, span, serverNow, recent, recentFailed
       );
     return { astro: line(d.tide.astro), surge: line(d.tide.surge) };
   }, [tideOn, tideAnswer.data, conv, span.from, span.to]);
-  const view = useMemo(
-    () => (run === undefined ? undefined : forecastView(run, conv, future ? serverNow : t)),
-    [run, conv, future, serverNow, t],
-  );
+  // O3: after now the view is cut at the server's now, so a step of t keeps it (and the chart redraws nothing but its
+  // marker); before now it is cut at t, whose own run arrives with each settled t anyway.
+  const base = future ? serverNow : t;
+  const view = useMemo(() => (run === undefined ? undefined : forecastView(run, conv, base)), [run, conv, base]);
   const failed = older.isError || (gap && api && earlier.isError) || recentFailed;
   const historyNone = source === 'none';
   const recentOnly = gap && !api;

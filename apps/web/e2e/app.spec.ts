@@ -830,7 +830,9 @@ test('a station named as an img tag with onerror is inert: popup, panel, table a
   await page.waitForFunction(() => {
     const charts = [...((window as unknown as W).__rws?.charts ?? [])];
     const option = charts[0]?.getOption();
-    return charts.length === 1 && (option?.series?.[0]?.data?.length ?? 0) > 100 && !!option?.tooltip?.[0];
+    // (the observations by id: the marker series of the now and selected lines comes first, O3)
+    const obs = option?.series?.find((x) => x.id === 'obs');
+    return charts.length === 1 && (obs?.data?.length ?? 0) > 100 && !!option?.tooltip?.[0];
   });
   const chartBox = panel.locator('div[role="img"]');
   const chartTags = () => chartBox.evaluate((el) => [...el.querySelectorAll('*')].map((e) => e.tagName.toLowerCase()));
@@ -845,8 +847,9 @@ test('a station named as an img tag with onerror is inert: popup, panel, table a
         .flatMap((e) => (typeof e.style?.text === 'string' ? [e.style.text] : []));
     const before = drawn();
     const option = chart.getOption();
-    const data = option?.series?.[0]?.data ?? [];
-    chart.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: data.length - 1 });
+    const obs = option?.series?.findIndex((x) => x.id === 'obs') ?? -1;
+    const data = option?.series?.[obs]?.data ?? [];
+    chart.dispatchAction({ type: 'showTip', seriesIndex: obs, dataIndex: data.length - 1 });
     await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
     return {
       renderMode: option?.tooltip?.[0]?.renderMode,

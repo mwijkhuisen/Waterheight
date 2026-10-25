@@ -49,13 +49,18 @@ test.beforeEach(async ({ page, browserName }) => {
     });
 });
 
-/** The first chart's option, reduced to what the tests read. */
+/**
+ * The first chart's option, reduced to what the tests read: the lines of every series (O3: the now and selected lines
+ * are the marker series', the thresholds the observations'), the zones of the observations.
+ */
 const chartOption = (page: Page) =>
   page.evaluate(() => {
     const option = [...((window as unknown as W).__rws?.charts ?? [])][0]?.getOption();
-    const obs = option?.series?.[0];
+    const obs = option?.series?.find((x) => x.id === 'obs');
     return {
-      lines: (obs?.markLine?.data ?? []).map((d) => ({ name: d.name ?? '', x: d.xAxis ?? null, y: d.yAxis ?? null })),
+      lines: (option?.series ?? [])
+        .flatMap((x) => x.markLine?.data ?? [])
+        .map((d) => ({ name: d.name ?? '', x: d.xAxis ?? null, y: d.yAxis ?? null })),
       zones: obs?.markArea?.data?.length ?? 0,
     };
   });
@@ -270,6 +275,100 @@ test('the period select sets the chart’s span (2, 7 and 14 days)', async ({ pa
   }
   // panel state only: the URL has no new key
   expect([...new URL(page.url()).searchParams.keys()].sort()).toEqual(['s']);
+  await finish(page, s);
+});
+
+// ---------------------------------------------------------------- O3: a step of t (issue #219)
+
+/** The first chart's series as drawn data (ids, points, lines, zones) and its time axis: functions left out. */
+const chartDrawn = (page: Page) =>
+  page.evaluate(() => {
+    const option = [...((window as unknown as W).__rws?.charts ?? [])][0]?.getOption() as
+      | {
+          series?: {
+            id?: string;
+            name?: string;
+            data?: unknown[];
+            markLine?: { data?: unknown[] };
+            markArea?: { data?: unknown[] };
+          }[];
+          xAxis?: { min?: number; max?: number }[];
+        }
+      | undefined;
+    return {
+      series: (option?.series ?? []).map((x) => ({
+        id: x.id,
+        name: x.name,
+        data: x.data,
+        // ECharts fills `emphasis` into a line item when it creates the series' marker model, not on a merge; the lines
+        // are `silent`, so no emphasis is ever drawn: it is left out of the comparison.
+        lines: (x.markLine?.data as { emphasis?: unknown }[] | undefined)?.map(({ emphasis: _, ...line }) => line),
+        zones: x.markArea?.data,
+      })),
+      x: (option?.xAxis ?? []).map((a) => [a.min, a.max]),
+    };
+  });
+/** The station charts' full redraws so far (the e2e build's count, chart.ts). */
+const draws = (page: Page) => page.evaluate(() => (window as unknown as W).__rws?.chartDraws ?? 0);
+/** The redraw count once it has stopped changing (late answers such as the as-of run may still redraw at first). */
+async function steadyDraws(page: Page): Promise<number> {
+  let last = -1;
+  await expect
+    .poll(
+      async () => {
+        const n = await draws(page);
+        const same = n === last;
+        last = n;
+        return same;
+      },
+      { intervals: [500] },
+    )
+    .toBe(true);
+  return last;
+}
+
+test('O3: a step of t moves only the selected line, and the chart then equals a fresh load at that t', async ({
+  page,
+  context,
+  baseURL,
+}) => {
+  const s = await start(page, context, baseURL, 'state');
+  // E2E Gap has no forecast run. 09:00Z and 08:50Z share the chart's 6-hour span (it ends at 12:00Z) and the Amsterdam
+  // day of the thresholds, so the step changes nothing but the selected instant: no full redraw.
+  await open(page, `/?t=2026-10-25T09:00Z&s=${GAP}`);
+  await settled(page);
+  const before = await steadyDraws(page);
+  await slider(page).focus();
+  await page.keyboard.press('ArrowLeft');
+  await expect.poll(() => param(page, 't')).toBe('2026-10-25T08:50Z');
+  await expect
+    .poll(async () => (await chartOption(page)).lines.map((l) => l.x))
+    .toContain(Date.parse('2026-10-25T08:50Z'));
+  expect(await steadyDraws(page), 'a step of t alone makes no full redraw').toBe(before);
+  const stepped = await chartDrawn(page);
+  // The same t loaded afresh draws the same chart.
+  await open(page, `/?t=2026-10-25T08:50Z&s=${GAP}`);
+  await settled(page);
+  await steadyDraws(page);
+  expect(await chartDrawn(page)).toEqual(stepped);
+
+  // Another period is new data: a full redraw.
+  const loaded = await draws(page);
+  await period(page).selectOption('2');
+  await expect.poll(() => draws(page)).toBeGreaterThan(loaded);
+
+  // After now (the hostile station has a run in recent.json), the forecast is cut at now, not at t: a step redraws
+  // nothing either (O3 review of the plan, finding 6).
+  await open(page, `/?t=2026-10-26T14:00Z&s=${HOSTILE}`);
+  await settled(page);
+  const ahead = await steadyDraws(page);
+  await slider(page).focus();
+  await page.keyboard.press('ArrowRight');
+  await expect.poll(() => param(page, 't')).toBe('2026-10-26T14:10Z');
+  await expect
+    .poll(async () => (await chartOption(page)).lines.map((l) => l.x))
+    .toContain(Date.parse('2026-10-26T14:10Z'));
+  expect(await steadyDraws(page), 'a step of t after now makes no full redraw').toBe(ahead);
   await finish(page, s);
 });
 

@@ -7,6 +7,8 @@ export interface RwsHook {
   map?: MapLibreMap | null;
   /** The live ECharts instances of the station panel. */
   charts?: Set<{ getOption(): unknown }>;
+  /** O3: the station charts' full redraws so far (a step of t alone moves the marker series without one). */
+  chartDraws?: number;
 }
 
 declare global {

@@ -634,7 +634,8 @@ test('the hostile strings are inert wherever they show: map, table, panel, legen
   await settled(page);
   await page.evaluate(async () => {
     const chart = [...((window as unknown as W).__rws?.charts ?? [])][0];
-    chart?.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: 5 });
+    const obs = chart?.getOption()?.series?.findIndex((x) => x.id === 'obs') ?? -1;
+    chart?.dispatchAction({ type: 'showTip', seriesIndex: obs, dataIndex: 5 });
     await new Promise<void>((r) => requestAnimationFrame(() => requestAnimationFrame(() => r())));
   });
   expect((await drawnText(page)).filter((t) => t.includes('onerror'))).toEqual([XSS]);

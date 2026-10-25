@@ -60,7 +60,7 @@ export interface HookChart {
   dispatchAction(action: object): void;
   getZr(): { storage: { getDisplayList(update?: boolean): { style?: { text?: unknown } }[] } };
 }
-export type W = Window & { __rws?: { map: HookMap | null; charts: Set<HookChart> } };
+export type W = Window & { __rws?: { map: HookMap | null; charts: Set<HookChart>; chartDraws?: number } };
 
 type Messages = Record<string, string>;
 const catalogue = (locale: 'nl' | 'en'): Messages =>
@@ -328,7 +328,11 @@ export async function settled(page: Page) {
   await page.waitForFunction(() => {
     const charts = [...((window as unknown as W).__rws?.charts ?? [])];
     const panels = document.querySelectorAll('aside div[role="img"]').length;
-    return charts.length === panels && charts.every((c) => (c.getOption()?.series?.[0]?.data?.length ?? 0) > 0);
+    // (the observations by id: the marker series of the now and selected lines comes first, O3)
+    return (
+      charts.length === panels &&
+      charts.every((c) => (c.getOption()?.series?.find((x) => x.id === 'obs')?.data?.length ?? 0) > 0)
+    );
   });
 }
 

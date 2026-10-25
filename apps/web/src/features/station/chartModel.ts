@@ -3,6 +3,8 @@ import { formatLocal } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { SURGE_COLOURS } from '../legend/palette.ts';
+import { MEASURED_COLOUR } from './colours.ts';
+import type { Marks } from './thresholds.ts';
 
 // The pure part of the station chart (P10a T6): points and one forecast run with its band (the references are in
 // thresholds.ts since P10d). Values arrive in canonical units; `conv` brings one to the native unit the page shows. Nothing here draws.
@@ -148,4 +150,87 @@ export function observedPoints(
 export function mergeHistory(older: readonly Pt[], recent: readonly Pt[]): Pt[] {
   const first = recent[0]?.[0];
   return [...(first === undefined ? older : older.filter(([t]) => t < first)), ...recent];
+}
+
+/** What the station chart draws (chart.ts); the selected instant comes apart, so that it can move alone (O3). */
+export interface ChartData {
+  locale: Locale;
+  /** The station name exactly as published: untrusted text. */
+  name: string;
+  /** The unit as published, with its zero ("cm NAP"). */
+  unit: string;
+  /** Observed points: [UTC ms, value in the native unit]. */
+  points: Pt[];
+  /** The server's now when it is on the axis: a solid vertical line, named `nowName`. */
+  now: number | undefined;
+  nowName: string;
+  /** The title of the time axis ("Nederlandse tijd"). */
+  axisName: string;
+  format: (value: number) => string;
+  /** One run (never blended with another): its series names come from Paraglide. */
+  forecast?: { view: ForecastView; name: string; estimateName: string } | undefined;
+  /**
+   * P19b (a tidal station's primary H series, raw, up to now): the astronomical tide and the API's derived surge at
+   * each measured instant, [UTC ms, value in the native unit]. The surge band is built from these (tide.ts surgeBand).
+   */
+  tide?: { astro: Pt[]; surge: Pt[] } | undefined;
+  /** The tooltip's words for the tide (plain text, from Paraglide); `unit` is the bare unit of a surge ("cm"). */
+  tideTip?: { astro: (value: string) => string; surge: (value: string) => string; unit: string } | undefined;
+  marks: Marks;
+  /** The threshold lines and zones are drawn only when this is true. */
+  showThresholds: boolean;
+  observedName: string;
+  /** The time axis: the panel's span, stretched to the end of the run shown (xRange). */
+  x: { min: number; max: number };
+}
+
+/**
+ * The marker series (O3, issue #219; the Hovmöller pattern): the now line and the selected instant's dashed line, the
+ * two vertical lines that sat first in the observations' markLine. It is the chart's first series, so its lines are
+ * drawn before the threshold lines, as they were; it has no data and an explicit colour, so it takes no palette colour
+ * and no tooltip row. The selected line keeps the observations' colour, which an unstyled markLine took from its series.
+ */
+export function markerSeries(d: Pick<ChartData, 'now' | 'nowName'>, selected: number | undefined) {
+  return {
+    id: 'marker',
+    type: 'line',
+    data: [],
+    silent: true,
+    lineStyle: { color: MEASURED_COLOUR },
+    itemStyle: { color: MEASURED_COLOUR },
+    markLine: {
+      silent: true,
+      symbol: 'none',
+      lineStyle: { color: MEASURED_COLOUR },
+      // A function, never a template string: a label may hold `{…}` (provider text).
+      label: { show: true, position: 'insideEndTop', formatter: (p: { name?: string }) => p.name ?? '' },
+      data: [
+        ...(d.now === undefined
+          ? []
+          : [{ xAxis: d.now, name: d.nowName, lineStyle: { type: 'solid', color: '#555' } }]),
+        ...(selected === undefined ? [] : [{ xAxis: selected, name: '', label: { show: false } }]),
+      ],
+    },
+  };
+}
+
+/** ECharts' `setOption`, as much of it as the chart uses. */
+export interface Settable {
+  setOption(option: object, opts?: { notMerge?: boolean }): void;
+}
+
+/**
+ * The station chart's draw (O3, issue #219): a new `d` (its data, unit, locale, thresholds or axis changed) is a full
+ * redraw (`notMerge`); the same `d` with another selected instant updates the marker series alone, as a playback tick
+ * or a step of t does.
+ */
+export function drawer(chart: Settable, full: (d: ChartData, selected: number | undefined) => object) {
+  let last: ChartData | undefined;
+  let lastSelected: number | undefined;
+  return (d: ChartData, selected: number | undefined): void => {
+    if (d !== last) chart.setOption(full(d, selected), { notMerge: true });
+    else if (selected !== lastSelected) chart.setOption({ series: [markerSeries(d, selected)] });
+    last = d;
+    lastSelected = selected;
+  };
 }

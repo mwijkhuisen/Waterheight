@@ -1,3 +1,4 @@
+import { monthDay } from '@rws/core/season';
 import { describe, expect, it } from 'vitest';
 import { type MarkOptions, referenceMarks } from '../src/features/station/thresholds.ts';
 import { basisLabel } from '../src/lib/labels/labels.ts';
@@ -23,7 +24,7 @@ const opts = (over: Partial<MarkOptions> = {}): MarkOptions => ({
   owner: () => false,
   locale: 'en',
   unit: 'cm NAP',
-  t: Date.UTC(2026, 9, 10, 12),
+  monthDay: monthDay(Date.UTC(2026, 9, 10, 12)),
   ...over,
 });
 const marks = (refs: Refs, over: Partial<MarkOptions> = {}) => referenceMarks(refs, opts(over));
@@ -235,7 +236,7 @@ describe('referenceMarks: NL-4 classes', () => {
       ...season([...cls(4, 'Verlaagd (<745cm)', null, 745), ...cls(5, 'Normaal (745 - 1200cm)', 745, 1200)], 801, 831),
       ...season([...cls(4, 'Verlaagd (<720cm)', null, 720), ...cls(5, 'Normaal (720 - 1200cm)', 720, 1200)], 1001, 430),
     ];
-    const at = (t: number) => marks(lobith, { t });
+    const at = (t: number) => marks(lobith, { monthDay: monthDay(t) });
     const iso = (s: string) => Date.parse(s);
 
     it.each([
@@ -280,7 +281,7 @@ describe('referenceMarks: NL-4 classes', () => {
         ...season(cls(5, 'Normaal (700 - 1200cm)', 700, 1200), 401, 1025),
         ...season(cls(5, 'Normaal (720 - 1200cm)', 720, 1200), 1026, 331),
       ];
-      const from = (t: string) => marks(refs, { t: iso(t) }).zones.map((z) => z.from);
+      const from = (t: string) => marks(refs, { monthDay: monthDay(iso(t)) }).zones.map((z) => z.from);
       expect(from('2026-10-25T00:30:00Z')).toEqual([700]); // 02:30 CEST, before the change
       expect(from('2026-10-25T22:59:59.999Z')).toEqual([700]); // 23:59 CET on the 25th
       expect(from('2026-10-25T23:00:00Z')).toEqual([720]); // 00:00 CET on the 26th
@@ -294,8 +295,10 @@ describe('referenceMarks: NL-4 classes', () => {
         ...season(cls(3, 'Normaal (0 - 80cm)', 0, 80), 315, 715),
         ...season(cls(3, 'Normaal (0 - 90cm)', 0, 90), 715, 315),
       ];
-      expect(marks(refs, { t: iso('2026-07-15T12:00:00Z') }).zones).toEqual([]);
-      expect(marks(refs, { t: iso('2026-07-16T12:00:00Z') }).zones.map(bounds)).toEqual([['normal', 0, 90]]);
+      expect(marks(refs, { monthDay: monthDay(iso('2026-07-15T12:00:00Z')) }).zones).toEqual([]);
+      expect(marks(refs, { monthDay: monthDay(iso('2026-07-16T12:00:00Z')) }).zones.map(bounds)).toEqual([
+        ['normal', 0, 90],
+      ]);
     });
   });
 
