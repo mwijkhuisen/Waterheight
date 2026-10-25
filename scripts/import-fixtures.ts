@@ -531,16 +531,19 @@ export function cutDst(rule: DstRule, raw: Buffer, n = 0): { body: Buffer; trimm
       trimmed: `the rows of data whose code_station is ${FR1_STATIONS.join(', ')}, all other keys kept (count stays the walk's total)`,
     };
   }
-  // NL-2: a snapshot whose counts differ from its features is refused as paged (parseCollection), so they follow.
-  const features = (doc.features as { properties: Doc }[]).filter((f) =>
-    NL2_CODES.includes(f.properties.CODE as string),
-  );
-  const count = features.length;
-  Object.assign(doc, { features, totalFeatures: count, numberMatched: count, numberReturned: count });
-  return {
-    body: Buffer.from(JSON.stringify(doc)),
-    trimmed: `the features whose properties.CODE is ${NL2_CODES.join(', ')}, with totalFeatures, numberMatched and numberReturned set to their count, all other keys kept`,
-  };
+  if (rule === 'nl2-codes') {
+    // A snapshot whose counts differ from its features is refused as paged (parseCollection), so they follow.
+    const features = (doc.features as { properties: Doc }[]).filter((f) =>
+      NL2_CODES.includes(f.properties.CODE as string),
+    );
+    const count = features.length;
+    Object.assign(doc, { features, totalFeatures: count, numberMatched: count, numberReturned: count });
+    return {
+      body: Buffer.from(JSON.stringify(doc)),
+      trimmed: `the features whose properties.CODE is ${NL2_CODES.join(', ')}, with totalFeatures, numberMatched and numberReturned set to their count, all other keys kept`,
+    };
+  }
+  throw new Error(`no rule ${rule satisfies never}`);
 }
 
 function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' | 'p8b' | 'lu5-other' | 'dst'): void {
@@ -563,8 +566,8 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' |
     'lu5-other': IMPORTS_LU5_OTHER,
     dst: IMPORTS_DST,
   };
-  const list = lists[mode];
-  for (const { name, source, fixture, keep, last, rule, n } of list) {
+  // Every body is read, checked and cut before the first write, so a bad export leaves the tree as it was (#55 SR-1).
+  const outs = lists[mode].map(({ name, source, fixture, keep, last, rule, n }) => {
     const raw = readFileSync(join(dir, `${name}.raw`));
     const line = JSON.parse(readFileSync(join(dir, `${name}.line.json`), 'utf8')) as Line;
     if (sha256(raw) !== line.sha256) throw new Error(`${name}: the body is not the archived object (sha256)`);
@@ -591,10 +594,13 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' |
       source_sha256: line.sha256,
       trimmed,
     };
+    return { source, fixture, body, meta, trimmed, key: line.key };
+  });
+  for (const { source, fixture, body, meta, trimmed, key } of outs) {
     const out = join(root, 'apps/server/src/adapters', source.toLowerCase(), 'fixtures');
     writeFileSync(join(out, `${fixture}.raw`), body);
     writeFileSync(join(out, `${fixture}.meta.json`), `${JSON.stringify(meta, null, 2)}\n`);
-    console.log(`${fixture}: ${body.length} B${trimmed === false ? '' : ` (${trimmed})`} ← ${line.key}`);
+    console.log(`${fixture}: ${body.length} B${trimmed === false ? '' : ` (${trimmed})`} ← ${key}`);
   }
 }
 
