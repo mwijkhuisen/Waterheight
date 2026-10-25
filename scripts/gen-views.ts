@@ -14,6 +14,7 @@ import {
   TWIN_CHECK_COLUMNS,
   VIEWS,
 } from '../apps/server/src/db/audience.ts';
+import { STALENESS_CAP_MS } from '../packages/contracts/src/stations.ts';
 
 // Writes the view migration (A§6 "Audiences, views and roles"). The four
 // families (display and api, public and owner) come from ONE template: the
@@ -32,7 +33,7 @@ import {
 
 export const VIEWS_MIGRATION = new URL('../db/migrations/20261003000006_views.sql', import.meta.url);
 
-export type Params = { audience: ChannelAudience; api: boolean };
+type Params = { audience: ChannelAudience; api: boolean };
 
 const audienceIn = (col: string, audience: ChannelAudience) =>
   `${col} IN (${FAMILY_AUDIENCES[audience].map((a) => `'${a}'`).join(', ')})`;
@@ -264,11 +265,11 @@ const view = (name: string, body: string) => `CREATE VIEW ${name} WITH (security
 
 /**
  * #212 (D-1): the cap on the staleness limit of every series the public family can see, which makes the constant
- * bound of the public Q1 exact. `validateStations` refuses a registry row over it (STALENESS_CAP_MS in
- * packages/contracts; the registry sync is the only production writer of public series), and a follow-up adds a
- * CHECK (D-6). The owner canary (36500 days, load/canary.ts) is exempt, so the owner Q1 has no such bound.
+ * bound of the public Q1 exact: `validateStations`' own STALENESS_CAP_MS (packages/contracts; the registry sync is
+ * the only production writer of public series) as SQL, and a follow-up adds a CHECK (D-6). The owner canary
+ * (36500 days, load/canary.ts) is exempt, so the owner Q1 has no such bound.
  */
-export const STALENESS_CAP = "interval '2 days'";
+export const STALENESS_CAP = `interval '${STALENESS_CAP_MS / 86_400_000} days'`;
 
 /**
  * A§8 Q1 as a function (see OBS_AT in audience.ts). SECURITY DEFINER, because

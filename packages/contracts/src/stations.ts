@@ -183,7 +183,9 @@ export function validateStations(
     // #212: every row, owner rows too (the sync stores an audience equal to its source's as NULL, so the database
     // cannot tell such a row from a public one); weeks, months and years are NaN, so refused.
     if (!(dayMs(row.staleness_limit) <= STALENESS_CAP_MS))
-      problems.push(`${at}: staleness_limit exceeds P2D (the cap of the public at-T bound)`);
+      problems.push(
+        `${at}: staleness_limit exceeds P2D, the cap of the public at-T bound (weeks, months and years are refused)`,
+      );
     const source = byId.get(row.source);
     if (source === undefined) problems.push(`${at}: unknown source ${row.source}`);
     else if (!audienceWithin(row.audience, source.audience)) {
