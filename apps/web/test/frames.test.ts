@@ -1,13 +1,19 @@
-import type { ApiStation, AttributionEntry } from '@rws/contracts';
+import { type ApiStation, type AttributionEntry, stateOf } from '@rws/contracts';
+import { replaceEqualDeep } from '@tanstack/react-query';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
   buildFrameStore,
+  type FrameStore,
   type FramesChunk,
   type FramesMeta,
+  type FramesRead,
   framesPlan,
   framesUrl,
   MAX_FRAMES_BYTES,
+  type PlayedValue,
+  readApiUnits,
+  readFileUnits,
   readFramesBody,
 } from '../src/lib/data/frames.ts';
 
@@ -399,5 +405,257 @@ describe('buildFrameStore on crafted chunks (review round 1)', () => {
       }),
       { numRuns: 300 },
     );
+  });
+});
+
+// --- O3 (#219): the stage readers keep their identity, and the indexed store equals the old copying one -------------
+
+describe('the stage readers under structural sharing', () => {
+  const c0 = chunk([1], [[1, 2]], T0);
+  const c1 = chunk([2], [[3, 4]], T0 + 2 * H);
+  const files = [
+    { kind: 'day', day: '2026-10-20', v: 1 },
+    { kind: 'day', day: '2026-10-21', v: 1 },
+  ] as const;
+  const calls = [
+    { kind: 'api', from: T0, to: T0 + 2 * H },
+    { kind: 'api', from: T0 + 2 * H, to: T0 + 4 * H },
+  ] as const;
+  const ok = (data: FramesChunk | undefined) => ({ isError: false, isSuccess: data !== undefined, data });
+  // useQueries runs a `combine` result through replaceEqualDeep against the previous one: same data, same object.
+  it('a changed fetch status alone gives back the previous result (files and API)', () => {
+    const nowMs = at('2026-10-26T12:00:00Z');
+    const rf = readFileUnits(files, T0, T0 + 2 * D, nowMs);
+    const a = rf([ok(c0), ok(c1)]);
+    const b = rf([{ ...ok(c0), isFetching: true } as FramesRead, { ...ok(c1), status: 'success' } as FramesRead]);
+    expect(replaceEqualDeep(a, b)).toBe(a);
+    const ra = readApiUnits(calls);
+    const x = ra([ok(c0), ok(c1)]);
+    const y = ra([{ ...ok(c0), isFetching: true } as FramesRead, ok(c1)]);
+    expect(replaceEqualDeep(x, y)).toBe(x);
+  });
+
+  it('a chunk arriving in an earlier slot keeps the other chunk object and takes the new one as it is', () => {
+    const ra = readApiUnits(calls);
+    const before = ra([ok(undefined), ok(c1)]);
+    const after = ra([ok(c0), ok(c1)]);
+    expect(before.chunks).toEqual([null, c1]);
+    const shared = replaceEqualDeep(before, after);
+    expect(shared).not.toBe(before);
+    expect(shared.chunks[0]).toBe(c0);
+    expect(shared.chunks[1]).toBe(c1);
+    expect(shared.answered).toEqual([
+      { from: T0, to: T0 + 2 * H },
+      { from: T0 + 2 * H, to: T0 + 4 * H },
+    ]);
+  });
+
+  it('failed is the sorted comma-joined day list, empty for none', () => {
+    const nowMs = at('2026-10-26T12:00:00Z');
+    const err = { isError: true, isSuccess: false, data: undefined };
+    const days = [
+      { kind: 'day', day: '2026-10-21', v: 1 },
+      { kind: 'day', day: '2026-10-20', v: 1 },
+    ] as const;
+    const read = readFileUnits(days, at('2026-10-20T00:00:00Z'), at('2026-10-22T00:00:00Z'), nowMs);
+    expect(read([ok(c0), ok(c1)]).failed).toBe('');
+    expect(read([err, ok(c1)]).failed).toBe('2026-10-21');
+    const both = read([err, err]);
+    expect(both.failed).toBe('2026-10-20,2026-10-21');
+    expect(both.chunks).toEqual([null, null]);
+    expect(both.answered).toEqual([]);
+    // recent.json failed: every unsettled day of the window is failed (24th, 25th and 26th are unsettled)
+    const recent = readFileUnits([{ kind: 'recent' }], at('2026-10-22T00:00:00Z'), at('2026-10-27T00:00:00Z'), nowMs);
+    expect(recent([err]).failed).toBe('2026-10-24,2026-10-25,2026-10-26');
+  });
+});
+
+describe('the indexed frame store equals the copying one it replaced (O3)', { timeout: 20_000 }, () => {
+  // The pre-O3 algorithm, verbatim from f4215e5 (buildFrameStore), as the oracle.
+  function oldStore(
+    chunks: readonly FramesChunk[],
+    answered: readonly { from: number; to: number }[],
+    stationList: readonly ApiStation[],
+  ): FrameStore {
+    const limit = new Map<number, number>();
+    for (const st of stationList) for (const s of st.series) limit.set(s.id, s.stalenessLimitSeconds);
+    const buckets = new Map<number, Map<number, number>>();
+    const codes = new Map<number, Map<number, number>>();
+    const first = new Map<number, number>();
+    const credits = new Map<string, AttributionEntry>();
+    let dropped = 0;
+    for (const c of chunks) {
+      const from = Date.parse(c.from);
+      const hours = (Date.parse(c.to) - from) / H;
+      if (
+        !Number.isInteger(hours) ||
+        hours < 0 ||
+        from % H !== 0 ||
+        c.vlast.length !== c.series.length ||
+        c.vlast.some((r) => r.length !== hours) ||
+        (c.state !== undefined && (c.state.length !== c.series.length || c.state.some((r) => r.length !== hours)))
+      ) {
+        dropped += c.series.length;
+        continue;
+      }
+      c.series.forEach((id, i) => {
+        if (!limit.has(id)) {
+          dropped += 1;
+          return;
+        }
+        const m = buckets.get(id) ?? new Map<number, number>();
+        const k = codes.get(id) ?? new Map<number, number>();
+        const states = c.state?.[i];
+        (c.vlast[i] as readonly (number | null)[]).forEach((v, h) => {
+          if (v === null || !Number.isFinite(v)) return;
+          const hourMs = from + h * H;
+          m.set(hourMs, v);
+          const code = states?.[h];
+          if (code == null) k.delete(hourMs);
+          else k.set(hourMs, code);
+          first.set(id, Math.min(first.get(id) ?? hourMs, hourMs));
+        });
+        buckets.set(id, m);
+        codes.set(id, k);
+      });
+      for (const a of c.attribution) credits.set(JSON.stringify(a), a);
+    }
+    const ready = (t: number) => {
+      const b = Math.floor(t / H) * H - H;
+      return answered.some((r) => r.from <= b && b < r.to);
+    };
+    const valuesAt = (t: number, only?: ReadonlySet<number>) => {
+      const out = new Map<number, PlayedValue>();
+      const newest = Math.floor(t / H) * H - H;
+      for (const [series, m] of buckets) {
+        if (only !== undefined && !only.has(series)) continue;
+        const limitMs = (limit.get(series) as number) * 1000;
+        const oldest = first.get(series) as number;
+        for (let b = newest; b >= oldest; b -= H) {
+          const ageMs = t - (b + H);
+          if (ageMs >= limitMs) break;
+          const value = m.get(b);
+          if (value === undefined) continue;
+          const code = codes.get(series)?.get(b);
+          const decoded = code === undefined ? undefined : stateOf(code);
+          out.set(series, {
+            series,
+            ts: new Date(b + H).toISOString(),
+            value,
+            qc: 0,
+            ageSeconds: Math.round(ageMs / 1000),
+            state: decoded?.state ?? 'no_ref',
+            basis: null,
+            section: decoded?.section ?? false,
+            ...(decoded === undefined ? { stateUnknown: true as const } : {}),
+          });
+          break;
+        }
+      }
+      return out;
+    };
+    return { ready, valuesAt, attribution: () => [...credits.values()], dropped };
+  }
+
+  const base = at('2026-10-24T00:00:00Z');
+  const sites = [station('s', [{ id: 1, limit: 6 * 3600 }]), station('t', [{ id: 2, limit: 2 * 3600 }])];
+  const cell = fc.oneof(
+    { weight: 3, arbitrary: fc.integer({ min: -50, max: 50 }) },
+    { weight: 2, arbitrary: fc.constant(null) },
+    fc.constant(Number.NaN),
+    fc.constant(Number.POSITIVE_INFINITY),
+  );
+  const code = fc.oneof(fc.constant(null), fc.integer({ min: 0, max: 15 }));
+  const credit = fc.constantFrom('A', 'B', 'C').map((text) => ({
+    source: 'NL-1',
+    lang: 'nl' as const,
+    text,
+    url: null,
+    required: true,
+    dateKind: null,
+    date: null,
+    dateText: null,
+  }));
+  const aChunk = fc
+    .record({
+      start: fc.integer({ min: 0, max: 10 }),
+      hours: fc.integer({ min: 0, max: 8 }),
+      // 1 and 2 are known, 3 is not; ids repeat within a chunk
+      series: fc.array(fc.constantFrom(1, 2, 3), { maxLength: 4 }),
+      withState: fc.boolean(),
+      // 0: aligned; 1: a row of the wrong length; 2: a missing row; 3: a start that is not a whole hour
+      fault: fc.constantFrom(0, 0, 0, 0, 1, 2, 3),
+      seed: fc.infiniteStream(cell),
+      codes: fc.infiniteStream(code),
+      credits: fc.array(credit, { maxLength: 2 }),
+    })
+    .map((r): FramesChunk | null => {
+      const cells = r.seed[Symbol.iterator]();
+      const cds = r.codes[Symbol.iterator]();
+      const grid = <T>(pick: () => T) => r.series.map(() => Array.from({ length: r.hours }, pick));
+      const vlast = grid(() => cells.next().value as number | null);
+      const state = grid(() => cds.next().value as number | null);
+      if (r.fault === 1 && vlast[0]) vlast[0] = [...vlast[0], 1];
+      if (r.fault === 2) vlast.pop();
+      const from = base + r.start * H + (r.fault === 3 ? 1000 : 0);
+      return {
+        from: new Date(from).toISOString(),
+        to: new Date(from + r.hours * H).toISOString(),
+        series: r.series,
+        vlast,
+        ...(r.withState ? { state } : {}),
+        attribution: r.credits,
+      };
+    });
+  // A null slot is a chunk not yet there: the new store skips it, the oracle gets the list without nulls.
+  const slots = fc.array(fc.oneof({ weight: 6, arbitrary: aChunk }, { weight: 1, arbitrary: fc.constant(null) }), {
+    maxLength: 5,
+  });
+  const entries = (m: Map<number, PlayedValue>) => [...m];
+
+  it('gives the same values, order, readiness, drops and credits for any list of chunks', () => {
+    fc.assert(
+      fc.property(slots, (list) => {
+        const answered = [{ from: base + 2 * H, to: base + 12 * H }];
+        const fresh = buildFrameStore(list, answered, sites);
+        const old = oldStore(
+          list.filter((c): c is FramesChunk => c !== null),
+          answered,
+          sites,
+        );
+        expect(fresh.dropped).toBe(old.dropped);
+        expect(fresh.attribution()).toEqual(old.attribution());
+        for (const h of [0, 1, 2, 3, 5, 8, 11, 12, 14, 20, 30]) {
+          for (const t of [base + h * H, base + h * H + 17 * 60_000]) {
+            expect(entries(fresh.valuesAt(t))).toEqual(entries(old.valuesAt(t)));
+            for (const only of [new Set([2]), new Set([1, 3]), new Set<number>()])
+              expect(entries(fresh.valuesAt(t, only))).toEqual(entries(old.valuesAt(t, only)));
+            expect(fresh.ready(t)).toBe(old.ready(t));
+          }
+        }
+      }),
+      { numRuns: 400 },
+    );
+  });
+
+  it('is not vacuous: the generator makes stores that hold values, states and drops', () => {
+    let held = 0;
+    let withState = 0;
+    let drops = 0;
+    fc.assert(
+      fc.property(slots, (list) => {
+        const store = buildFrameStore(list, [], sites);
+        drops += store.dropped;
+        for (const h of [4, 8, 12]) {
+          const v = store.valuesAt(base + h * H);
+          held += v.size;
+          for (const x of v.values()) if (!x.stateUnknown) withState += 1;
+        }
+      }),
+      { numRuns: 200 },
+    );
+    expect(held).toBeGreaterThan(0);
+    expect(withState).toBeGreaterThan(0);
+    expect(drops).toBeGreaterThan(0);
   });
 });

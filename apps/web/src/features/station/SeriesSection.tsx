@@ -1,12 +1,13 @@
 import type { ApiStation, SeriesMeta } from '@rws/contracts';
 import { SUSPECT_BITS } from '@rws/core/qc';
+import { monthDay } from '@rws/core/season';
 import { useMemo, useState } from 'react';
 import type { Change } from '../../lib/data/change.ts';
 import type { WebSources } from '../../lib/data/contracts.ts';
 import type { PlayedValue } from '../../lib/data/frames.ts';
 import type { WebForecast as SnapshotForecast } from '../../lib/data/static.ts';
 import type { WarningsAt } from '../../lib/data/warnings.ts';
-import { basisLabel, referenceLabel, useOwnerLabels } from '../../lib/labels/labels.ts';
+import { basisLabel, referenceLabel, useOwnerLabels } from '../../lib/labels/basis.ts';
 import type { Lapse } from '../../lib/stationStates.ts';
 import { formatAge, formatDay, formatLocal, quantise } from '../../lib/time/time.ts';
 import { m } from '../../paraglide/messages.js';
@@ -123,6 +124,8 @@ export function SeriesSection({
   const data = useSeriesData({ series, t, span, serverNow, recent, recentFailed, tidal });
   const [chartFailed, setChartFailed] = useState(false);
   const ownerLabels = useOwnerLabels();
+  // O3: the season of a seasonal reference follows the day of t, so the marks are rebuilt once a day, not every step.
+  const md = monthDay(t);
   const marks = useMemo(
     () =>
       referenceMarks(recent?.references ?? [], {
@@ -133,9 +136,9 @@ export function SeriesSection({
         owner: (s) => ownerSources.has(s),
         locale,
         unit,
-        t,
+        monthDay: md,
       }),
-    [recent, series.quantity, data.conv, ownerLabels, ownerSources, locale, unit, t],
+    [recent, series.quantity, data.conv, ownerLabels, ownerSources, locale, unit, md],
   );
   const run = data.run;
   const runText =

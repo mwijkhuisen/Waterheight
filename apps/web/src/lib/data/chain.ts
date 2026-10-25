@@ -1,6 +1,7 @@
 import { type ApiStation, type Meta, ReachRiver, RiversManifest, toSnapshot, WATERBODY_KINDS } from '@rws/contracts';
 import { holdForecasts } from '@rws/core/forecast-hold';
 import { z } from 'zod';
+import { MODES } from '../url/url.ts';
 import {
   type Contracts,
   lenient,
@@ -13,7 +14,7 @@ import {
   type WebSources,
 } from './contracts.ts';
 import { type SnapshotSource, snapshotSource, type WebSnapshot } from './static.ts';
-import { type WarningsAt, warningsAt, warningsSource } from './warnings.ts';
+import type { WarningsRead, WarningsSource } from './warnings.ts';
 
 // The fetch chain (P9a): the static file first, the API on a 404, a 5xx, a network failure or a parse failure. The
 // fetcher is injected so the chain is tested without a network; paths are relative (same origin, invariant 7).
@@ -30,10 +31,40 @@ export class HttpError extends Error {
 }
 
 export type Fetcher = (path: string, signal?: AbortSignal) => Promise<Response>;
-export const browserFetch: Fetcher = (path, signal) =>
-  fetch(path, { signal: signal ?? null, redirect: 'error', headers: { accept: 'application/json' } });
-
 const STATIC = '/data/v1/';
+const request: Fetcher = (path, signal) =>
+  fetch(path, { signal: signal ?? null, redirect: 'error', headers: { accept: 'application/json' } });
+const early = new Map<string, Promise<Response>>();
+
+/**
+ * O4 (#220): the home route's first reads, started in main.tsx before Temporal. The first read of each path takes the
+ * answer once and still parses it with the site's contract (getJson); a later read fetches again. The early request
+ * has no signal (nothing can cancel it before a query exists); a rejection reaches the reader as it would have.
+ */
+export function prefetchStatic(names: readonly string[]): void {
+  for (const n of names) {
+    const p = request(STATIC + n);
+    p.catch(() => {}); // a separate chain: the reader still gets the rejection, an unread one is never unhandled
+    early.set(STATIC + n, p);
+  }
+}
+
+/**
+ * meta.json and stations.json, plus status.json unless the URL names a valid mode (useMode then never reads it).
+ * Not `readSearch`: its `t` needs Temporal, which is not loaded yet. The mode test is readSearch's (`isMode`, url.ts).
+ */
+export function bootFiles(search: string): string[] {
+  const mode = new URLSearchParams(search).get('mode');
+  const files = ['meta.json', 'stations.json'];
+  return mode !== null && (MODES as readonly string[]).includes(mode) ? files : [...files, 'status.json'];
+}
+
+export const browserFetch: Fetcher = (path, signal) => {
+  const p = early.get(path);
+  if (p === undefined) return request(path, signal);
+  early.delete(path);
+  return p;
+};
 const aborted = (signal?: AbortSignal) => signal?.aborted === true;
 
 /** One parsed answer and whether Caddy marked it as its stand-in for a dead API. */
@@ -243,33 +274,32 @@ export async function loadStatusPage(
 }
 
 /**
- * The warning areas valid at `t` (warnings.ts chooses the file): latest.geojson at the current bucket, else the file of
- * t's UTC day (today.json or the dated file). That file missing (404), or today.json already of the next day, falls
- * back to latest.geojson filtered to `t`, marked incomplete.
+ * The warnings file a t reads (warnings.ts `warningsSource` chooses it): latest.geojson at the current bucket, else the
+ * file of t's UTC day (today.json or the dated file). That file missing (404), or today.json already of the next day,
+ * falls back to latest.geojson, marked incomplete. A source the site hides is dropped. O3 (#219): the whole file, read
+ * once for every t of it; `warningsAt` picks the areas valid at a t.
  */
-export async function loadWarnings(
+export async function loadWarningsFile(
   f: Fetcher,
-  t: number,
-  meta: Pick<WebMeta, 'now'>,
+  choice: WarningsSource,
   signal?: AbortSignal,
   c: Contracts = PUBLIC_CONTRACTS,
-): Promise<WarningsAt> {
-  const choice = warningsSource(t, Date.parse(meta.now));
+): Promise<WarningsRead> {
   const read = async (path: string) => (await getJson(f, `${STATIC}warnings/${path}`, c.WarningsFile, signal)).data;
-  const visible = (w: WarningsAt): WarningsAt => ({
-    ...w,
-    features: w.features.filter((x) => !c.hidden(x.properties.source)),
+  const visible = (file: Pick<WarningsRead, 'features'>, incomplete: boolean): WarningsRead => ({
+    features: file.features.filter((x) => !c.hidden(x.properties.source)),
+    incomplete,
   });
   if (choice.kind === 'dated') {
     try {
       const file = await read(choice.path);
-      if (file.day === choice.day) return visible(warningsAt(file, t, false));
+      if (file.day === choice.day) return visible(file, false);
     } catch (e) {
       if (aborted(signal) || !(e instanceof HttpError && e.status === 404)) throw e;
     }
-    return visible(warningsAt(await read('latest.geojson'), t, true));
+    return visible(await read('latest.geojson'), true);
   }
-  return visible(warningsAt(await read('latest.geojson'), t, false));
+  return visible(await read('latest.geojson'), false);
 }
 
 /** series/<station>/recent.json: 7 days of raw values, the run and the references of each series of one station. */

@@ -14,11 +14,11 @@ import { Layout } from './features/layout/Layout.tsx';
 import { Legend } from './features/legend/Legend.tsx';
 import { MapControls } from './features/legend/MapControls.tsx';
 import { RiverChip } from './features/legend/RiverChip.tsx';
+import { preloadMap } from './features/map/preload.ts';
 import { StationsMap } from './features/map/StationsMap.tsx';
 import { hasWebGL2 } from './features/map/webgl.ts';
 import { Page } from './features/pages/Page.tsx';
 import { StationSearch } from './features/search/StationSearch.tsx';
-import { StationPanel } from './features/station/StationPanel.tsx';
 import { StationTable } from './features/table/StationTable.tsx';
 import { Timebar } from './features/timebar/Timebar.tsx';
 import {
@@ -44,6 +44,7 @@ import type { WebWaterbody } from './lib/data/chain.ts';
 import { changesAt } from './lib/data/change.ts';
 import type { FrameStore } from './lib/data/frames.ts';
 import { globalEnd, pageT, sliderEnd } from './lib/forecast.ts';
+import { perLocale } from './lib/intl.ts';
 import { pathOf, routeOf } from './lib/routes.ts';
 import { hiddenKey, lapses, stationStates, visibleStations } from './lib/stationStates.ts';
 import { ceilHour, DAY_MS, floorHour, HOUR_MS, quantise } from './lib/time/time.ts';
@@ -61,7 +62,10 @@ import type { Locale } from './paraglide/runtime.js';
 const FETCH_DEBOUNCE_MS = 150;
 const NO_GROUPS: readonly Group[] = [];
 const NO_BODIES: readonly WebWaterbody[] = [];
+/** The station sort's collator: `localeCompare(b, locale)` is defined as this collator's `compare`, made once (O3). */
+const COLLATOR = perLocale((l) => new Intl.Collator(l));
 
+type StationPanel = typeof import('./features/station/StationPanel.tsx').StationPanel;
 type HovmollerPanel = typeof import('./features/flow/hovmoller/HovmollerPanel.tsx').HovmollerPanel;
 
 export function App({ locale }: { locale: Locale }) {
@@ -117,7 +121,7 @@ function Viewer({ locale }: { locale: Locale }) {
     return { start, now, epoch: Date.parse(meta.data.dataEpoch), serverNow, ahead: meta.data.forecastHorizons };
   }, [meta.data]);
   const sorted = useMemo(
-    () => [...(stations.data?.stations ?? [])].sort((a, b) => a.name.localeCompare(b.name, locale)),
+    () => [...(stations.data?.stations ?? [])].sort((a, b) => COLLATOR(locale).compare(a.name, b.name)),
     [stations.data, locale],
   );
   const selected = url.s === undefined ? undefined : sorted.find((st) => st.id === url.s);
@@ -295,7 +299,7 @@ function Viewer({ locale }: { locale: Locale }) {
     };
     return { travel, past };
   }, [shiftMax, shiftSeries, shiftT, pastStore, playing, shiftWindow, travel, quantity]);
-  const warnings = useWarnings(asked, meta.data, isLive).data;
+  const warnings = useWarnings(asked, meta.data, isLive);
   // KG-233: latest.json's age of the newest value of a series with none at t; a station with nothing newer than
   // 25 hours is hidden (map, table, search), and the selected one stays open by its link.
   // Live, the previous bucket's latest.json stays on screen while the next one loads (keepPreviousData): its ages go
@@ -382,9 +386,33 @@ function Viewer({ locale }: { locale: Locale }) {
     };
   }, [hovOpen, hov]);
 
+  // O4 (#220): the station panel is a lazy chunk like the Hovmöller panel, asked for only once `?s=` is set; a failed
+  // chunk is an alert in its box with a way out. The e2e helpers wait for the aside it renders.
+  const panelOpen = url.s !== undefined;
+  const [panel, setPanel] = useState<{ Panel: StationPanel } | 'failed' | undefined>();
+  useEffect(() => {
+    // After a failed chunk, the next station asks for it again (the reload link stays the way out).
+    if (!panelOpen) {
+      if (panel === 'failed') setPanel(undefined);
+      return;
+    }
+    if (panel !== undefined) return;
+    let gone = false;
+    import('./features/station/StationPanel.tsx')
+      .then((x) => !gone && setPanel({ Panel: x.StationPanel }))
+      .catch(() => !gone && setPanel('failed'));
+    return () => {
+      gone = true;
+    };
+  }, [panelOpen, panel]);
+
   const canMap = webgl && !mapFailed;
   const riverTiles = rivers.data?.manifest.current.tiles.file;
   const onMap = canMap && view === 'map';
+  // O4 (#220): each map (re)mount gets an early chunk, style and manifest read; its createMap consumes the manifest.
+  useEffect(() => {
+    if (onMap) preloadMap(locale);
+  }, [onMap, locale]);
   const notice = !webgl ? m.map_no_webgl({}, { locale }) : mapFailed ? m.map_unavailable({}, { locale }) : undefined;
 
   const legend =
@@ -526,32 +554,48 @@ function Viewer({ locale }: { locale: Locale }) {
                 />
               )}
             </div>
-            {selected !== undefined && (
-              <StationPanel
-                key={selected.id}
-                locale={locale}
-                station={selected}
-                values={values}
-                states={states}
-                forecasts={forecasts}
-                changes={changes}
-                lapsed={lapsed}
-                warnings={warnings}
-                ownerSources={ownerSources}
-                live={isLive}
-                serverNow={range.serverNow}
-                t={t}
-                dataEpoch={range.epoch}
-                displayStart={range.start}
-                chartAt={settled ?? t}
-                stations={list}
-                allStations={sorted}
-                focus={focusPanel}
-                onClose={close}
-                onSelect={open}
-                played={played}
-              />
-            )}
+            {selected !== undefined &&
+              (panel === undefined || panel === 'failed' ? (
+                // The drawer's box (opaque, like the panel's), never an <aside>: the helpers count those.
+                <div className={styles.panelPending} aria-busy={panel === undefined}>
+                  {panel === 'failed' && (
+                    <>
+                      <button type="button" className={styles.panelClose} onClick={close}>
+                        {m.panel_close({}, { locale })}
+                      </button>
+                      <p role="alert">
+                        {m.data_unavailable({}, { locale })}{' '}
+                        <a href={`${pathOf('home', locale)}${searchOf(url)}`}>{m.page_reload({}, { locale })}</a>
+                      </p>
+                    </>
+                  )}
+                </div>
+              ) : (
+                <panel.Panel
+                  key={selected.id}
+                  locale={locale}
+                  station={selected}
+                  values={values}
+                  states={states}
+                  forecasts={forecasts}
+                  changes={changes}
+                  lapsed={lapsed}
+                  warnings={warnings}
+                  ownerSources={ownerSources}
+                  live={isLive}
+                  serverNow={range.serverNow}
+                  t={t}
+                  dataEpoch={range.epoch}
+                  displayStart={range.start}
+                  chartAt={settled ?? t}
+                  stations={list}
+                  allStations={sorted}
+                  focus={focusPanel}
+                  onClose={close}
+                  onSelect={open}
+                  played={played}
+                />
+              ))}
           </div>
           {url.hov !== undefined &&
             (hov === undefined || hov === 'failed' ? (

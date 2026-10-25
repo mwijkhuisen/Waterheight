@@ -9,7 +9,7 @@
 // else of it: no contacts, e-mails or terms), registry/sources.yaml (the board is `audience: "off"`), providers.yaml
 // (its name), registry/uncovered.yaml (curated rivers and 1-2 gauges) and registry/stations/*.yaml (each gauge a public,
 // open, primary row of a public source). `uncoveredBoards` is pure and throws on any mismatch; no source id is emitted.
-// They go in their own file, uncovered.gen.ts: station/thresholds.ts imports method.gen.ts into the initial bundle,
+// They go in their own file, uncovered.gen.ts: station/thresholds.ts imports method.gen.ts (the lazy StationPanel chunk),
 // and the board list belongs to the lazy Method chunk only.
 // Usage: node scripts/gen-web-method.ts [--check] [repo-root]   (--check diffs both files and exits 1)
 import { spawnSync } from 'node:child_process';

@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  type ChartData,
+  drawer,
   forecastView,
   fromAsofRun,
+  markerSeries,
   mergeHistory,
   observedPoints,
   onAxis,
@@ -220,5 +223,81 @@ describe('provenance', () => {
     expect(dhValue(-0.5, 'Q', 'nl')).toBe('-0,5 m³/s');
     expect(trendGlyph('rising')).toBe('▲');
     expect(trendGlyph('falling')).toBe('▼');
+  });
+});
+
+describe('markerSeries', () => {
+  const lines = (s: ReturnType<typeof markerSeries>) => s.markLine.data;
+  it('holds the now line and the selected instant as the observations did before O3', () => {
+    const s = markerSeries({ now: NOW, nowName: 'Nu' }, NOW - H);
+    expect(s.id).toBe('marker');
+    expect(s.data).toEqual([]);
+    expect(s.markLine.silent).toBe(true);
+    expect(s.markLine.symbol).toBe('none');
+    expect(lines(s)).toEqual([
+      { xAxis: NOW, name: 'Nu', lineStyle: { type: 'solid', color: '#555' } },
+      { xAxis: NOW - H, name: '', label: { show: false } },
+    ]);
+    expect(s.markLine.label.show).toBe(true);
+    expect(s.markLine.label.position).toBe('insideEndTop');
+  });
+  it('leaves out what is undefined; the label shows the name, never a template', () => {
+    expect(lines(markerSeries({ now: undefined, nowName: 'Nu' }, undefined))).toEqual([]);
+    expect(lines(markerSeries({ now: undefined, nowName: 'Nu' }, 5))).toHaveLength(1);
+    expect(lines(markerSeries({ now: 5, nowName: 'Nu' }, undefined))).toHaveLength(1);
+    const f = markerSeries({ now: 1, nowName: 'Nu' }, 2).markLine.label.formatter;
+    expect(f({ name: '{a}' })).toBe('{a}');
+    expect(f({})).toBe('');
+  });
+});
+
+describe('drawer', () => {
+  const data = (over: Partial<ChartData> = {}): ChartData =>
+    ({ locale: 'nl', unit: 'cm', points: [[NOW, 1]], now: NOW, nowName: 'Nu', ...over }) as unknown as ChartData;
+  const setup = () => {
+    const calls: unknown[][] = [];
+    const chart = { setOption: (...a: unknown[]) => void calls.push(a) };
+    const draw = drawer(chart, (d, selected) => ({ full: true, unit: d.unit, selected }));
+    return { calls, draw };
+  };
+  it('the first draw is full and replaces everything', () => {
+    const { calls, draw } = setup();
+    draw(data(), 7);
+    expect(calls).toEqual([[{ full: true, unit: 'cm', selected: 7 }, { notMerge: true }]]);
+  });
+  it('another t on the same data updates the marker series alone, without notMerge', () => {
+    const { calls, draw } = setup();
+    const d = data();
+    draw(d, 7);
+    draw(d, 9);
+    expect(calls).toHaveLength(2);
+    expect(calls[1]).toHaveLength(1);
+    const opt = calls[1]?.[0] as { series: { id: string; markLine: { data: { xAxis: number }[] } }[] };
+    expect(opt.series.map((s) => s.id)).toEqual(['marker']);
+    expect(opt.series[0]?.markLine.data.map((l) => l.xAxis)).toEqual([NOW, 9]);
+  });
+  it('nothing changed, no call', () => {
+    const { calls, draw } = setup();
+    const d = data();
+    draw(d, 7);
+    draw(d, 7);
+    expect(calls).toHaveLength(1);
+  });
+  it('a new data object (unit, locale or points) is a full redraw, also with the same t', () => {
+    const { calls, draw } = setup();
+    draw(data(), 7);
+    draw(data({ unit: 'm' }), 7);
+    draw(data({ locale: 'en' }), 7);
+    draw(data({ points: [] }), 8);
+    expect(calls).toHaveLength(4);
+    for (const c of calls.slice(1)) expect(c[1]).toEqual({ notMerge: true });
+  });
+  it('a selection cleared and set again moves the marker only', () => {
+    const { calls, draw } = setup();
+    const d = data();
+    draw(d, 7);
+    draw(d, undefined);
+    draw(d, 7);
+    expect(calls.slice(1).map((c) => c.length)).toEqual([1, 1]);
   });
 });

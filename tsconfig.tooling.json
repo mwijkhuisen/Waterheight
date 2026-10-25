@@ -29,6 +29,8 @@
     "apps/web/src/features/station/value.ts",
     "apps/web/src/features/station/state.ts",
     "apps/web/src/features/station/chartModel.ts",
+    "apps/web/src/features/station/colours.ts",
+    "apps/web/src/lib/intl.ts",
     "apps/web/src/features/station/thresholds.ts",
     "apps/web/src/features/station/neighbours.ts",
     "apps/web/src/features/station/tide.ts",

@@ -33,8 +33,9 @@ function whenVisible(el: Element, signal: AbortSignal): Promise<void> {
 
 /**
  * A MapLibre map in `container` (A§10 features/map). MapLibre, its worker,
- * the pmtiles protocol and the style load as a lazy chunk once the container
- * comes into view. On unmount, or when the language changes, the map is removed
+ * the pmtiles protocol and the style are a lazy chunk, asked for at the map
+ * view's mount (O4: features/map/preload.ts); the map is set up once the
+ * container comes into view. On unmount, or when the language changes, the map is removed
  * and the protocol released; a map whose set-up finishes after unmount is
  * removed at once. `options` are read once, at mount.
  */

@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import type { createChart } from './chart.ts';
-import { runName } from './chartModel.ts';
+import { type ChartData, runName } from './chartModel.ts';
 import styles from './station.module.css';
 import type { Marks } from './thresholds.ts';
 import type { SeriesData } from './useSeriesData.ts';
@@ -74,15 +74,15 @@ export function Chart({
     };
   }, [onFailed]);
 
-  useEffect(() => {
-    if (chart === null) return;
+  // Everything but the selected instant (O3): a step of t that changes nothing else keeps `d`, so the chart moves its
+  // marker series alone; any other change is a new `d` and a full redraw (chartModel.ts drawer).
+  const d = useMemo((): ChartData => {
     const { run, view } = data;
     const label = run === undefined ? '' : `${runName(run, locale)}${ownerTag(run.source, ownerSources, locale)}`;
-    chart.update({
+    return {
       locale,
       name,
       unit,
-      selected,
       now,
       nowName: m.now_marker({}, { locale }),
       axisName: m.chart_axis_time({}, { locale }),
@@ -102,8 +102,12 @@ export function Chart({
           : { view, name: label, estimateName: `${label} (${m.forecast_estimate({}, { locale })})` },
       x,
       format: (v) => formatNumber(v, locale),
-    });
-  }, [chart, data, marks, showThresholds, now, selected, x, locale, name, unit, deltaUnit, ownerSources]);
+    };
+  }, [data, marks, showThresholds, now, x, locale, name, unit, deltaUnit, ownerSources]);
+
+  useEffect(() => {
+    chart?.draw(d, selected);
+  }, [chart, d, selected]);
 
   return <div ref={ref} className={styles.chart} role="img" aria-label={m.chart_label({ unit, days }, { locale })} />;
 }

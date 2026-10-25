@@ -1,5 +1,5 @@
 import type { State, StationRecent } from '@rws/contracts';
-import { inSeason, monthDay } from '@rws/core/season';
+import { inSeason } from '@rws/core/season';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { LADDER, STATE_COLOUR } from '../legend/palette.ts';
@@ -54,8 +54,11 @@ export interface MarkOptions {
   locale: Locale;
   /** The series' unit with its zero ("cm NAP"). */
   unit: string;
-  /** The selected time (epoch ms): it picks the season of a seasonal reference, in Europe/Amsterdam. */
-  t: number;
+  /**
+   * The month and day (MMDD, `monthDay` of the selected time in Europe/Amsterdam) that picks the season of a seasonal
+   * reference: the marks change with the day, not with every step of t (O3).
+   */
+  monthDay: number;
 }
 
 /** The reference's quantity unit in canonical terms: cm for a stage or level, m³/s for a discharge; else not shown. */
@@ -102,7 +105,7 @@ interface Pending {
 
 export function referenceMarks(refs: readonly Ref[], o: MarkOptions): Marks {
   const { locale } = o;
-  const md = monthDay(o.t);
+  const md = o.monthDay;
   const usable = refs
     .filter(
       (r) => canonicalUnit(r.unit, o.quantity) && (r.season === undefined || inSeason(md, r.season.from, r.season.to)),

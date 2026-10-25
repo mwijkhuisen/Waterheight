@@ -144,18 +144,29 @@ export function generate(root: string): Map<string, string> {
       `${header}import type { OwnerLabels } from '../../lib/labels/labels.ts';\n\nexport const OWNER_LABELS: OwnerLabels = Object.freeze({\n// (source, scale, code) → key, here and not in the public index: the owner sources' ids stay out of the public bundle.\nkeys: ${frozenMap(sorted(ownerIndex))},\nnl: ${ownerEntries('nl')},\nen: ${ownerEntries('en')},\n});\n`,
     ),
   );
+  const imports = (entries: [string, string][]) =>
+    `import {\n${entries
+      .map(([, k]) => k)
+      .sort()
+      .map((k) => `${k},`)
+      .join(
+        '\n',
+      )}\n} from '../../paraglide/messages.js';\n\ntype Message = (inputs: object, options: { locale: 'nl' | 'en' }) => string;\n`;
+  // O4 (#220): the provider-class labels are lazy-only (basis.ts), so they have their own file; the entry keeps rivers and colours.
+  out.set(
+    'apps/web/src/lib/labels/labels-public.gen.ts',
+    biomeFormat(
+      root,
+      'labels-public.gen.ts',
+      `${header}${imports(publicIndex)}// Keys are \`<source>\\n<scale>\\n<code>\` (public labels, message functions imported by name so the bundle holds only these; the owner index lives in the owner chunk).\nexport const PUBLIC_LABELS: Readonly<Record<string, Message>> = ${frozenMap(sorted(publicIndex), true)};\n/** Copies of CLASS_SCALE and AREA_SCALE of packages/core/src/crosswalk.ts. */\nexport const CLASS_SCALE: Readonly<Record<string, string>> = ${frozenMap(scaleMap(CLASS_SCALE))};\nexport const AREA_SCALE: Readonly<Record<string, string>> = ${frozenMap(scaleMap(AREA_SCALE))};\n`,
+    ),
+  );
   out.set(
     'apps/web/src/lib/labels/labels-index.gen.ts',
     biomeFormat(
       root,
       'labels-index.gen.ts',
-      `${header}import {\n${[...publicIndex, ...riverIndex]
-        .map(([, k]) => k)
-        .sort()
-        .map((k) => `${k},`)
-        .join(
-          '\n',
-        )}\n} from '../../paraglide/messages.js';\n\ntype Message = (inputs: object, options: { locale: 'nl' | 'en' }) => string;\n// Keys are \`<source>\\n<scale>\\n<code>\` (public labels, message functions imported by name so the bundle holds only these), or a river id (the owner index lives in the owner chunk).\nexport const PUBLIC_LABELS: Readonly<Record<string, Message>> = ${frozenMap(sorted(publicIndex), true)};\nexport const RIVER_LABELS: Readonly<Record<string, Message>> = ${frozenMap(sorted(riverIndex), true)};\n/** Copies of CLASS_SCALE and AREA_SCALE of packages/core/src/crosswalk.ts. */\nexport const CLASS_SCALE: Readonly<Record<string, string>> = ${frozenMap(scaleMap(CLASS_SCALE))};\nexport const AREA_SCALE: Readonly<Record<string, string>> = ${frozenMap(scaleMap(AREA_SCALE))};\n/** The LHP legend colours of DE-6, keyed \`<scale>\\n<code>\`. */\nexport const LHP_COLOURS: Readonly<Record<string, string>> = ${frozenMap(sorted(colours))};\n`,
+      `${header}${imports(riverIndex)}// Keys are a river id.\nexport const RIVER_LABELS: Readonly<Record<string, Message>> = ${frozenMap(sorted(riverIndex), true)};\n/** The LHP legend colours of DE-6, keyed \`<scale>\\n<code>\`. */\nexport const LHP_COLOURS: Readonly<Record<string, string>> = ${frozenMap(sorted(colours))};\n`,
     ),
   );
   return out;

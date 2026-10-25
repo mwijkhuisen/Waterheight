@@ -1,6 +1,6 @@
-import { type ApiStation, dayOf, floorBucket, isSettled, RiversManifest } from '@rws/contracts';
+import { type ApiStation, floorBucket, RiversManifest } from '@rws/contracts';
 import { keepPreviousData, QueryClient, useQueries, useQuery } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { loadRuntimeConfig, type RuntimeConfig } from '../config/runtime.ts';
 import { stationHorizon } from '../forecast.ts';
 import { quantise, STEP_MS, toUrlT } from '../time/time.ts';
@@ -17,7 +17,7 @@ import {
   loadStations,
   loadStatusMode,
   loadStatusPage,
-  loadWarnings,
+  loadWarningsFile,
   mouthsOf,
   type ReachesRead,
   riversOf,
@@ -34,9 +34,12 @@ import {
   type FramesUnit,
   framesPlan,
   framesUrl,
+  readApiUnits,
+  readFileUnits,
   readFramesBody,
 } from './frames.ts';
 import { snapshotSource, versionKey } from './static.ts';
+import { stableWarnings, type WarningsAt, warningsAt, warningsFileKey, warningsSource } from './warnings.ts';
 
 // The data of the page, read through relative paths only, so the same build serves the public site and the owner
 // site (A§10 owner mode). Every answer is parsed with its site's contract (contracts.ts) before the UI sees it;
@@ -56,7 +59,7 @@ const live = (on: boolean) => (on ? { refetchInterval: LIVE_MS, refetchIntervalI
  * /runtime-config.json, once: one query for the audience and the site's operator, contact and CDN (P10b, plan C8). A
  * failure is retried (three times, with backoff) and never becomes "public" (lib/config/runtime.ts; review round 1).
  */
-const runtimeConfigQuery = {
+export const runtimeConfigQuery = {
   queryKey: ['runtime-config'],
   queryFn: ({ signal }: { signal: AbortSignal }) => loadRuntimeConfig(undefined, signal),
   staleTime: Number.POSITIVE_INFINITY,
@@ -301,27 +304,39 @@ export function useChanges(
 /**
  * The warning areas valid at `t` (P10a T5; warnings.ts picks the file). Live, the latest file is asked again every
  * minute. A failure shows no areas (the map still works); `incomplete` says when earlier areas may be missing.
+ * O3 (#219): one query per file, never per t (warningsFileKey), and the areas at t picked from it here. While a file
+ * is on its way, while playing (no t) and after now, the areas shown last stay, as `keepPreviousData` kept them; an
+ * unchanged set keeps its identity (stableWarnings), so the map does not set its data again.
  */
-export const useWarnings = (t: number | undefined, meta: Pick<WebMeta, 'now'> | undefined, isLive = false) => {
+export function useWarnings(
+  t: number | undefined,
+  meta: Pick<WebMeta, 'now'> | undefined,
+  isLive = false,
+): WarningsAt | undefined {
   const c = useContracts();
-  const bucket = meta === undefined ? undefined : floorBucket(Date.parse(meta.now));
-  return useQuery({
-    // The day of meta.now too: after midnight UTC a fallback cached for t (today.json of the next day) is asked again.
-    queryKey: [
-      'warnings',
-      c?.audience,
-      t,
-      t !== undefined && bucket !== undefined && t >= bucket ? 'latest' : 'at',
-      meta === undefined ? undefined : dayOf(Date.parse(meta.now)),
-    ],
-    queryFn: ({ signal }) => loadWarnings(browserFetch, t ?? 0, meta as WebMeta, signal, c),
-    enabled: c !== undefined && t !== undefined && meta !== undefined && t <= (bucket ?? 0),
-    placeholderData: keepPreviousData,
+  const now = meta === undefined ? undefined : Date.parse(meta.now);
+  const choice = t === undefined || now === undefined || t > floorBucket(now) ? undefined : warningsSource(t, now);
+  const { data, isPending } = useQuery({
+    queryKey: ['warnings', c?.audience, ...(choice === undefined ? ['wait'] : warningsFileKey(choice, now ?? 0))],
+    queryFn: ({ signal }) => loadWarningsFile(browserFetch, choice as NonNullable<typeof choice>, signal, c),
+    enabled: c !== undefined && choice !== undefined,
     staleTime: 60_000,
     retry: false,
     ...live(isLive),
   });
-};
+  // The last areas shown; a failed file shows none, but leaves them for the next wait.
+  const last = useRef<WarningsAt | undefined>(undefined);
+  const shown = useMemo(() => {
+    if (isPending) return last.current;
+    return data === undefined || t === undefined
+      ? undefined
+      : stableWarnings(last.current, warningsAt(data, t, data.incomplete));
+  }, [isPending, data, t]);
+  useEffect(() => {
+    if (shown !== undefined) last.current = shown;
+  }, [shown]);
+  return shown;
+}
 
 /** series/<station>/recent.json of the selected station (7 days, its runs and references); refreshed live. */
 export const useRecent = (station: string | undefined, isLive = false) => {
@@ -464,29 +479,8 @@ export function useFrames(
         : [],
     [on, aud, from, to, meta],
   );
-  const read1 = useCallback(
-    (rs: readonly FramesRead[]) => {
-      const out = {
-        chunks: [] as FramesChunk[],
-        answered: [] as { from: number; to: number }[],
-        failed: new Set<string>(),
-      };
-      rs.forEach((r, i) => {
-        const u = files[i] as FileUnit;
-        if (r.isError) {
-          if (u.kind === 'day') out.failed.add(u.day);
-          else
-            for (let d = Math.floor(from / DAY_MS) * DAY_MS; d < to; d += DAY_MS)
-              if (!isSettled(dayOf(d), nowMs)) out.failed.add(dayOf(d));
-        } else if (r.data) {
-          out.chunks.push(r.data);
-          out.answered.push({ from: Date.parse(r.data.from), to: Date.parse(r.data.to) });
-        }
-      });
-      return out;
-    },
-    [files, from, to, nowMs],
-  );
+  // O3 (#219): the readers keep their result while only a fetch status flips (frames.ts StageRead).
+  const read1 = useMemo(() => readFileUnits(files, from, to, nowMs), [files, from, to, nowMs]);
   const q1 = useQueries({
     queries: files.map((u) => ({
       queryKey: u.kind === 'day' ? ['frames', aud, 'day', u.day, u.v] : ['frames', aud, 'recent', meta?.now],
@@ -499,7 +493,7 @@ export function useFrames(
   });
 
   // Stage 2: the API for version-0 days, failed files and the whole owner range, one call per contiguous range.
-  const failedKey = [...q1.failed].sort().join();
+  const failedKey = q1.failed;
   const calls = useMemo(
     () =>
       on
@@ -513,19 +507,7 @@ export function useFrames(
         : [],
     [on, aud, from, to, meta, failedKey],
   );
-  const read2 = useCallback(
-    (rs: readonly FramesRead[]) => {
-      const out = { chunks: [] as FramesChunk[], answered: [] as { from: number; to: number }[] };
-      rs.forEach((r, i) => {
-        if (!r.isSuccess) return;
-        // An API range that failed was answered with no data (null): it is never asked again in a loop.
-        out.answered.push({ from: (calls[i] as ApiUnit).from, to: (calls[i] as ApiUnit).to });
-        if (r.data) out.chunks.push(r.data);
-      });
-      return out;
-    },
-    [calls],
-  );
+  const read2 = useMemo(() => readApiUnits(calls), [calls]);
   const q2 = useQueries({
     queries: calls.map((u) => ({
       queryKey: ['frames', aud, 'api', u.from, u.to],
@@ -555,7 +537,6 @@ export function useFrames(
 
 type FileUnit = Exclude<FramesUnit, { kind: 'api' }>;
 type ApiUnit = Extract<FramesUnit, { kind: 'api' }>;
-type FramesRead = { isError: boolean; isSuccess: boolean; data: FramesChunk | null | undefined };
 
 /** Frames never change once settled: kept 10 minutes after the last observer, asked again only after 5 minutes, never retried. */
 const FRAMES_QUERY = { gcTime: 600_000, staleTime: 300_000, retry: false, structuralSharing: false } as const;

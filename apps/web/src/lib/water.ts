@@ -38,7 +38,7 @@ const isLake = (b: WaterBody) => GROUP[b.kind] === 'lakes';
 
 /**
  * P19b: the water body a station lies in, by the order of groupsOf: a lake, then a closed estuary, an estuary, a sea;
- * undefined for a river station. Here, not in the lazy tide chunk: StationPanel (eager) reads it.
+ * undefined for a river station. Here, not in the lazy tide chunk: the lazy StationPanel reads it.
  */
 export function bodyOf<B extends { kind: string; stations: readonly string[] }>(
   stationId: string,

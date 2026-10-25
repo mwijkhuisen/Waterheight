@@ -1,5 +1,6 @@
 import { attributionText } from '../../lib/attribution.ts';
 import { httpsHref } from '../../lib/href.ts';
+import { intlLocale, perLocale } from '../../lib/intl.ts';
 import { formatDay } from '../../lib/time/time.ts';
 import type { Locale } from '../../paraglide/runtime.js';
 
@@ -33,12 +34,13 @@ export function creditLines(
 
 export type Trend = 'rising' | 'falling' | 'steady';
 
+const SIGNED = perLocale(
+  (l) => new Intl.NumberFormat(intlLocale(l), { maximumFractionDigits: 2, signDisplay: 'exceptZero' }),
+);
+
 /** "+12 cm" / "-0,5 m³/s": a signed change in the canonical unit of its quantity. */
 export function dhValue(dh: number, quantity: 'H' | 'Q', locale: Locale): string {
-  const n = new Intl.NumberFormat(locale === 'nl' ? 'nl-NL' : 'en-GB', {
-    maximumFractionDigits: 2,
-    signDisplay: 'exceptZero',
-  }).format(dh);
+  const n = SIGNED(locale).format(dh);
   return `${n} ${quantity === 'H' ? 'cm' : 'm³/s'}`;
 }
 

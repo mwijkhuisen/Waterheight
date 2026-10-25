@@ -6,6 +6,7 @@ import type {
   Map as MapLibreMap,
   SymbolLayerSpecification,
 } from 'maplibre-gl';
+import type { StationState } from '../../lib/stationStates.ts';
 import type { Mode } from '../../lib/url/url.ts';
 import { isMsl } from '../../lib/water.ts';
 import {
@@ -114,6 +115,31 @@ export function stationFilter(layer: string, selected = ''): ExpressionSpecifica
 }
 
 /** Puts the selected station (or none) into the filters, so it stays drawn at every zoom; the camera does not move. */
+/**
+ * O3 (#219): writes the feature-state of each shown station whose record changed against `written` (the reach layer's
+ * pattern): a played hour rewrites only the stations whose state moved, a selection only the old and the new one. The
+ * key is the whole record with `selected`, so a changed record is written with every key (feature state merges:
+ * nothing of an earlier t stays). Returns what is now written; an empty `written` writes every station.
+ */
+export function writeStates(
+  map: MapLibreMap,
+  shown: readonly ApiStation[],
+  states: ReadonlyMap<string, StationState>,
+  selected: string | undefined,
+  written: ReadonlyMap<string, string>,
+): Map<string, string> {
+  const next = new Map<string, string>();
+  for (const st of shown) {
+    const s = states.get(st.id);
+    if (s === undefined) continue;
+    const record = { ...s, selected: st.id === selected };
+    const key = JSON.stringify(record);
+    next.set(st.id, key);
+    if (written.get(st.id) !== key) map.setFeatureState({ source: SOURCE, id: st.id }, record);
+  }
+  return next;
+}
+
 export function setSelectedStation(map: MapLibreMap, selected: string | undefined): void {
   for (const id of Object.keys(TIERED))
     if (map.getLayer(id) !== undefined) map.setFilter(id, stationFilter(id, selected));

@@ -1,6 +1,7 @@
 import type { StateBasis } from '@rws/contracts';
 import type { WarningsAt } from '../../lib/data/warnings.ts';
-import { basisLabel, lhpColour, useOwnerLabels } from '../../lib/labels/labels.ts';
+import { basisLabel, useOwnerLabels } from '../../lib/labels/basis.ts';
+import { lhpColour } from '../../lib/labels/labels.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 import { OwnerBadge } from '../owner/OwnerBadge.tsx';

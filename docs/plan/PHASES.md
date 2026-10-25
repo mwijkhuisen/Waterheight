@@ -4682,3 +4682,84 @@ What optimisation issue #218 (O2, from the read-only audit at d5cc442; built on 
   - [x] [CI] bench-q1 before and after on one machine, B1 and B4 above.
   - [ ] [agent-prod] `publisher.cycleSeconds` and `lastDayRender.seconds` 24 h either side of the deploy (KG-480).
 - **[U] items** (also in `docs/known-gaps.md`): KG-478 (accepted), KG-479 (accepted), KG-480 [agent-prod].
+
+## 61. Amendment: O3 (#219), web playback work per time step (2026-10-25)
+
+What optimisation issue #219 changed: each time step of the web app now does only the work that changed, and what is shown stays identical. Web only: no change to the CSP, Caddy, any request target, any HTML sink, contracts, dependencies, the server or deploy.
+
+- **Built** (paths under `apps/web/src/`).
+  1. Station chart: `features/station/chartModel.ts` `drawer(chart, full)`. A new `ChartData` object is a full `notMerge` redraw; the same one with another selected instant sets only the `marker` series (the Hovmöller pattern). The marker holds the now line and the selected line (moved out of the observations' markLine) and is the chart's first series, so the lines are still drawn before the threshold lines. `Chart.tsx` builds `ChartData` without the selected instant. `thresholds.ts` `MarkOptions.monthDay` (MMDD) replaces `t`, so the marks change once a day. `useSeriesData.ts` keys the forecast view on `future ? serverNow : t`. The e2e build counts full redraws in `window.__rws.chartDraws`, and e2e readers find the observations by id `obs`.
+  2. Feature-state: `features/map/stationLayer.ts` `writeStates` keeps the written record (JSON of the state plus `selected`) per station and writes only a changed one (the `reachLayer.ts` pattern); a selection change writes the old and the new id. `StationsMap.tsx` resets the written map on every `setData` and on a new map.
+  3. Warnings: `lib/data/api.ts` `useWarnings` asks one query per file (`lib/data/warnings.ts` `warningsFileKey`: `latest.geojson` per 10-minute bucket, a day file per path and day plus the day of now; never `t`). `chain.ts` `loadWarningsFile` replaces `loadWarnings` (same incomplete fallback and hidden-source filter). `stableWarnings` keeps the result's identity while the same rows are valid, so the map's `setData` effect does not run.
+  4. Frames: `lib/data/frames.ts` `readFileUnits` and `readApiUnits` return the failed days as a sorted string and one chunk slot per unit, so `replaceEqualDeep` keeps the result while only a fetch status flips. `buildFrameStore` keeps each series' rows of the chunks instead of copying every value into maps, with a module `WeakMap<FramesChunk, …>` of each chunk's check and first finite hour; the three `useFrames` users share it.
+  5. Intl: `lib/intl.ts` (`intlLocale`, the one copy; `perLocale`, one object per page language). The `time.ts` formatters, `formatNumber`, the pages' numbers, `dhValue`, the Hovmöller table's change text and the station sort's `Intl.Collator` are cached.
+- **Reality against the issue.**
+  1. Warnings during playback: main already asked no warnings file while playing (`asked` is undefined then). The per-`t` re-read happened on every settled `t` (paused key steps, drag stops). The consequence is KG-481: a non-live view of a `t` earlier today reads `today.json` once per key.
+  2. ECharts 6's merge `setOption` calls `mergeOption({})` on every series the option does not name, which rebuilds that series' data (`model/Global.js` 281-285, `model/Series.js` 135-153). The marker path skips the model, view and axis teardown of `notMerge`, not the data pass (KG-482).
+  3. The forecast view: before, a forecast station rebuilt on every step after now, because its key held `t`; it is keyed on `serverNow` there now.
+  4. Chunk identity: `replaceEqualDeep` deep-copies a plain object that moved index, so the readers keep one slot per unit; a chunk arriving in an earlier slot keeps the other chunk object.
+  5. On a software renderer the playing cases sit near 100 % main-thread busy, so fps is the throughput signal there; `fps.spec.ts` reports a `busy` share per run (union of `RunTask` on the busiest `CrRendererMain` thread over the trace's span).
+  6. The chart span during playback (unchanged, checked on main): the span is cut from the settled t where play began (App's debounced `chartAt`), so the selected-time line leaves the axis a few played hours later and the charts then show no t line until play stops. On main each played hour still redrew both charts in full; now nothing is sent while the line is off the axis.
+- **Acceptance criteria** (those of #219, in its order).
+  - [x] [CI] `apps/web/e2e/fps.spec.ts` has the case "desktop: at least 30 frames a second while playing back with a station panel open" (Lobith). Its numbers before and after are in the table below (report-only, KG-269).
+  - [x] [CI] Unit tests: (1) `test/station-chart.test.ts` "markerSeries" and "another t on the same data updates the marker series alone, without notMerge" (a data, unit or locale change redraws in full: same file, and `e2e/p10d.spec.ts` "O3: a step of t moves only the selected line, and the chart then equals a fresh load at that t"); (2) `test/map-layers.test.ts` "writeStates (O3)" (an unchanged state writes nothing, one change writes that station, a selection change writes two ids); (3) `test/p10a-data.test.ts` "every t of a file shares one query key; the key moves with the day or the 10-minute bucket of now" and "stableWarnings keeps the previous result while the valid set is the same, else takes the next"; (4) `test/frames.test.ts` "the stage readers under structural sharing" ("a changed fetch status alone gives back the previous result") and the property "the indexed frame store equals the copying one it replaced (O3)"; (5) `test/time.test.ts` "cached formatters equal the pre-O3 output" (native Temporal and temporal-polyfill).
+  - [ ] [CI] The existing web unit tests and the e2e suite pass on all three browsers; `e2e/p11b.spec.ts` "O3: paused steps and a playback read each warnings file at most once" holds the request log. Evidence: the CI run on the PR head (to be added).
+  - [ ] [CI] Invariants 3 and 7 hold: no new HTML sink (tooltips stay `richText`; the marker's labels use the same plain-text formatter), no new request target; the Playwright third-party check passes in the same run.
+- **Frame rate** (report-only, KG-269; measured on the owner's WSL box with software WebGL, so not a GPU number):
+
+Three runs per build, base (f4215e5 with the new spec) and head alternated run by run on one machine: AMD Ryzen 7 5800X under WSL2, headless Chromium 156.0.8078.4 (Playwright 1.64.0), software WebGL, load average 3–5 from other work during the runs. fps is presented frames over the 10 s (`DrawFrame`); `busy` is the main-thread share.
+
+| Case | base fps | head fps | busy (both) |
+|---|---|---|---|
+| desktop, scrubbing | 14.3, 14.0, 13.1 | 13.5, 13.2, 13.7 | 66–72 % |
+| mobile 4× CPU, scrubbing | 28.5, 26.6, 28.4 | 28.1, 28.7, 27.9 | 81–97 % |
+| desktop, playing with the reach layers | 6.7, 6.6, 6.2 | 10.1, 10.4, 9.1 | 98–99 % |
+| desktop, playing with the Hovmöller panel | 13.2, 15.2, 12.1 | 12.1, 13.4, 13.2 | 96–99 % |
+| mobile 4× CPU, playing with the Hovmöller panel | 6.3, 4.8, 4.6 | 5.4, 5.1, 6.2 | 96–99 % |
+| desktop, playing with a station panel (new) | 7.7, 8.4, 9.2 | 10.0, 9.0, 8.7 | 93–98 % |
+
+Two more runs of the new case counted the station charts' `setOption` calls in the 10 s (each ECharts instance wrapped, so the count is the same on both builds) and the hours the playback moved: base 144 and 140 full redraws, no merge (68 hours played in the second); head 12 and 10 full redraws (an Amsterdam day change rebuilds the marks) and 14 marker merges each (81 hours played), at 7.2/6.9 and 10.3/8.8 fps. The clear fps gain is in the reach-layer case (the station feature-states, all rewritten each hour before); the station-panel fps difference is within run-to-run noise on this box, where its evidence is the redraw count; the scrubbing and Hovmöller cases are within noise too (review CR-4).
+
+- **[U] items** (KG-269, KG-481 to KG-483): the owner GPU run of `fps.spec.ts` with `FPS_GATE=1` now covers the new case too; the owner decides on KG-481.
+- **Not in scope** (#219): per-language bundles, `strictExecutionOrder`, a `React.memo` sweep, sharing `spansOf`, the load path and the bundle (O4), deduplicating helpers.
+
+## 62. Amendment: O4 (#220), the web load path (2026-10-25)
+
+What optimisation issue #220 changed: the web app starts its boot requests earlier and loads less in the entry, and what is shown stays identical. Web only: no change to the CSP, Caddy, any request target, any HTML sink, contracts, dependencies, the server or deploy. Stacked on PR #226 (O3, #219) by the owner (2026-10-25); the O4 PR targets `claude/opt-web-playback`.
+
+- **Built** (paths under `apps/web/src/`).
+  1. Boot fetches (f58eb58): the runtime config and the home route's boot files (`prefetchStatic(bootFiles(location.search))`, `lib/data/chain.ts`) start before `ensureTemporal`; `browserFetch` hands the early answer to the first read of its path once, and the site's contract still parses it. Nothing that needs Temporal runs before it (never `readSearch`).
+  2. Map preload (04b977d): `features/map/preload.ts` starts the map chunk, the style and the tiles manifest at the map view's mount (keyed on `onMap`); `createMap` takes the early manifest once while it is under 60 s old and parses it in the map chunk.
+  3. Lazy station panel (04b977d): `StationPanel` is a lazy chunk with the Hovmöller pattern (a `div.panelPending` box, never an `<aside>`, while it loads or failed); the e2e `settled()`/`idle()` wait for the `aside` when the URL has `s=`.
+  4. Label split (d139029): the basis labels live in `lib/labels/basis.ts` + `labels-public.gen.ts` (lazy only); `labels.ts`/`labels-index.gen.ts` keep what the eager legend and river chips use.
+  The baseline (c82c2af) added the `rws:map-idle` mark in `createMap.ts` and `e2e/time-to-map.spec.ts`.
+- **Reality against the plan.**
+  1. #219 was not merged when this was planned; the owner stacked O4 on PR #226.
+  2. A `?s=` deep link does not move focus today (`focusPanel` is set only by `open()`); "with focus as before" means this, unchanged.
+  3. The label catalogue is in the entry independently of the panel (through `Legend.tsx`, `RiverChip.tsx` and `flow/rows.ts`).
+  4. The entry-size numbers in the older docs disagree; the baseline is what `map-build.test.ts` logs on the base commit. The budget is 250 KiB.
+  5. No test asserted that information pages make no data requests; one is added.
+  6. `docs/agent-reference.md` does not exist on this branch; the web gotchas are in CLAUDE.md § Gotchas.
+  7. On home, `status.json` is read only by `useMode`, and only without a valid `?mode=`.
+  8. `/tiles/manifest.json` is not the rivers manifest, so the rivers manifest dedupe stays out of scope.
+  9. Only the fetch of the tiles manifest moves; its parse stays in the map chunk.
+  10. The time-to-map mark is the base map's first `idle` (style and first tiles); `StationsMap` adds the station layers after `ready`.
+  11. The request-order criterion: the home route reads no `latest.json` (the snapshot is `/data/v1/recent/<day>/<hhmm>.json`), and the boot files finish around the moment `Viewer` mounts, so their order against the map chunk is a race. The spec asserts that the createMap chunk starts before the first snapshot read.
+  12. The baseline CI run of c82c2af failed `p19b.spec.ts:118` (tidal panel) on all three public legs. It was inherited from 6c60b86 and fixed in O3's f913595, merged here in 12e3e33.
+- **Numbers observed** (initial JavaScript is gzip per shell; the same on all four shells).
+
+| Measure | Base (6c60b86 + mark) | After boot fetches, preload, lazy panel (04b977d) | After label split (d139029) |
+|---|---|---|---|
+| Entry JS, gzip | 208,842 B | 196,879 B | 191,274 B |
+
+  Base and head carry the same O3 app code: the merge 12e3e33 brought only O3's e2e and docs fix (f913595: `p11b.spec.ts`, `p19b.spec.ts`, known-gaps, PHASES). The `StationPanel` chunk is 37.63 kB, 12.59 kB gzip. The label split saves 5,605 B, at or over the 2,048 B threshold, so it is kept (owner Q2).
+- **Time to the first map idle** (report-only; fresh context, 3 runs, CDP: 150 ms latency, 1.6 Mbps down, 750 kbps up, CPU x4): CI is the `owner-perf` leg on GitHub's runner, WSL is Chromium headless shell 1248 = Chromium 156.0.8078.4 on WSL2, Ryzen 7 5800X, software GL; CI against the real Caddy serving dist-e2e, WSL against the HTTP/1.1 Node stand-in; neither is production (KG-484).
+
+| Run | Base median | Head median |
+|---|---|---|
+| CI (run 40194043809, c82c2af) | 12,469 ms (12,442, 12,469, 12,783) | 13,374 ms (13,207, 13,374, 14,387; run 40197763942, 12e3e33) and 13,151 ms (13,151, 13,253, 13,134; run 40201416612, cdc3e6d) |
+| WSL | 13,785, 13,706, 13,858 ms (three sets: 13,896 13,785 13,666 / 14,046 13,697 13,706 / 13,861 13,858 13,809) | 13,109, 13,534, 13,496, 12,966 ms (19406eb); alternating on one box with the base (cdc3e6d against c82c2af): 12,896 and 12,935 against 13,795 and 13,886 ms |
+
+- **Lighthouse** (the CI `owner-perf` leg, 3 runs, report-only, KG-237), the TBT watch of the plan (MapLibre now evaluates at the map view's mount): base (c82c2af) performance 46, 66, 67, TBT 2,990, 2,400, 2,188 ms, LCP 5,392, 2,251, 2,286 ms; head (12e3e33) performance 47, 48, 65, TBT 5,350, 7,002, 5,480 ms, LCP 5,020, 4,569, 2,111 ms, and (cdc3e6d) performance 44, 49, 65, TBT 7,004, 6,280, 4,801 ms, LCP 5,452, 4,653, 2,103 ms. Each CI run had its own runner: the scripting of the untouched `temporal` chunk rose 1.42 to 1.84× too. On one box (WSL, the stand-in, alternating base and head, 2 × 3 runs each), TBT median went from about 2,450 to 1,980 ms, LCP median from about 4,775 to 6,501 ms, and performance from about 46 to 42. The LCP element is the timebar's time text, which paints after meta and stations, and the 302 kB map chunk now shares the link with them. A variant that starts the chunk once meta and stations are in (style and manifest still at mount) measured an LCP median of about 5,503 ms against 4,225 ms for the base, and time-to-map 13,499 and 13,407 against 13,982 and 13,739 ms. By the owner's rule (adopt it only if LCP is back to base) it was not adopted (KG-487).
+- **[U] items:** time-to-map is measured on Chromium only (CDP) and the CI runner varies by about 50 % (report-only, KG-120, KG-237); the gain on Safari's polyfill wait is not measured (Playwright WebKit has native Temporal); production (Cloudflare edge) is not measured, and the owner may run Lighthouse on waterradar.io after the deploy (KG-484). New rows: KG-484 to KG-487.
+- **Not in scope** (#220): a router, `React.lazy`, a new dependency, the rivers manifest dedupe, per-language bundles.

@@ -242,4 +242,14 @@ describe('e2e build', () => {
     for (const file of staticClosure([panel?.file ?? '']))
       expect(read(file), file).not.toMatch(/_echarts_instance_|ecModel/);
   });
+
+  // O4 (#220): the station panel (with its sections, chart code and thresholds) is a lazy chunk like the Hovmöller one,
+  // asked for only by `?s=`: no page's initial load holds it, and the helpers' `aside` wait depends on that.
+  it('keeps the station panel out of every initial load', () => {
+    const panel = manifest['src/features/station/StationPanel.tsx'];
+    expect(panel?.isDynamicEntry).toBe(true);
+    for (const page of pages) {
+      for (const file of initialLoad(page)) expect(file, `${page} → ${file}`).not.toBe(panel?.file);
+    }
+  });
 });

@@ -3,10 +3,24 @@ import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { DH_COLOUR, dhBin, LADDER, levelOf, qSize, STATE_COLOUR } from '../src/features/legend/palette.ts';
 import { OWNER_CONTRACTS } from '../src/features/owner/contracts.ts';
-import { type Fetcher, loadMeta, loadRecent, loadSources, loadStations, loadWarnings } from '../src/lib/data/chain.ts';
+import {
+  type Fetcher,
+  loadMeta,
+  loadRecent,
+  loadSources,
+  loadStations,
+  loadWarningsFile,
+} from '../src/lib/data/chain.ts';
 import { changesAt, historySource } from '../src/lib/data/change.ts';
 import { PUBLIC_CONTRACTS } from '../src/lib/data/contracts.ts';
-import { validAt, warningsAt, warningsSource } from '../src/lib/data/warnings.ts';
+import {
+  stableWarnings,
+  validAt,
+  type WarningsAt,
+  warningsAt,
+  warningsFileKey,
+  warningsSource,
+} from '../src/lib/data/warnings.ts';
 import { HIDE_AFTER_S, hiddenKey, lapses, stationStates, visibleStations } from '../src/lib/stationStates.ts';
 
 // P10a, the lead's pure parts: the warnings at t, the 24-hour change, the history source, the palette bins, the
@@ -48,6 +62,18 @@ function fake(table: Record<string, { status?: number; body?: unknown }>) {
     return new Response(JSON.stringify(r.body ?? {}), { status: r.status ?? 200 });
   };
   return { f, asked };
+}
+
+// The pre-O3 loadWarnings(f, t, meta, signal, c), on the file read once and picked at t.
+async function loadWarnings(
+  f: Fetcher,
+  t: number,
+  meta: { now: string },
+  signal?: AbortSignal,
+  c: typeof PUBLIC_CONTRACTS = PUBLIC_CONTRACTS,
+): Promise<WarningsAt> {
+  const r = await loadWarningsFile(f, warningsSource(t, Date.parse(meta.now)), signal, c);
+  return warningsAt(r, t, r.incomplete);
 }
 
 describe('warnings at t', () => {
@@ -124,6 +150,41 @@ describe('warnings at t', () => {
     const o = await loadWarnings(owner.f, NOW, { now: '2026-10-26T12:00:00Z' }, undefined, OWNER_CONTRACTS);
     expect(o.features.map((x) => x.properties.source)).toEqual(['DE-6']);
     expect(owner.asked).toEqual(['/data/v1/warnings/latest.geojson']);
+  });
+
+  it('every t of a file shares one query key; the key moves with the day or the 10-minute bucket of now', () => {
+    const key = (t: number, now = NOW) => JSON.stringify(warningsFileKey(warningsSource(t, now), now));
+    expect(key(T('2026-10-26T01:00:00Z'))).toBe(key(T('2026-10-26T09:37:00Z')));
+    expect(key(T('2026-10-25T01:00:00Z'))).toBe(key(T('2026-10-25T22:00:00Z')));
+    expect(key(T('2026-10-25T23:50:00Z'))).not.toBe(key(T('2026-10-26T00:10:00Z')));
+    expect(key(T('2026-10-26T11:50:00Z'))).not.toBe(key(NOW));
+    // latest: the bucket of now only
+    const a = T('2026-10-26T12:03:00Z');
+    const b = T('2026-10-26T12:09:59Z');
+    const c = T('2026-10-26T12:10:00Z');
+    expect(key(a, a)).toBe(key(b, b));
+    expect(key(b, b)).not.toBe(key(c, c));
+    // the day file of today follows the day of now
+    expect(key(T('2026-10-26T01:00:00Z'), NOW)).toBe(key(T('2026-10-26T02:00:00Z'), NOW + 60_000));
+    expect(key(T('2026-10-26T01:00:00Z'), NOW)).not.toBe(key(T('2026-10-26T01:00:00Z'), T('2026-10-27T00:05:00Z')));
+  });
+
+  it('stableWarnings keeps the previous result while the valid set is the same, else takes the next', () => {
+    const f1 = feature({ area: 'a1', from: '2026-10-25T00:00:00Z' });
+    const f2 = feature({ area: 'a2', from: '2026-10-25T00:00:00Z', to: '2026-10-25T10:00:00Z' });
+    const file = { features: [f1, f2] };
+    const at = (t: string, inc = false) => warningsAt(file, T(t), inc);
+    const prev = at('2026-10-25T05:00:00Z');
+    expect(stableWarnings(prev, at('2026-10-25T06:00:00Z'))).toBe(prev);
+    const later = at('2026-10-25T11:00:00Z'); // a2 ended
+    expect(stableWarnings(prev, later)).toBe(later);
+    expect(stableWarnings(prev, at('2026-10-25T06:00:00Z', true)).incomplete).toBe(true);
+    // the same rows in another order
+    const swapped = warningsAt({ features: [f2, f1] }, T('2026-10-25T06:00:00Z'), false);
+    expect(stableWarnings(prev, swapped)).toBe(swapped);
+    // a refetch: the same area with another level is another row object
+    const refetch = warningsAt({ features: [feature({ area: 'a1', level: 4 }), f2] }, T('2026-10-25T06:00:00Z'), false);
+    expect(stableWarnings(prev, refetch)).toBe(refetch);
   });
 
   it('a dated file that fails otherwise is an error, not a silent fallback', async () => {

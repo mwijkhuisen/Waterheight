@@ -23,7 +23,14 @@ import { formatNumber } from '../station/value.ts';
 import styles from './map.module.css';
 import { badgeLine, changeLine, modeLines, surgeLine } from './popup.ts';
 import { hasReachBins, highlightRiver, RIVERS, RIVERS_HIGHLIGHT, showRivers } from './rivers.ts';
-import { SOURCE, setSelectedStation, setStationMode, showStations, TIER2_MINZOOM } from './stationLayer.ts';
+import {
+  SOURCE,
+  setSelectedStation,
+  setStationMode,
+  showStations,
+  TIER2_MINZOOM,
+  writeStates,
+} from './stationLayer.ts';
 import { useMapLibre } from './useMapLibre.ts';
 import { showWarnings, WARNINGS_FILL } from './warnings.ts';
 import type { WaterHandle } from './waterLayer.ts';
@@ -216,22 +223,22 @@ export function StationsMap({
       setMap(null);
     };
   }, [state, locale]);
+  // The feature-state records written to the source (O3: only a changed one is written again).
+  const written = useRef<ReadonlyMap<string, string>>(new Map());
   // A new station list (a hidden group, KG-233's hidden stations) only replaces the points. Never through the set-up
-  // above: MapLibre fires `load` once, so a set-up re-run while tiles load would wait for it forever (P19a).
+  // above: MapLibre fires `load` once, so a set-up re-run while tiles load would wait for it forever (P19a). New data
+  // (or a new map) starts the written records afresh, so the effect below writes every station once more.
   useEffect(() => {
+    written.current = new Map();
     if (map !== null)
       showStations(map, shown, modeNow.current, m.legend_impounded({}, { locale }), m.map_msl_short({}, { locale }));
   }, [map, shown, locale]);
 
   useEffect(() => {
     if (map === null) return;
-    // Feature state merges: every key of the record is always written, so nothing of an earlier t stays. Only the
-    // stations in the source: a hidden one (KG-233) has no feature to write to.
-    for (const st of shown) {
-      const s = states.get(st.id);
-      if (s !== undefined)
-        map.setFeatureState({ source: SOURCE, id: st.id }, { ...s, selected: st.id === selected?.id });
-    }
+    // Only the stations in the source: a hidden one (KG-233) has no feature to write to. A changed record is written
+    // whole, so nothing of an earlier t stays; an unchanged one is not written (stationLayer.ts writeStates).
+    written.current = writeStates(map, shown, states, selected?.id, written.current);
   }, [map, shown, states, selected]);
   // #205: the selected station is drawn at every zoom, a tier-2 one too (its id in the layer filters); the view stays.
   const selectedId = selected?.id;

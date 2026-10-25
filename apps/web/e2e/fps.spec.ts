@@ -1,5 +1,5 @@
 import { type Browser, devices, expect, type Page, test } from '@playwright/test';
-import { type HovW, mapReady, msg, NOW, open, slider, type W } from './helpers.ts';
+import { type HovW, mapReady, msg, NOW, open, settled, slider, type W } from './helpers.ts';
 
 // P11a (issue #26, C4; owner decision D-B): the frame rate of the map with the flow animation on, while the timebar is
 // scrubbed with the keyboard for 10 s over the fixture rivers (the committed river release, prepare-tiles.ts), measured
@@ -22,11 +22,17 @@ import { type HovW, mapReady, msg, NOW, open, slider, type W } from './helpers.t
 // `args.chrome_frame_reporter` or `args.data`), so the parser looks in all of them; if a trace has no such event, it
 // falls back to the compositor's `DrawFrame` instants, then to the viz display's `Display::DrawAndSwap` slices, and the
 // annotation names the one used. fps = frames / 10 s (the trace spans exactly the scrubbing).
+//
+// O3 (#219): each run also reports `busy`, the share of the traced time the page's main thread spent in tasks (`RunTask`
+// on the busiest `CrRendererMain` thread of the trace, nested tasks once). On a software renderer the frame count is bound by the GL emulation,
+// so the per-step work of the page (charts, feature-state, warnings, frames) shows in `busy` first.
 
 const DESKTOP_MIN_FPS = 30;
 const MOBILE_MIN_FPS = 20;
 const SCRUB_MS = 10_000;
 const KEY_EVERY_MS = 30; // a held key repeats about 30 times a second
+/** O3 (#219): the station of the panel case, with an H and a Q chart in the e2e seed. */
+const STATION = 'nl.rws.lobith.bovenrijn.tolkamer';
 const FLOW = 'rivers-flow';
 const CATEGORIES = [
   'toplevel',
@@ -41,22 +47,64 @@ interface TraceEvent {
   name?: string;
   ph?: string;
   pid?: number;
+  tid?: number;
+  /** Microseconds. */
+  ts?: number;
+  /** Microseconds, on a complete (`X`) event. */
+  dur?: number;
   id?: string | number;
   id2?: { local?: string; global?: string };
   args?: {
     chrome_frame_reporter?: { state?: string };
     data?: { state?: string };
     state?: string;
+    /** A `thread_name` metadata event's name. */
+    name?: string;
   };
+}
+
+const eventsOf = (trace: unknown): TraceEvent[] =>
+  Array.isArray(trace) ? trace : ((trace as { traceEvents?: TraceEvent[] } | null)?.traceEvents ?? []);
+
+/**
+ * The share of the traced time that the busiest `CrRendererMain` thread spent in tasks: the union of its `RunTask`
+ * intervals (a nested task is counted once) over the span of the whole trace; 0 when none is found.
+ */
+function mainBusy(trace: unknown): number {
+  const events = eventsOf(trace);
+  const main = new Set<string>();
+  for (const e of events)
+    if (e.ph === 'M' && e.name === 'thread_name' && e.args?.name === 'CrRendererMain') main.add(`${e.pid}:${e.tid}`);
+  const tasks = new Map<string, [number, number][]>();
+  let lo = Number.POSITIVE_INFINITY;
+  let hi = Number.NEGATIVE_INFINITY;
+  for (const e of events) {
+    if (typeof e.ts !== 'number' || e.ph === 'M') continue;
+    lo = Math.min(lo, e.ts);
+    hi = Math.max(hi, e.ts + (e.dur ?? 0));
+    const key = `${e.pid}:${e.tid}`;
+    if (e.name === 'RunTask' && e.ph === 'X' && main.has(key))
+      tasks.set(key, [...(tasks.get(key) ?? []), [e.ts, e.ts + (e.dur ?? 0)]]);
+  }
+  let busiest = 0;
+  for (const list of tasks.values()) {
+    list.sort((a, b) => a[0] - b[0]);
+    let busy = 0;
+    let end = Number.NEGATIVE_INFINITY;
+    for (const [from, to] of list) {
+      if (to > end) busy += to - Math.max(from, end);
+      end = Math.max(end, to);
+    }
+    busiest = Math.max(busiest, busy);
+  }
+  return hi > lo ? busiest / (hi - lo) : 0;
 }
 
 type FrameCount = { method: 'presented' | 'DrawFrame' | 'DrawAndSwap' | 'none'; frames: number };
 
 /** Presented frames of a Chromium trace (`{traceEvents: [...]}` or a bare array), by the first method that finds any. */
 function countFrames(trace: unknown): FrameCount & { all: Record<string, number> } {
-  const events: TraceEvent[] = Array.isArray(trace)
-    ? trace
-    : ((trace as { traceEvents?: TraceEvent[] } | null)?.traceEvents ?? []);
+  const events = eventsOf(trace);
   const presented = new Map<string, boolean>();
   let drawFrame = 0;
   let drawAndSwap = 0;
@@ -84,6 +132,12 @@ interface Run {
   all: Record<string, number>;
   flowTicks: number;
   pixelRatio: number;
+  /** O3: the main thread's busy share of the traced time (mainBusy). */
+  busy: number;
+  /** O3: the station charts' `setOption` calls while measured: full (`notMerge`) redraws and merges (the marker). */
+  chartSets: { full: number; merge: number };
+  /** O3: the hours the URL's t moved while measured (playback progress; 0 when scrubbing ends where it began). */
+  hours: number;
 }
 
 /** Opens the map over the fixture rivers in a page, scrubs the timebar for 10 s under a trace, and counts the frames. */
@@ -94,10 +148,22 @@ async function measure(
   throttle: number | null,
   playing = false,
   panel = false,
+  station?: string,
 ): Promise<Run> {
   await page.clock.setFixedTime(NOW);
-  await open(page, panel ? '/?mode=delta&hov=rhine-waal' : playing ? '/?mode=delta' : '/');
+  await open(
+    page,
+    station !== undefined
+      ? `/?mode=delta&s=${station}`
+      : panel
+        ? '/?mode=delta&hov=rhine-waal'
+        : playing
+          ? '/?mode=delta'
+          : '/',
+  );
   await mapReady(page);
+  // O3: with a station panel open its charts have drawn their points before measuring.
+  if (station !== undefined) await settled(page);
   // P11c: with the "Langs de rivier" panel open its chart has drawn (the hook holds the ECharts instance) before measuring.
   if (panel)
     await expect.poll(() => page.evaluate(() => (window as unknown as HovW).__rwsHov?.chart != null)).toBe(true);
@@ -133,16 +199,21 @@ async function measure(
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
   }
   const framesBefore = await flowFrames(page);
+  await countChartSets(page);
+  const tOf = () => Date.parse(new URL(page.url()).searchParams.get('t') ?? '');
   await slider(page).focus();
   // The map draws every frame while measured (MapLibre's `repaint`): Chromium presents a frame only when something
   // changed, so without it the count follows the key presses (about 26 a second here), not what the page can render.
   await setRepaint(page, true);
   await browser.startTracing(page, { path: tracePath, categories: CATEGORIES });
   const t0 = performance.now();
+  let tStart = Number.NaN;
   if (playing) {
     // P11b: hourly playback from 7 days back at the normal speed, the reach layers painting a new hour about 12 times a second.
     await page.getByRole('button', { name: msg('nl', 'play'), exact: true }).click();
-    await page.waitForTimeout(SCRUB_MS);
+    await page.waitForTimeout(500);
+    tStart = tOf();
+    await page.waitForTimeout(SCRUB_MS - 500);
   } else {
     // Back through the time range, and forth again: every key press changes t, so values and map states change.
     for (let key = 0; performance.now() - t0 < SCRUB_MS; key++) {
@@ -158,7 +229,16 @@ async function measure(
   // Flow stayed on the whole time, at no more than its cap.
   expect(flowTicks, 'flow ticks while scrubbing or playing').toBeGreaterThan(0);
   expect(flowTicks / elapsed, 'flow ticks a second').toBeLessThanOrEqual(25.5);
-  return { fps: frames / (SCRUB_MS / 1000), method, all, flowTicks, pixelRatio };
+  return {
+    fps: frames / (SCRUB_MS / 1000),
+    method,
+    all,
+    flowTicks,
+    pixelRatio,
+    busy: mainBusy(trace),
+    chartSets: await page.evaluate(() => (window as unknown as SetsW).__o3Sets ?? { full: 0, merge: 0 }),
+    hours: Number.isFinite(tStart) ? (tOf() - tStart) / 3_600_000 : 0,
+  };
 }
 
 /** The threshold fails the test only with FPS_GATE=1; otherwise a shortfall is reported. */
@@ -174,6 +254,28 @@ const setRepaint = (page: Page, on: boolean) =>
     map.repaint = v;
   }, on);
 
+type SetsW = W & { __o3Sets?: { full: number; merge: number } };
+
+/**
+ * O3: counts the `setOption` calls of the open station charts from now on, full redraws apart (wrapping each ECharts
+ * instance of the e2e hook, so it counts the same on a build before O3).
+ */
+const countChartSets = (page: Page) =>
+  page.evaluate(() => {
+    const w = window as unknown as SetsW;
+    const sets = { full: 0, merge: 0 };
+    w.__o3Sets = sets;
+    for (const chart of w.__rws?.charts ?? []) {
+      const c = chart as unknown as { setOption: (o: unknown, opts?: unknown, lazy?: unknown) => void };
+      const set = c.setOption.bind(c);
+      c.setOption = (o, opts, lazy) => {
+        if (opts === true || (opts as { notMerge?: boolean } | undefined)?.notMerge === true) sets.full++;
+        else sets.merge++;
+        set(o, opts, lazy);
+      };
+    }
+  });
+
 const flowFrames = (page: Page) =>
   page.evaluate(() => (window as unknown as W & { __rwsFlowFrames?: number }).__rwsFlowFrames ?? 0);
 
@@ -188,7 +290,7 @@ test('desktop: at least 30 frames a second while scrubbing the timebar with the 
   testInfo.annotations.push({ type: 'fps-desktop', description: `${run.fps.toFixed(1)} (${run.method})` });
   await testInfo.attach('fps-desktop.json', { body: JSON.stringify(run, null, 2), contentType: 'application/json' });
   console.log(
-    `fps desktop: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks})`,
+    `fps desktop: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks}; main busy ${(run.busy * 100).toFixed(1)} %)`,
   );
   gate(run.fps, DESKTOP_MIN_FPS, `desktop fps (${run.method}) ${JSON.stringify(run.all)}`);
 });
@@ -208,7 +310,7 @@ test('mobile, 4x CPU throttle: at least 20 frames a second while scrubbing the t
     testInfo.annotations.push({ type: 'fps-mobile-4x', description: `${run.fps.toFixed(1)} (${run.method})` });
     await testInfo.attach('fps-mobile.json', { body: JSON.stringify(run, null, 2), contentType: 'application/json' });
     console.log(
-      `fps mobile 4x: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks})`,
+      `fps mobile 4x: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks}; main busy ${(run.busy * 100).toFixed(1)} %)`,
     );
     gate(run.fps, MOBILE_MIN_FPS, `mobile fps (${run.method}) ${JSON.stringify(run.all)}`);
   } finally {
@@ -229,7 +331,7 @@ test('desktop: at least 30 frames a second while playing back with the reach lay
     contentType: 'application/json',
   });
   console.log(
-    `fps desktop playing: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks})`,
+    `fps desktop playing: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks}; main busy ${(run.busy * 100).toFixed(1)} %; hours played ${run.hours})`,
   );
   gate(run.fps, DESKTOP_MIN_FPS, `desktop playing fps (${run.method}) ${JSON.stringify(run.all)}`);
 });
@@ -248,7 +350,7 @@ test('desktop: at least 30 frames a second while playing back with the Hovmölle
     contentType: 'application/json',
   });
   console.log(
-    `fps desktop panel: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks})`,
+    `fps desktop panel: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks}; main busy ${(run.busy * 100).toFixed(1)} %)`,
   );
   gate(run.fps, DESKTOP_MIN_FPS, `desktop panel fps (${run.method}) ${JSON.stringify(run.all)}`);
 });
@@ -271,10 +373,41 @@ test('mobile, 4x CPU throttle: at least 20 frames a second while playing back wi
       contentType: 'application/json',
     });
     console.log(
-      `fps mobile 4x panel: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks})`,
+      `fps mobile 4x panel: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks}; main busy ${(run.busy * 100).toFixed(1)} %)`,
     );
     gate(run.fps, MOBILE_MIN_FPS, `mobile panel fps (${run.method}) ${JSON.stringify(run.all)}`);
   } finally {
     await context.close();
   }
+});
+
+// O3 (issue #219): the same measure with a station panel open (Lobith's H and Q charts) and hourly playback running, so
+// every played hour moves the charts' selected-time line, the station feature-states and the reach layers. Report-only
+// like the others (KG-269) unless FPS_GATE=1; the numbers (and the main thread's busy share) are printed, annotated and
+// attached.
+test('desktop: at least 30 frames a second while playing back with a station panel open', async ({
+  browser,
+  page,
+}, testInfo) => {
+  const run = await measure(
+    browser,
+    page,
+    testInfo.outputPath('trace-desktop-station.json'),
+    null,
+    true,
+    false,
+    STATION,
+  );
+  testInfo.annotations.push({
+    type: 'fps-desktop-station',
+    description: `${run.fps.toFixed(1)} (${run.method}; main busy ${(run.busy * 100).toFixed(1)} %)`,
+  });
+  await testInfo.attach('fps-desktop-station.json', {
+    body: JSON.stringify(run, null, 2),
+    contentType: 'application/json',
+  });
+  console.log(
+    `fps desktop station: ${run.fps.toFixed(1)} (${run.method}; ${JSON.stringify(run.all)}; flow ticks ${run.flowTicks}; main busy ${(run.busy * 100).toFixed(1)} %; chart setOption ${JSON.stringify(run.chartSets)}; hours played ${run.hours})`,
+  );
+  gate(run.fps, DESKTOP_MIN_FPS, `desktop station fps (${run.method}) ${JSON.stringify(run.all)}`);
 });

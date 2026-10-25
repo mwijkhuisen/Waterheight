@@ -159,59 +159,125 @@ export interface FrameStore {
   readonly dropped: number;
 }
 
+/** One query's result as the frames readers see it (TanStack's, reduced). */
+export type FramesRead = { isError: boolean; isSuccess: boolean; data: FramesChunk | null | undefined };
+type FileUnit = Exclude<FramesUnit, { kind: 'api' }>;
+type ApiUnit = Extract<FramesUnit, { kind: 'api' }>;
+
 /**
- * A store over the chunks loaded so far. `answered` lists the hour ranges [from, to) that have answered, with or
- * without data; `stations` are the site's stations.json (the known ids and their staleness limits).
+ * What the queries of one stage have given so far: a chunk slot per unit (null: none yet, failed, or no data), the hour
+ * ranges answered, and (files only) the days whose file failed as a sorted list. O3 (#219): no `Set` and no compacted
+ * list, so TanStack's structural sharing keeps the whole result while only a fetch status flips, and keeps each chunk
+ * object itself when another arrives (useFrames builds no new store then, and the chunk cache below still knows it).
+ */
+export interface StageRead {
+  chunks: (FramesChunk | null)[];
+  answered: { from: number; to: number }[];
+  /** The failed days, sorted and comma-joined ('' for none). */
+  failed: string;
+}
+
+/** The `combine` of the file queries (settled days, recent.json): a file that fails moves its days into `failed`. */
+export function readFileUnits(files: readonly FileUnit[], from: number, to: number, nowMs: number) {
+  return (rs: readonly FramesRead[]): StageRead => {
+    const out: StageRead = { chunks: [], answered: [], failed: '' };
+    const failed = new Set<string>();
+    rs.forEach((r, i) => {
+      const u = files[i] as FileUnit;
+      out.chunks.push(!r.isError && r.data ? r.data : null);
+      if (r.isError) {
+        if (u.kind === 'day') failed.add(u.day);
+        else
+          for (let d = Math.floor(from / DAY_MS) * DAY_MS; d < to; d += DAY_MS)
+            if (!isSettled(dayOf(d), nowMs)) failed.add(dayOf(d));
+      } else if (r.data) out.answered.push({ from: Date.parse(r.data.from), to: Date.parse(r.data.to) });
+    });
+    out.failed = [...failed].sort().join();
+    return out;
+  };
+}
+
+/** The `combine` of the API queries: a range that failed was answered with no data (null), so it is never asked again. */
+export function readApiUnits(calls: readonly ApiUnit[]) {
+  return (rs: readonly FramesRead[]): StageRead => {
+    const out: StageRead = { chunks: [], answered: [], failed: '' };
+    rs.forEach((r, i) => {
+      out.chunks.push(r.isSuccess && r.data ? r.data : null);
+      if (!r.isSuccess) return;
+      out.answered.push({ from: (calls[i] as ApiUnit).from, to: (calls[i] as ApiUnit).to });
+    });
+    return out;
+  };
+}
+
+/**
+ * O3 (#219): per chunk, once, its check and index: null when it is misaligned (a row that is not one entry per hour,
+ * or a row count that is not the series count: dropped whole), else for each row the hour of its first finite value
+ * (−1: none). Keyed by the chunk object: another day, version, range or site is another fetch, another object.
+ */
+const indexed = new WeakMap<FramesChunk, number[] | null>();
+
+function indexOf(c: FramesChunk): number[] | null {
+  const known = indexed.get(c);
+  if (known !== undefined) return known;
+  const from = Date.parse(c.from);
+  const hours = (Date.parse(c.to) - from) / HOUR_MS;
+  const index =
+    !Number.isInteger(hours) ||
+    hours < 0 ||
+    from % HOUR_MS !== 0 ||
+    c.vlast.length !== c.series.length ||
+    c.vlast.some((r) => r.length !== hours) ||
+    (c.state !== undefined && (c.state.length !== c.series.length || c.state.some((r) => r.length !== hours)))
+      ? null
+      : c.vlast.map((r) => r.findIndex((v) => v !== null && Number.isFinite(v)));
+  indexed.set(c, index);
+  return index;
+}
+
+/** One series' row of one chunk. */
+interface Row {
+  from: number;
+  vlast: readonly (number | null)[];
+  state: readonly (number | null)[] | undefined;
+}
+
+/**
+ * A store over the chunks loaded so far (null slots are skipped). `answered` lists the hour ranges [from, to) that
+ * have answered, with or without data; `stations` are the site's stations.json (the known ids and their staleness
+ * limits). O3 (#219): the store keeps each series' rows of the chunks, in chunk order, instead of copying every value
+ * into maps, so a store over the same chunks plus a new one costs that chunk's index and one entry per series row.
  */
 export function buildFrameStore(
-  chunks: readonly FramesChunk[],
+  chunks: readonly (FramesChunk | null)[],
   answered: readonly { from: number; to: number }[],
   stations: readonly ApiStation[],
 ): FrameStore {
   const limit = new Map<number, number>();
   for (const st of stations) for (const s of st.series) limit.set(s.id, s.stalenessLimitSeconds);
-  const buckets = new Map<number, Map<number, number>>();
-  // The state code of each bucket (#112); a bucket without one (a version 1 chunk) has its state unknown.
-  const codes = new Map<number, Map<number, number>>();
+  const rows = new Map<number, Row[]>();
   const first = new Map<number, number>();
   const credits = new Map<string, AttributionEntry>();
   let dropped = 0;
   for (const c of chunks) {
-    const from = Date.parse(c.from);
-    const hours = (Date.parse(c.to) - from) / HOUR_MS;
-    // Misaligned: a row that is not one entry per hour, or a row count that is not the series count. Dropped whole.
-    if (
-      !Number.isInteger(hours) ||
-      hours < 0 ||
-      from % HOUR_MS !== 0 ||
-      c.vlast.length !== c.series.length ||
-      c.vlast.some((r) => r.length !== hours) ||
-      (c.state !== undefined && (c.state.length !== c.series.length || c.state.some((r) => r.length !== hours)))
-    ) {
+    if (c === null) continue;
+    const index = indexOf(c);
+    if (index === null) {
       dropped += c.series.length;
       continue;
     }
+    const from = Date.parse(c.from);
     c.series.forEach((id, i) => {
       // Only a series of this site's stations.json is ever mapped (R2); anything else is counted and left out.
       if (!limit.has(id)) {
         dropped += 1;
         return;
       }
-      const m = buckets.get(id) ?? new Map<number, number>();
-      const k = codes.get(id) ?? new Map<number, number>();
-      const states = c.state?.[i];
-      (c.vlast[i] as readonly (number | null)[]).forEach((v, h) => {
-        if (v === null || !Number.isFinite(v)) return;
-        const at = from + h * HOUR_MS;
-        m.set(at, v);
-        // A later chunk for the same hour replaces the value, so it replaces (or drops) the state too.
-        const code = states?.[h];
-        if (code == null) k.delete(at);
-        else k.set(at, code);
-        first.set(id, Math.min(first.get(id) ?? at, at));
-      });
-      buckets.set(id, m);
-      codes.set(id, k);
+      const list = rows.get(id) ?? [];
+      list.push({ from, vlast: c.vlast[i] as readonly (number | null)[], state: c.state?.[i] });
+      rows.set(id, list);
+      const h = index[i] as number;
+      if (h >= 0) first.set(id, Math.min(first.get(id) ?? Number.POSITIVE_INFINITY, from + h * HOUR_MS));
     });
     for (const a of c.attribution) credits.set(JSON.stringify(a), a);
   }
@@ -222,7 +288,7 @@ export function buildFrameStore(
   const valuesAt = (t: number, only?: ReadonlySet<number>) => {
     const out = new Map<number, PlayedValue>();
     const newest = Math.floor(t / HOUR_MS) * HOUR_MS - HOUR_MS;
-    for (const [series, m] of buckets) {
+    for (const [series, list] of rows) {
       if (only !== undefined && !only.has(series)) continue;
       const limitMs = (limit.get(series) as number) * 1000;
       const oldest = first.get(series) as number;
@@ -230,10 +296,19 @@ export function buildFrameStore(
         const ageMs = t - (b + HOUR_MS);
         // The same rule as `lapses`: an age of exactly the limit is lapsed too.
         if (ageMs >= limitMs) break;
-        const value = m.get(b);
+        // The latest row with a value at b wins (a later chunk, or a later row of the same series), with its own state.
+        let value: number | undefined;
+        let code: number | null | undefined;
+        for (let j = list.length - 1; j >= 0; j--) {
+          const row = list[j] as Row;
+          const v = row.vlast[(b - row.from) / HOUR_MS];
+          if (v === undefined || v === null || !Number.isFinite(v)) continue;
+          value = v;
+          code = row.state?.[(b - row.from) / HOUR_MS];
+          break;
+        }
         if (value === undefined) continue;
-        const code = codes.get(series)?.get(b);
-        const decoded = code === undefined ? undefined : stateOf(code);
+        const decoded = code == null ? undefined : stateOf(code);
         out.set(series, {
           series,
           ts: new Date(b + HOUR_MS).toISOString(),

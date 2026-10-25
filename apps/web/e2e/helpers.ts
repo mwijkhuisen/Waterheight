@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { type BrowserContext, expect, type Locator, type Page } from '@playwright/test';
+import { routeOf } from '../src/lib/routes.ts';
 import { expectClean, instrument, type Log } from './clean.ts';
 
 // Helpers of the P10a specs (p10a, owner, no-webgl2, cvd): the "clean page" session, the e2e build's test hook
@@ -60,7 +61,7 @@ export interface HookChart {
   dispatchAction(action: object): void;
   getZr(): { storage: { getDisplayList(update?: boolean): { style?: { text?: unknown } }[] } };
 }
-export type W = Window & { __rws?: { map: HookMap | null; charts: Set<HookChart> } };
+export type W = Window & { __rws?: { map: HookMap | null; charts: Set<HookChart>; chartDraws?: number } };
 
 type Messages = Record<string, string>;
 const catalogue = (locale: 'nl' | 'en'): Messages =>
@@ -322,13 +323,29 @@ export async function mapReady(page: Page) {
   await expect.poll(() => featureState(page, 'nl.e2e.xss')).toMatchObject({ has: true });
 }
 
+/**
+ * O4 (#220): the station panel is a lazy chunk, so with `s=` in the home route's URL the aside may not exist yet, and
+ * "0 charts === 0 panels" would hold vacuously. Wait for it (a station the page does not know has no panel: do not call
+ * this for it). Only the home route has a panel; an information page keeps `s=` in its view links.
+ */
+async function panelMounted(page: Page) {
+  const url = new URL(page.url());
+  if (url.searchParams.has('s') && routeOf(url.pathname)?.id === 'home')
+    await expect(panelOf(page).first()).toBeAttached();
+}
+
 /** The values on screen are those of the page's t (nothing is marked busy) and every chart has drawn its points. */
 export async function settled(page: Page) {
+  await panelMounted(page);
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   await page.waitForFunction(() => {
     const charts = [...((window as unknown as W).__rws?.charts ?? [])];
     const panels = document.querySelectorAll('aside div[role="img"]').length;
-    return charts.length === panels && charts.every((c) => (c.getOption()?.series?.[0]?.data?.length ?? 0) > 0);
+    // (the observations by id: the marker series of the now and selected lines comes first, O3)
+    return (
+      charts.length === panels &&
+      charts.every((c) => (c.getOption()?.series?.find((x) => x.id === 'obs')?.data?.length ?? 0) > 0)
+    );
   });
 }
 
@@ -337,6 +354,7 @@ export async function settled(page: Page) {
  * station with a series that has no data (the BE-3 station's discharge).
  */
 export async function idle(page: Page) {
+  await panelMounted(page);
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
   await page.waitForFunction(() => {
     const charts = (window as unknown as W).__rws?.charts?.size ?? 0;

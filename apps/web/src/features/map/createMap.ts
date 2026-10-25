@@ -9,6 +9,7 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { Protocol } from 'pmtiles';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
+import { styles, tilesManifest } from './preload.ts';
 import { acquireProtocol } from './protocol.ts';
 import { resolveStyle } from './resolveStyle.ts';
 
@@ -16,11 +17,6 @@ import { resolveStyle } from './resolveStyle.ts';
 export { Popup } from 'maplibre-gl';
 
 type Style = Exclude<MapOptions['style'], string | undefined>;
-
-const styles = {
-  nl: () => import('./styles/style-nl.json'),
-  en: () => import('./styles/style-en.json'),
-};
 
 export class MapError extends Error {
   readonly code = 'manifest_unavailable';
@@ -33,7 +29,7 @@ export class MapError extends Error {
 
 /** The manifest names the current extract; it is validated before any URL is built from it. */
 async function loadManifest(signal: AbortSignal) {
-  const res = await fetch('/tiles/manifest.json', { signal, redirect: 'error' });
+  const res = await tilesManifest(signal);
   if (!res.ok) throw new MapError();
   return parseTilesManifest(await res.text());
 }
@@ -80,6 +76,8 @@ export async function createMap(
       locale: mapLocale(lang),
       ...options,
     });
+    // O4 (#220): the base map's first idle (style + first tiles; no data) is the time-to-map mark of e2e/time-to-map.spec.ts.
+    map.once('idle', () => performance.mark('rws:map-idle'));
     // #205: zoom buttons without a compass, so nothing may rotate the map (there is no reset-north): `dragRotate` is off
     // in the options, the touch twist and Shift+arrow here. The buttons' words are mapLocale's.
     map.touchZoomRotate.disableRotation();

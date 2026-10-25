@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { basisLabel, lhpColour, type OwnerLabels, referenceLabel, riverName } from '../src/lib/labels/labels.ts';
+import { basisLabel, referenceLabel } from '../src/lib/labels/basis.ts';
+import { lhpColour, type OwnerLabels, riverName } from '../src/lib/labels/labels.ts';
 
 const owner: OwnerLabels = {
   keys: Object.assign(Object.create(null), {

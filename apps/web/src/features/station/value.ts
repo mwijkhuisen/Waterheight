@@ -1,4 +1,5 @@
 import { type SeriesMeta as Meta, TO_CANONICAL } from '@rws/contracts';
+import { intlLocale, perLocale } from '../../lib/intl.ts';
 import { m } from '../../paraglide/messages.js';
 import type { Locale } from '../../paraglide/runtime.js';
 
@@ -30,9 +31,10 @@ export function unitLabel(series: Pick<Meta, 'nativeUnit' | 'valueKind' | 'datum
   return `${series.nativeUnit} ${series.datum}`;
 }
 
+const NUMBER = perLocale((l) => new Intl.NumberFormat(intlLocale(l), { maximumFractionDigits: 2 }));
+
 /** A number as the page shows it: at most two decimals, in the page's locale. */
-export const formatNumber = (n: number, locale: Locale): string =>
-  new Intl.NumberFormat(locale === 'nl' ? 'nl-NL' : 'en-GB', { maximumFractionDigits: 2 }).format(n);
+export const formatNumber = (n: number, locale: Locale): string => NUMBER(locale).format(n);
 
 /** A canonical value from the API, shown in its native unit. */
 export const formatValue = (value: number, series: Pick<Meta, 'nativeUnit'>, locale: Locale): string =>

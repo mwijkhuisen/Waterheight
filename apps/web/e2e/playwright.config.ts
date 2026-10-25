@@ -32,7 +32,7 @@ const ownerPublish = join(tmpdir(), 'rws-e2e-owner-publish');
 /** Files each kind of project runs. The public ones never run an owner spec (no credentials) or the tool specs. */
 const OWNER = /owner[^/]*\.spec\.ts$/;
 const PUBLIC_IGNORE =
-  /(owner[^/]*|cvd|screens|de2-beleg|lighthouse|fps|no-webgl2|visual|flood-drill|storm-drill|egress|chaos[^/]*)\.spec\.ts$/;
+  /(owner[^/]*|cvd|screens|de2-beleg|lighthouse|fps|time-to-map|no-webgl2|visual|flood-drill|storm-drill|egress|chaos[^/]*)\.spec\.ts$/;
 
 // P12a: in compose mode E2E_SPEC names the one spec to run (default degraded): flood-drill, storm-drill (P20a), egress or
 // a chaos spec need the compose stack (loadtest.yml), so the other modes never run them (PUBLIC_IGNORE).
@@ -147,7 +147,7 @@ export default defineConfig({
           // own, add --no-deps. Its thresholds are fixed (owner decision D-B): a shortfall is reported, never tuned away.
           {
             name: 'fps',
-            testMatch: /fps\.spec\.ts$/,
+            testMatch: /(fps|time-to-map)\.spec\.ts$/,
             use: chromium,
             dependencies: ['lighthouse'],
           },

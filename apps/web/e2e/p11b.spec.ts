@@ -28,6 +28,7 @@ import {
   timebarOf,
   urlsFrom,
   type W,
+  warningAreas,
   XSS,
 } from './helpers.ts';
 
@@ -277,6 +278,61 @@ test('B2: playing 7 days back reads at most one frames file per UTC day, no snap
   ).toEqual([]);
   // Nothing of the snapshot path while it played (the slice ends before the click on Pause has an effect).
   expect(during.filter((u) => SNAPSHOT_PATH.test(u.pathname)).map((u) => u.pathname)).toEqual([]);
+  await finish(page, s);
+});
+
+// O3 (issue #219): the warnings are read once per file, never per t. Paused steps within a day, a short playback and
+// steps after it ask each warnings file at most once (main asked the day file again at every settled t).
+test('O3: paused steps and a playback read each warnings file at most once', async ({ page, context, baseURL }) => {
+  const s = await start(page, context, baseURL, 'dh');
+  // 2026-10-25 has its dated file (the seed starts on 2026-10-24): no 404, so no latest.geojson fallback.
+  await open(page, deep('2026-10-25T08:00Z'));
+  await mapReady(page);
+  const steps = async (key: 'ArrowLeft' | 'ArrowRight', n: number) => {
+    await slider(page).focus();
+    for (let i = 0; i < n; i++) {
+      await page.keyboard.press(key);
+      // past the 150 ms debounce: each step is a settled t that asks what it asks
+      await page.waitForTimeout(400);
+    }
+  };
+  // The areas of 08:00Z hold until 18:00Z: once they are on the map, a step within the file sets no new data (the
+  // warnings keep their identity, so the map's setData effect does not run).
+  await expect.poll(() => warningAreas(page)).toEqual(['e2e-2', 'e2e-ended']);
+  await page.evaluate(() => {
+    const w = window as unknown as W & { __o3WarningSets?: number };
+    const source = w.__rws?.map?.getSource('warnings') as unknown as { setData: (d: unknown) => unknown } | undefined;
+    if (source === undefined) throw new Error('no warnings source');
+    const set = source.setData.bind(source);
+    w.__o3WarningSets = 0;
+    source.setData = (d) => {
+      w.__o3WarningSets = (w.__o3WarningSets ?? 0) + 1;
+      return set(d);
+    };
+  });
+  await steps('ArrowRight', 4);
+  await expect.poll(() => param(page, 't')).toBe('2026-10-25T08:40Z');
+  expect(
+    await page.evaluate(() => (window as unknown as { __o3WarningSets?: number }).__o3WarningSets),
+    'no warnings setData for steps within one file and one valid set',
+  ).toBe(0);
+  await play(page).click();
+  await expect(pause(page)).toBeVisible();
+  await page.waitForTimeout(1_500);
+  await pause(page).click();
+  await paused(page);
+  await steps('ArrowLeft', 3);
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+  const reads = urlsFrom(s)
+    .map((u) => u.pathname)
+    .filter((p) => p.startsWith('/data/v1/warnings/'));
+  const counts = new Map<string, number>();
+  for (const p of reads) counts.set(p, (counts.get(p) ?? 0) + 1);
+  expect(counts.get('/data/v1/warnings/2026-10-25.json'), 'the day file of the steps').toBe(1);
+  expect(
+    [...counts].filter(([, n]) => n > 1),
+    'no warnings file is read twice',
+  ).toEqual([]);
   await finish(page, s);
 });
 

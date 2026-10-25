@@ -1,10 +1,15 @@
 import { floorBucket } from '@rws/contracts';
 import fc from 'fast-check';
+import { Temporal as Polyfill } from 'temporal-polyfill';
 import { describe, expect, it } from 'vitest';
+import { intlLocale, perLocale } from '../src/lib/intl.ts';
 import {
   amsterdam,
   formatAge,
+  formatDay,
   formatLocal,
+  formatShort,
+  formatTick,
   localInstants,
   parseUrlT,
   quantise,
@@ -196,5 +201,106 @@ describe('formatAge', () => {
     ['en', 120 * 60, /^2\s*hours/],
   ] as const)('%s, %i s', (locale, seconds, expected) => {
     expect(formatAge(seconds, locale)).toMatch(expected);
+  });
+});
+
+// O3 (#219): the formatters use cached Intl objects. Their output must be that of the code before O3, which called
+// Temporal's toLocaleString with these options (f4215e5), on the native Temporal and on the polyfill.
+describe('cached formatters equal the pre-O3 output', { timeout: 60_000 }, () => {
+  const ZONE = 'Europe/Amsterdam';
+  const OLD = {
+    local: { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' },
+    short: { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' },
+    tick: { day: 'numeric', month: 'short' },
+  } as const;
+  const tags = { nl: 'nl-NL', en: 'en-GB' } as const;
+  const instants: number[] = [];
+  for (const day of [Date.UTC(2026, 2, 29), Date.UTC(2026, 9, 25)])
+    for (let ms = day; ms <= day + 4 * 3_600_000; ms += TEN_MIN) instants.push(ms);
+  for (let ms = Date.UTC(2026, 0, 1); ms < Date.UTC(2027, 0, 2); ms += 7 * 3_600_000) instants.push(ms);
+  for (let ms = Date.UTC(2026, 11, 31, 21); ms <= Date.UTC(2026, 11, 31, 23, 30); ms += TEN_MIN) instants.push(ms);
+
+  const impls = { native: globalThis.Temporal, polyfill: Polyfill as unknown as typeof Temporal };
+  const g = globalThis as unknown as { Temporal: typeof Temporal };
+  for (const [name, T] of Object.entries(impls)) {
+    it(`formatLocal, formatShort and formatTick on the ${name} Temporal`, () => {
+      const keep = g.Temporal;
+      g.Temporal = T;
+      try {
+        for (const locale of ['nl', 'en'] as const)
+          for (const ms of instants) {
+            const z = T.Instant.fromEpochMilliseconds(ms).toZonedDateTimeISO(ZONE);
+            expect(formatLocal(ms, locale)).toBe(`${z.toLocaleString(tags[locale], OLD.local)} ${zoneLabel(z.offset)}`);
+            expect(formatShort(ms, locale)).toBe(z.toLocaleString(tags[locale], OLD.short));
+            expect(formatTick(ms, locale)).toBe(z.toLocaleString(tags[locale], OLD.tick));
+          }
+      } finally {
+        g.Temporal = keep;
+      }
+    });
+  }
+
+  it('formatDay (UTC and Amsterdam) equals a fresh Intl.DateTimeFormat', () => {
+    for (const locale of ['nl', 'en'] as const)
+      for (const timeZone of ['UTC', ZONE] as const)
+        for (const ms of instants.filter((_, i) => i % 7 === 0)) {
+          const fresh = new Intl.DateTimeFormat(tags[locale], {
+            day: 'numeric',
+            month: 'long',
+            year: 'numeric',
+            timeZone,
+          }).format(ms);
+          expect(formatDay(ms, locale, timeZone)).toBe(fresh);
+        }
+    // the default is UTC: 23:30 UTC on the 24th is still the 24th, in Amsterdam already the 25th
+    const late = Date.UTC(2026, 9, 24, 23, 30);
+    expect(formatDay(late, 'en')).toBe(formatDay(late, 'en', 'UTC'));
+    expect(formatDay(late, 'en')).not.toBe(formatDay(late, 'en', ZONE));
+  });
+
+  it('formatAge (minutes below 2 h, hours from it) equals fresh Intl.NumberFormat objects', () => {
+    for (const locale of ['nl', 'en'] as const)
+      for (const seconds of [0, 59, 60, 90, 3_599, 7_199, 7_200, 7_260, 9_000, 86_400, 200_000]) {
+        const minutes = Math.round(seconds / 60);
+        const fresh =
+          minutes < 120
+            ? new Intl.NumberFormat(tags[locale], { style: 'unit', unit: 'minute', unitDisplay: 'short' }).format(
+                minutes,
+              )
+            : new Intl.NumberFormat(tags[locale], {
+                style: 'unit',
+                unit: 'hour',
+                unitDisplay: 'long',
+                maximumFractionDigits: 1,
+              }).format(minutes / 60);
+        expect(formatAge(seconds, locale)).toBe(fresh);
+      }
+  });
+});
+
+describe('perLocale', () => {
+  it('makes one object per page language, once, and a different one for each', () => {
+    let made = 0;
+    const get = perLocale((locale) => ({ locale, n: ++made }));
+    const nl = get('nl');
+    const en = get('en');
+    expect(nl).not.toBe(en);
+    expect([nl.locale, en.locale]).toEqual(['nl', 'en']);
+    expect(get('nl')).toBe(nl);
+    expect(get('en')).toBe(en);
+    expect(made).toBe(2);
+  });
+  it('keeps a falsy value instead of making it again', () => {
+    let made = 0;
+    const get = perLocale(() => {
+      made += 1;
+      return 0;
+    });
+    get('nl');
+    get('nl');
+    expect(made).toBe(1);
+  });
+  it('names Dutch nl-NL and English en-GB', () => {
+    expect([intlLocale('nl'), intlLocale('en')]).toEqual(['nl-NL', 'en-GB']);
   });
 });
