@@ -391,7 +391,12 @@ function Viewer({ locale }: { locale: Locale }) {
   const panelOpen = url.s !== undefined;
   const [panel, setPanel] = useState<{ Panel: StationPanel } | 'failed' | undefined>();
   useEffect(() => {
-    if (!panelOpen || panel !== undefined) return;
+    // After a failed chunk, the next station asks for it again (the reload link stays the way out).
+    if (!panelOpen) {
+      if (panel === 'failed') setPanel(undefined);
+      return;
+    }
+    if (panel !== undefined) return;
     let gone = false;
     import('./features/station/StationPanel.tsx')
       .then((x) => !gone && setPanel({ Panel: x.StationPanel }))
@@ -552,7 +557,7 @@ function Viewer({ locale }: { locale: Locale }) {
             {selected !== undefined &&
               (panel === undefined || panel === 'failed' ? (
                 // The drawer's box (opaque, like the panel's), never an <aside>: the helpers count those.
-                <div className={styles.panelPending}>
+                <div className={styles.panelPending} aria-busy={panel === undefined}>
                   {panel === 'failed' && (
                     <>
                       <button type="button" className={styles.panelClose} onClick={close}>
