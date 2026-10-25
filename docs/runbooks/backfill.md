@@ -88,8 +88,37 @@ systemctl list-timers --all | grep rws-backfill   # the timer and the time it fi
 
 It is not a function call, so `sudo` goes in front of `systemd-run` and the command is written out. To cancel it before it fires: `sudo systemctl stop rws-backfill-nl1.timer`. To read the run afterwards (or while it goes): `sudo journalctl -u rws-backfill-nl1` (add `-f` to follow). `--collect` lets the next evening reuse the unit name even after a run that exited 1. To stop a running night, stop its container (`sudo docker ps --filter name=backfill-run`, then `sudo docker stop <id>`: a SIGTERM, clean as below); stopping the unit alone may leave the container running. The window still closes the run at 05:00 UTC.
 
-- **A reboot removes the timer.** A transient timer lives in `/run`: a reboot before it fires drops it, and nothing runs that night (2026-10-14: a reboot at 17:01Z, no entries in the journal). After any reboot or bootstrap before 22:00, run `systemctl list-timers --all | grep rws-backfill` again and schedule it anew if it is gone.
+- **A reboot removes the timer.** A transient timer lives in `/run`: a reboot before it fires drops it, and nothing runs that night (2026-10-14: a reboot at 17:01Z; 2026-10-24: an unclean reboot at 09:54Z, two hours after the timer was set; no entries in the journal either night). After any reboot or bootstrap before 22:00, run `systemctl list-timers --all | grep rws-backfill` again and schedule it anew if it is gone, or use the nightly timer below, which a reboot keeps.
 - **"Unit rws-backfill-nl1.service was already loaded".** A unit of an earlier night is left (one started without `--collect`, which ended failed): `sudo systemctl reset-failed rws-backfill-nl1.service`, then `systemd-run` again. "Unit … not loaded" from `stop` or `reset-failed` of a timer that is gone is harmless.
+
+**Every night until done (survives a reboot).** For a backfill of many nights, write the unit and its timer to `/etc/systemd/system` once. They are the owner's own files: `bootstrap.sh` installs only `deploy/systemd/*` and removes nothing else, so a bootstrap leaves them alone. The service runs the same command as the transient timer; the timer fires at 22:01 UTC every night, and a reboot keeps it. Stop a transient timer of the same night first, or the second `run` exits `busy`:
+
+```bash
+sudo tee /etc/systemd/system/rws-backfill-nightly.service >/dev/null <<'EOF'
+[Unit]
+Description=rws history backfill, one night (docs/runbooks/backfill.md §3)
+
+[Service]
+ExecStart=/bin/bash -c '. /usr/local/lib/rws/deploy/bin/rws-lib.sh && rws_compose run --rm --no-deps -T backfill backfill run'
+EOF
+sudo tee /etc/systemd/system/rws-backfill-nightly.timer >/dev/null <<'EOF'
+[Unit]
+Description=rws history backfill at 22:01 UTC every night
+
+[Timer]
+OnCalendar=*-*-* 22:01:00 UTC
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+EOF
+sudo systemctl daemon-reload
+sudo systemctl stop rws-backfill.timer rws-backfill-nl1.timer 2>/dev/null   # a transient timer of tonight, if any
+sudo systemctl enable --now rws-backfill-nightly.timer
+systemctl list-timers --all | grep rws-backfill   # rws-backfill-nightly.timer, next 22:01 UTC
+```
+
+The night's journal is then `sudo journalctl -u rws-backfill-nightly --since '<date> 21:55 UTC'`. A reboot during a night ends that night's run (the lease lapses, §1), and the timer fires again the next evening; it does not catch up a missed 22:01 after a reboot. To skip nights (a replay that needs the loader, a provider outage): `sudo systemctl disable --now rws-backfill-nightly.timer`, and `enable --now` to resume. When `status` shows every job `done` (a run then prints `"chunks":0,"requests":0`), disable it and remove both files, then `sudo systemctl daemon-reload`. Stopping a running night is as above: stop its container, not the unit.
 
 Ctrl-C and `docker stop` (SIGINT, SIGTERM) are safe and clean: the run ends between two chunks (never between the archive object, the manifest line and the cursor), gives the lease back and exits 0 with `"stopped":"interrupted"`, so the next `run` starts at once. A `kill -9`, a reboot or a lost container leaves the lease, which lapses within 2 minutes (a `run` before that exits `busy`). Either way the next `run` continues at each job's cursor (§1). The window closing between two chunks is the normal end of a night; `run` again the next evening until `status` shows every job `done`.
 
