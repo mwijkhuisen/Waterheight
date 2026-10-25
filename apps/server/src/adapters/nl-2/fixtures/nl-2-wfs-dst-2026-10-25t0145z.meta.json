@@ -1,0 +1,14 @@
+{
+  "spec": "nl-2-wfs",
+  "variant": "default",
+  "source": "NL-2",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/NL-2/nl-2-wfs/2026/10/25/014500Z-f7a70e1a4a879f69.zst",
+  "recorded_at": "2026-10-25T01:45:00Z",
+  "status": 200,
+  "url": "https://geo.rijkswaterstaat.nl/services/ogc/hws/DDAPI20/wfs?SERVICE=WFS&VERSION=2.0.0&REQUEST=GetFeature&TYPENAMES=DDAPI20:locatiesmetlaatstewaarneming&outputFormat=application/json&PROPERTYNAME=CODE,NAAM,GROOTHEIDCODE,HOEDANIGHEIDCODE,EENHEIDCODE,WAARDEBEPALINGSMETHODECODE,WAARDE_LAATSTE_METING,TIJDSTIP_LAATSTE_METING,BEMONSTERINGSHOOGTE,OPDRACHTGEVENDE_INSTANTIE,KWALITEITSWAARDE_CODE,GEOMETRY&CQL_FILTER=COMPARTIMENTCODE%3D%27OW%27%20AND%20GROOTHEIDCODE%20IN%20(%27WATHTE%27%2C%27Q%27)%20AND%20TIJDSTIP_LAATSTE_METING%20%3E%20%272026-10-24T13%3A40%27",
+  "bytes": 235548,
+  "source_sha256": "f7a70e1a4a879f6968e4fe81b97ab8617692d89430409a078bf928cf3817525d",
+  "trimmed": "the features whose properties.CODE is lobith.bovenrijn.tolkamer, with totalFeatures, numberMatched and numberReturned set to their count, all other keys kept"
+}

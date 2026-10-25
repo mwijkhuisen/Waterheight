@@ -1,0 +1,14 @@
+{
+  "spec": "nl-1-obs-key",
+  "variant": "lobith.bovenrijn.tolkamer/H",
+  "source": "NL-1",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/NL-1/nl-1-obs-key/2026/10/25/031100Z-437fcd043c4f3024.zst",
+  "recorded_at": "2026-10-25T03:11:00Z",
+  "status": 200,
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "bytes": 6017,
+  "source_sha256": "437fcd043c4f30241056e1fffd1ee89455f64a3a1420790bfceeb8ea680f1f0e",
+  "trimmed": false
+}
