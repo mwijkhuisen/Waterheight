@@ -295,7 +295,9 @@ export function normaliseForecast(lists: readonly Waarnemingen[], ctx: Context):
   const byCombination = new Map<string, string[]>();
   for (const key of ctx.registry.keys()) {
     const combination = key.slice(0, key.lastIndexOf('/'));
-    byCombination.set(combination, [...(byCombination.get(combination) ?? []), key]);
+    const keys = byCombination.get(combination) ?? [];
+    keys.push(key);
+    byCombination.set(combination, keys);
   }
   const merged = new Map<string, { samples: Map<number, number>; conflicts: Set<number> }>();
   const unknown = new Set<string>();
@@ -466,7 +468,9 @@ export function normaliseTide(lists: readonly Waarnemingen[], ctx: Context, kind
   const byCombination = new Map<string, string[]>();
   for (const key of ctx.registry.keys()) {
     const combination = key.slice(0, key.lastIndexOf('/'));
-    byCombination.set(combination, [...(byCombination.get(combination) ?? []), key]);
+    const keys = byCombination.get(combination) ?? [];
+    keys.push(key);
+    byCombination.set(combination, keys);
   }
   // `holes`: the instants of every value dropped from a series (only those between its first and last kept value
   // matter: the time-window drops lie outside by construction).
@@ -596,7 +600,9 @@ export function normaliseTideType(lists: readonly Waarnemingen[], ctx: Context):
   const byCombination = new Map<string, string[]>();
   for (const key of ctx.registry.keys()) {
     const combination = key.slice(0, key.lastIndexOf('/'));
-    byCombination.set(combination, [...(byCombination.get(combination) ?? []), key]);
+    const keys = byCombination.get(combination) ?? [];
+    keys.push(key);
+    byCombination.set(combination, keys);
   }
   const merged = new Map<string, { labels: Map<number, 'high' | 'low'>; conflicts: Set<number> }>();
   const unknown = new Set<string>();

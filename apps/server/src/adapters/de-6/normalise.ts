@@ -123,7 +123,9 @@ export function normaliseStations(doc: Stations, table: LhpTable, fetchedAt: num
     const feature = seen.get(e.lhp);
     const group = groups.get(e.station);
     if (feature === undefined || group === null) continue;
-    groups.set(e.station, [...(group ?? []), { feature, state: e.state, operator: e.operator }]);
+    const members = group ?? [];
+    members.push({ feature, state: e.state, operator: e.operator });
+    groups.set(e.station, members);
   }
   const classes: ClassRow[] = [];
   for (const [station, group] of groups) {

@@ -167,7 +167,11 @@ export async function readStations(db: Kysely<DB>, family: ChannelAudience): Pro
   }));
   const sinceOf = new Map(since.map((r) => [r.series_id, r.since]));
   const byStation = new Map<string, SeriesRow[]>();
-  for (const s of series) byStation.set(s.station_id, [...(byStation.get(s.station_id) ?? []), s]);
+  for (const s of series) {
+    const list = byStation.get(s.station_id) ?? [];
+    list.push(s);
+    byStation.set(s.station_id, list);
+  }
   return {
     stations: stations.flatMap((st) => {
       const list = byStation.get(st.id);

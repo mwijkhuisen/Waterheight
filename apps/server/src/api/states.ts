@@ -289,7 +289,11 @@ function parseGeometry(text: string | null): unknown {
 
 const seriesByStation = (series: readonly SeriesRow[]) => {
   const out = new Map<string, SeriesRow[]>();
-  for (const s of series) out.set(s.station_id, [...(out.get(s.station_id) ?? []), s]);
+  for (const s of series) {
+    const list = out.get(s.station_id) ?? [];
+    list.push(s);
+    out.set(s.station_id, list);
+  }
   return out;
 };
 
@@ -463,15 +467,16 @@ export async function readStates(
   for (const c of rows.classes) {
     const target = classSeries(c.source_id, seriesOf.get(c.subject_id) ?? []);
     if (target === undefined || c.provider_code === null) continue;
-    classesOf.set(target.id, [
-      ...(classesOf.get(target.id) ?? []),
-      { source: c.source_id, code: c.provider_code, fresh: fresh(c.source_id) },
-    ]);
+    const list = classesOf.get(target.id) ?? [];
+    list.push({ source: c.source_id, code: c.provider_code, fresh: fresh(c.source_id) });
+    classesOf.set(target.id, list);
   }
   const areasOf = new Map<string, AreaIn[]>();
   for (const { w, ids } of rows.areas) {
     for (const id of ids) {
-      areasOf.set(id, [...(areasOf.get(id) ?? []), areaIn(w, fresh(w.source_id))]);
+      const list = areasOf.get(id) ?? [];
+      list.push(areaIn(w, fresh(w.source_id)));
+      areasOf.set(id, list);
     }
   }
 
@@ -674,19 +679,30 @@ export async function readHourStates(
     doyMdOf.push(utcMonthDay(instantOf(h)));
   }
   const refsOf = new Map<number, { r: Ranged<RefRow>; in: RefIn }[]>();
-  for (const r of [...fixed.refs, ...(await readDoy(db, family, [...new Set(doyMdOf)], opts.cache))])
-    refsOf.set(r.series_id, [...(refsOf.get(r.series_id) ?? []), { r, in: refIn(r) }]);
+  for (const r of [...fixed.refs, ...(await readDoy(db, family, [...new Set(doyMdOf)], opts.cache))]) {
+    const list = refsOf.get(r.series_id) ?? [];
+    list.push({ r, in: refIn(r) });
+    refsOf.set(r.series_id, list);
+  }
   // Per target series and source (in source order, as readStates' DISTINCT ON orders them): the class rows by time.
   const classesOf = new Map<number, Map<string, ClassAt[]>>();
   for (const c of rows.classes) {
     const target = classSeries(c.source_id, seriesOf.get(c.subject_id) ?? []);
     if (target === undefined) continue;
     const bySource = classesOf.get(target.id) ?? new Map<string, ClassAt[]>();
-    bySource.set(c.source_id, [...(bySource.get(c.source_id) ?? []), { ts: c.ts.getTime(), code: c.provider_code }]);
+    const list = bySource.get(c.source_id) ?? [];
+    list.push({ ts: c.ts.getTime(), code: c.provider_code });
+    bySource.set(c.source_id, list);
     classesOf.set(target.id, bySource);
   }
   const areasOf = new Map<string, RangedWarning[]>();
-  for (const { w, ids } of rows.areas) for (const id of ids) areasOf.set(id, [...(areasOf.get(id) ?? []), w]);
+  for (const { w, ids } of rows.areas) {
+    for (const id of ids) {
+      const list = areasOf.get(id) ?? [];
+      list.push(w);
+      areasOf.set(id, list);
+    }
+  }
 
   for (let i = 0; i < frames.ids.length; i++) {
     if (opts.yieldEvery !== undefined && i > 0 && i % opts.yieldEvery === 0)
@@ -817,7 +833,11 @@ const add = (c: Count, states: readonly SeriesState[], doy: boolean) => {
  */
 export function classCoverage(read: StateRead): ClassCoverage {
   const byStation = new Map<string, SeriesState[]>();
-  for (const s of read.series) byStation.set(s.station, [...(byStation.get(s.station) ?? []), s]);
+  for (const s of read.series) {
+    const list = byStation.get(s.station) ?? [];
+    list.push(s);
+    byStation.set(s.station, list);
+  }
   const count = new Map<string, { t1: Count; fr: Count }>();
   const all = { t1: zero(), fr: zero() };
   for (const st of read.stations) {

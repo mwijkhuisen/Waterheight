@@ -40,7 +40,9 @@ function calibrator(release: ReachesFile, placed: ReadonlyMap<string, Placement>
   for (const s of release.stations) {
     const p = placed.get(s.id);
     if (s.km_graph === null || p === undefined || p.river !== s.river_id || p.km_graph === null) continue;
-    byRiver.set(s.river_id, [...(byRiver.get(s.river_id) ?? []), [p.km_graph, s.km_graph]]);
+    const list = byRiver.get(s.river_id) ?? [];
+    list.push([p.km_graph, s.km_graph]);
+    byRiver.set(s.river_id, list);
   }
   for (const [river, list] of byRiver) {
     list.sort((a, b) => a[0] - b[0] || a[1] - b[1]);
@@ -77,10 +79,19 @@ export function splitReaches(
   const skipped: SplitResult['skipped'] = [];
 
   const reachesOf = new Map<string, Reach[]>();
-  for (const r of release.reaches) reachesOf.set(r.river_id, [...(reachesOf.get(r.river_id) ?? []), r]);
+  for (const r of release.reaches) {
+    const list = reachesOf.get(r.river_id) ?? [];
+    list.push(r);
+    reachesOf.set(r.river_id, list);
+  }
   const publicOf = new Map<string, ReachesFile['stations']>();
-  for (const s of release.stations)
-    if (s.km_graph !== null && s.reach_id !== null) publicOf.set(s.river_id, [...(publicOf.get(s.river_id) ?? []), s]);
+  for (const s of release.stations) {
+    if (s.km_graph !== null && s.reach_id !== null) {
+      const list = publicOf.get(s.river_id) ?? [];
+      list.push(s);
+      publicOf.set(s.river_id, list);
+    }
+  }
 
   // 1. Place every point: co-located with a public station, on exactly one reach, or skipped.
   const calibrated = new Map<string, number>();
@@ -112,7 +123,9 @@ export function splitReaches(
       skipped.push({ id: st.id, code: hits.length === 0 ? 'owner_reach_unplaced' : 'owner_reach_ambiguous' });
       continue;
     }
-    onReach.set(hit.id, [...(onReach.get(hit.id) ?? []), { st, km }]);
+    const list = onReach.get(hit.id) ?? [];
+    list.push({ st, km });
+    onReach.set(hit.id, list);
   }
 
   // 2. The clusters of each split reach, in graph order along it.

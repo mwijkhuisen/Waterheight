@@ -143,8 +143,13 @@ export function normalise(alert: CapAlert | OtherSender, ctx: Context): Normalis
   if (alert.msgType !== 'Cancel') {
     // Per area, the blocks that state it: the French one is the base for the label, validity and geometry.
     const areas = new Map<string, CapInfo[]>();
-    for (const info of alert.info)
-      for (const a of info.area) areas.set(a.areaDesc, [...(areas.get(a.areaDesc) ?? []), info]);
+    for (const info of alert.info) {
+      for (const a of info.area) {
+        const blocks = areas.get(a.areaDesc) ?? [];
+        blocks.push(info);
+        areas.set(a.areaDesc, blocks);
+      }
+    }
     for (const [key, blocks] of areas) {
       const base = blocks.find((b) => b.language === BASE_LANGUAGE) ?? (blocks[0] as CapInfo);
       const raw = param(base, 'cb-eu-level') ?? null;
