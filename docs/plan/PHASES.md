@@ -4763,3 +4763,53 @@ What optimisation issue #220 changed: the web app starts its boot requests earli
 - **Lighthouse** (the CI `owner-perf` leg, 3 runs, report-only, KG-237), the TBT watch of the plan (MapLibre now evaluates at the map view's mount): base (c82c2af) performance 46, 66, 67, TBT 2,990, 2,400, 2,188 ms, LCP 5,392, 2,251, 2,286 ms; head (12e3e33) performance 47, 48, 65, TBT 5,350, 7,002, 5,480 ms, LCP 5,020, 4,569, 2,111 ms, and (cdc3e6d) performance 44, 49, 65, TBT 7,004, 6,280, 4,801 ms, LCP 5,452, 4,653, 2,103 ms. Each CI run had its own runner: the scripting of the untouched `temporal` chunk rose 1.42 to 1.84× too. On one box (WSL, the stand-in, alternating base and head, 2 × 3 runs each), TBT median went from about 2,450 to 1,980 ms, LCP median from about 4,775 to 6,501 ms, and performance from about 46 to 42. The LCP element is the timebar's time text, which paints after meta and stations, and the 302 kB map chunk now shares the link with them. A variant that starts the chunk once meta and stations are in (style and manifest still at mount) measured an LCP median of about 5,503 ms against 4,225 ms for the base, and time-to-map 13,499 and 13,407 against 13,982 and 13,739 ms. By the owner's rule (adopt it only if LCP is back to base) it was not adopted (KG-487).
 - **[U] items:** time-to-map is measured on Chromium only (CDP) and the CI runner varies by about 50 % (report-only, KG-120, KG-237); the gain on Safari's polyfill wait is not measured (Playwright WebKit has native Temporal); production (Cloudflare edge) is not measured, and the owner may run Lighthouse on waterradar.io after the deploy (KG-484). New rows: KG-484 to KG-487.
 - **Not in scope** (#220): a router, `React.lazy`, a new dependency, the rivers manifest dedupe, per-language bundles.
+
+## 63. Amendment: #212 PR A, the 4,000-series timing limits (2026-10-25)
+
+What PR A of issue #212 changed: the at-T reads that kept `bench-4000` over its timing limits on the CI runner (AMD EPYC 7763), and the bench that measured them. The values returned are the same (an `EXCEPT ALL` test against the frozen bodies); only the plans and the CPU change. One generated migration, no new role, view, grant, audience, route or dependency. The database CHECK of the staleness cap is the follow-up #229 (owner decision D-6, 2026-10-25).
+
+- **Built.**
+  1. Public Q1 (`scripts/gen-views.ts`, `OBS_AT.public`): `AND o.ts > p_t - interval '2 days'` beside the per-series bound `o.ts > p_t - s.staleness_limit`. PostgreSQL removes the obs partitions outside the window at executor start-up ("Subplans Removed: 83") instead of keeping 83 history partitions in every plan as "never executed". The bound is exact only while every series the public family can see has a `staleness_limit` of at most 2 days. `OBS_AT.owner` is unchanged (the owner canary has 36500 days).
+  2. The cap: `validateStations` (`packages/contracts/src/stations.ts`, `STALENESS_CAP_MS`) refuses a `staleness_limit` over P2D on every station row, owner rows included (weeks, months and years too); `syncOwnerCanary` (`apps/server/src/load/canary.ts`) marks the canary series `audience = 'owner'`, on insert and on conflict. The database does not enforce it (#229).
+  3. Tide (`TIDE_AT`, both functions): the tidal CTE is driven from the fenced subquery `(SELECT st.id FROM public.station st WHERE st.flags ->> 'tidal' = 'true' OFFSET 0)`, joined to `series_eff`, instead of one `station_pkey` probe per series through an EXISTS. `OFFSET 0` keeps the planner from flattening it. The predicate is one constant (`TIDAL_FLAG`), shared with the api tide views, which are unchanged, so `/snapshot` and `/series` still agree.
+  4. `nl4Candidate` (`packages/core/src/classify.ts`) computes the Europe/Amsterdam month-day only once it finds an NL-4 row.
+  5. Migration: `db/migrations/20261119000001_views_at_t_plans.sql` (`pnpm db:views`; `atTPlansMigration()` in `scripts/gen-views.ts`). `down` restores the frozen v1 bodies; the earlier migrations are byte-identical; same signatures, owners, SECURITY DEFINER, search_path, TimeZone and grants.
+  6. `scripts/bench-q1.ts`: creates production's empty history partitions (`ensure_history_partitions('1950-01-01', seed start)`; obs then has 86 leaves, as production has since DE-8's backfill, #190); reads the Q1 body from `pg_proc` for its EXPLAIN; two new hard plan checks: no obs partition ending before the seed's first instant may stay in the Q1 plan (skipped for `--days` below 3), and no `station_pkey` probe in the tide plan.
+- **Reality against the plan** (the PR body's list).
+  1. D-6 (owner, 2026-10-25): the CHECK is split out to #229. A CHECK is a "tighten" step, and `docs/runbooks/deploy-rollback.md:52` allows only expand-only migrations for one release: a manual rollback to a release before PR A runs that release's `migrate`, whose canary insert (audience NULL, 36500 days) the CHECK would refuse. So PR A has no hand-written migration and no CHECK, and the plan comment's two migrations are one generated file.
+  2. The plan comment's CHECK form `… OR audience = 'owner'` is NULL-unsafe: `series.audience` is NULL for rows that do not narrow their source (`registry-sync.ts:479`), and a CHECK passes NULL. #229 uses `audience IS NOT DISTINCT FROM 'owner'`.
+  3. Production was never over the cap: no committed registry version ever had a limit over P1D, and today's largest is P1D (71 rows). Only the canary exceeds 2 days.
+  4. `ensure_history_partitions('1950-01-01', seed start)` also creates the monthly obs partitions up to the seed's month; obs has 86 leaves and 83 of them end before the seed's first instant.
+  5. `apps/server/test/db/audience.int.test.ts` asserted that the two Q1 functions are one template; the public-only bound breaks that by design, so it asserts the exact difference.
+  6. `docs/agent-reference.md` does not exist on main; the cap is documented in CLAUDE.md, Database and loader.
+  7. Plan check 1 is skipped for `--days` below 3, with a note in the log; the CI jobs use the default 60 days.
+- **Numbers observed.** Local: AMD Ryzen 7 5800X (WSL2), PostgreSQL 18.6, `bench-q1 --series 4000`, before (the old bodies, with the history partitions) and after.
+
+| Measure | Before | After |
+|---|---|---|
+| Q1 median | 53.2 ms | 45.0 ms |
+| Tide at T, median | 12.0 ms | 6.8 ms |
+| `/snapshot` cold p95 | 141.0 ms | 118.4 ms |
+| `/series` 14 d raw p95 | 57.4 ms | 33.6 ms |
+| Verdict | `OK` with 2 timing limits reported | `bench-q1: OK` with no REPORT line |
+
+  Local `--series 3000` after: Q1 median 36.0 ms, tide 6.5 ms, `/snapshot` cold p95 93.3 ms, and `/series` 14 d raw p95 63.6 ms, which failed the 50 ms limit. That route reads the series views, which PR A does not change; KG-463 already recorded this box over that limit. CI before-run, run 40232324004, on the old bodies with the history partitions:
+
+| Job | Machine | Q1 median | Tide at T median | `/snapshot` cold p95 | Plan checks |
+|---|---|---|---|---|---|
+| `bench` (3,000) | AMD EPYC 9V74, 4 cores | 37.0 ms | 12.7 ms | 110.8 ms | both FAIL |
+| `bench-4000` | AMD EPYC 7763, 4 cores | 56.1 ms | 17.1 ms | 163.0 ms | both FAIL |
+
+  `monthDay` CPU profile (5800X, 4,000 series x 120 passes): `monthDay` 4.59 to 0.21 ms a pass; `classify` 11.97 to 5.90 ms.
+
+<!-- D4 -->
+
+- **Criteria.**
+  - [ ] [CI] `bench` (3,000) and `bench-4000` create the history partitions and pass every limit hard on two consecutive runs on an AMD EPYC 7763, with `--report-timings` gone from `ci.yml` (D-4; evidence above, to be added).
+  - [x] [CI] The new public Q1 and both new tide functions return the same rows as the frozen bodies, and the owner function is the frozen body: `apps/server/test/db/at-t-plans.int.test.ts` "same rows as the frozen bodies" (EXCEPT ALL both ways at 14 instants; the comparisons are not vacuous; the cap boundary holds at T0), "OBS_AT.owner is the frozen body", "tide rows by audience and flag"; `apps/server/test/api/locf.int.test.ts` `capInside` and `capAtLimit`.
+  - [x] [CI] The owner canary (`777777.777`): `at-t-plans.int.test.ts` "the owner canary" ("syncOwnerCanary marks the series owner; owner Q1 and /snapshot have it, the public ones do not"; "a canary row of the old shape (audience NULL) is marked owner by the ON CONFLICT path and still reaches the owner Q1").
+  - [x] [CI] The cap: `packages/contracts/test/stations.test.ts` "refuses a staleness_limit over P2D" (P2DT1H, P1W, an owner row with P3D) and "accepts a staleness_limit of" P2D and PT48H; `test/staleness-cap.test.ts` "STALENESS_CAP (SQL) equals STALENESS_CAP_MS (registry validator)". The database refusing it moved to #229 (D-6).
+  - [x] [CI] Migrations: one generated file in `test/migrations.test.ts`; `pnpm db:views` regenerates it; the earlier migrations are byte-identical.
+  - [ ] [agent-prod] After the deploy, `publisher.cycleSeconds` and `lastDayRender.seconds` in the public status files are no worse than in the 24 h before, and `verify-prod` passes on pages and the snapshot.
+- **[U] items:** the cap is not a database constraint until #229 (KG-488); the owner family keeps the unbounded Q1 (KG-489); `bench-4000` becomes a required timing gate on a shared runner (KG-490). New rows: KG-488 to KG-490.
+- **Not in scope** (PR A): the database CHECK (#229), and the measure-first leads of PR B.

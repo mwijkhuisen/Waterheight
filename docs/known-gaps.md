@@ -4,6 +4,14 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## #212 PR A, the at-T plans (2026-10-25)
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-488 | security | **The 2-day staleness cap of the public at-T bound is enforced by `validateStations` and the canary marking, not by the database:** `OBS_AT.public` carries the constant bound `o.ts > p_t - interval '2 days'`, which removes no row only while every public series has a `staleness_limit` of at most P2D. `validateStations` refuses more on every station row (owner rows included) and `syncOwnerCanary` marks the canary series (36500 days) `audience = 'owner'`, but a public series written with a longer limit outside the registry sync would have its values older than 2 days hidden from the public snapshot (hidden, never leaked; owner outputs are unaffected). | #229 (the database CHECK, `audience IS NOT DISTINCT FROM 'owner'`; owner decision D-6, 2026-10-25), built after PR A is deployed | open [U] |
+| KG-489 | perf | **The owner family keeps the unbounded Q1:** `OBS_AT.owner` still plans every obs partition, because the owner canary series has a `staleness_limit` of 36500 days, so a constant 2-day bound would hide it. The owner family is the owner view only, and its speed is today's. | not planned; revisit only if the owner view's `/snapshot` is measured slow | open |
+| KG-490 | ci | **`bench-4000` is a required timing gate on a shared runner once `--report-timings` is dropped:** `ci` needs the job, so a slow runner can turn `ci` red without a code change. The rule is to rerun the job. | [owner] accepts the rerun rule (PHASES §63) | open |
+
 ## O4, web load path (#220)
 
 | ID | Area | Gap | What closes it / who | Status |
