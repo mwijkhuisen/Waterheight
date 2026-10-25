@@ -12,9 +12,11 @@ import {
 } from '@rws/contracts';
 import type { Hono } from 'hono';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { readStations } from '../../src/api/data.ts';
 import { DisplayWindow } from '../../src/api/window.ts';
 import { createApp } from '../../src/app.ts';
 import type { Db } from '../../src/db/pool.ts';
+import { DATA_FLOOR } from '../../src/load/dirty.ts';
 import { API_POOL_MAX, openApiDb } from '../../src/main.ts';
 import { NEVER_PUBLIC, seedAudienceFixture } from '../db/seed.ts';
 import { createTestDb, type TestDb } from '../db/testdb.ts';
@@ -782,6 +784,30 @@ describe('on the fixed clock of 2026-10-26T12:00Z', () => {
     const dates = stationsOf(res.json()).stations.map((s) => s.series[0]?.dataSince);
     expect(dates[1]).not.toBe(dates[2]);
     expect(Date.parse(dates[2] as string)).toBeLessThan(Date.parse(dates[1] as string));
+  });
+
+  it('#218 (KG-112): dataSince counts the days from DATA_FLOOR on only; a day before it changes no answer', async () => {
+    const answer = async () =>
+      (await readStations(api.db, 'public')).stations.flatMap((st) => st.series).map((s) => [s.id, s.dataSince]);
+    const before = await answer();
+    expect(before.length).toBeGreaterThan(5);
+    // A day before DATA_FLOOR for a series with days after it, and for one with no day at all (it stays null).
+    await t.admin.query(
+      `INSERT INTO obs_1d (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
+       VALUES ($1, '2026-07-15T00:00:00Z', 1, 1, 1, 1, 1, 0), ($2, '2026-07-20T00:00:00Z', 1, 1, 1, 1, 1, 0)`,
+      [sid('public'), sid('dense')],
+    );
+    try {
+      expect(Date.parse('2026-07-20T00:00:00Z')).toBeLessThan(Date.parse(DATA_FLOOR));
+      expect(await answer()).toEqual(before);
+      expect(before.find(([id]) => id === sid('dense'))?.[1]).toBeNull();
+    } finally {
+      await t.admin.query(
+        `DELETE FROM obs_1d WHERE (series_id = $1 AND bucket = '2026-07-15T00:00:00Z')
+                              OR (series_id = $2 AND bucket = '2026-07-20T00:00:00Z')`,
+        [sid('public'), sid('dense')],
+      );
+    }
   });
 
   it('answers HEAD like GET without a body', async () => {

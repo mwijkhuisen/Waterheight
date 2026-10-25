@@ -522,6 +522,16 @@ try {
      CROSS JOIN (SELECT id FROM series ORDER BY id LIMIT $1) s`,
     [TIDAL],
   );
+  // #218 (KG-112): the daily rollup's rows, one a series and seed day, so /stations' first-data-day read (dataSince)
+  // meets the rows it reads in production. Only their keys matter to the bench; the values are placeholders.
+  await t.admin.query(
+    `INSERT INTO obs_1d (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
+     SELECT s.id, d, 0, 0, 0, 0, 96, 1
+     FROM generate_series(date_bin('1 day', now(), timestamptz '2000-01-01 00:00:00+00') - make_interval(days => $1),
+                          date_bin('1 day', now(), timestamptz '2000-01-01 00:00:00+00'), interval '1 day') d
+     CROSS JOIN series s`,
+    [DAYS],
+  );
   await seedClassification(SERIES, DAYS);
   await t.admin.query('ANALYZE');
   const { rows: size } = await t.admin.query<{ n: string }>('SELECT count(*) AS n FROM obs');
@@ -752,7 +762,8 @@ try {
     await ask([snapshotPath(lo - BUCKET_MS), seriesPath(ids[0] as number, lo - BUCKET_MS)]);
 
     // #218 (KG-112): one uncached /stations (this app has answered none yet) and the plan of its first-data-day read
-    // as rws_api through the public view: a bounded probe per series names obs_1d_pkey under no Sort or aggregate.
+    // as rws_api through the public view: the series drive the join, so it is a range of obs_1d_pkey per series from
+    // DATA_FLOOR on (a backfill's history before it is never read), never a scan of the whole rollup.
     const stationsCall = (await ask(['/api/v1/stations'])).answers[0] as { status: number; ms: number; body: string };
     console.log(
       `API /stations uncached: ${stationsCall.ms.toFixed(1)} ms, ${stationsCall.body.length} bytes (KG-112's trigger: 500 ms)`,
@@ -772,12 +783,19 @@ try {
       .map((r: unknown[]) => String(r[0]))
       .join('\n');
     console.log(sincePlan);
-    const probe = /obs_1d_pkey/.test(sincePlan) && !/\b(Sort|HashAggregate|GroupAggregate)\b/.test(sincePlan);
+    const perSeries =
+      /(Index (Only )?Scan using|Bitmap Index Scan on) obs_1d_pkey/.test(sincePlan) &&
+      /Index Cond: \(\(series_id = s\.id\) AND \(bucket >= /.test(sincePlan) &&
+      !/Seq Scan on obs_1d/.test(sincePlan);
     console.log(
-      probe
-        ? 'dataSince: one bounded probe of obs_1d_pkey per series'
-        : 'dataSince: NOT one bounded probe of obs_1d_pkey per series',
+      perSeries
+        ? 'dataSince: a range of obs_1d_pkey per series from DATA_FLOOR on'
+        : 'dataSince: NOT a range of obs_1d_pkey per series',
     );
+    if (!perSeries) {
+      console.error('bench-q1: FAIL: the dataSince read is not a range of obs_1d_pkey per series (KG-112)');
+      failed = true;
+    }
 
     const cold = await ask(snapshots);
     report('/snapshot cold (LRU miss)', SNAPSHOT_COLD_MS, cold, snapshotProblem);
