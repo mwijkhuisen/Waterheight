@@ -603,8 +603,9 @@ try {
     console.error('bench-q1: FAIL: the tide function scans the tide table');
     failed = true;
   }
-  // #212 (F1): the tidal series are found from the tidal stations, never by one station_pkey probe per series.
-  if (/\bstation_pkey\b/.test(tidePlan)) {
+  // #212 (F1): the tidal series are found from the tidal stations, never by one station_pkey probe per series (a
+  // station_pkey scan that runs more than once; one scan feeding the fence is fine).
+  if ([...tidePlan.matchAll(/\bstation_pkey\b[^\n]*\bloops=(\d+)/g)].some((m) => Number(m[1]) > 1)) {
     console.error(
       'bench-q1: FAIL: the tide function probes station_pkey (once per series, not from the tidal stations)',
     );
