@@ -147,8 +147,8 @@ async function insertValues(tx: Tx, runId: string, points: readonly CanonPoint[]
 }
 
 /**
- * Stores the runs of one payload (A§7.4 item 9). Per run: partitions over its valid range, the stored runs of the
- * same series and source that end where it ends, then the merge decision: insert, lower fetched_at (and an inferred
+ * Stores the runs of one payload (A§7.4 item 9): partitions over the runs' valid range, then per run the stored runs
+ * of the same series and source that end where it ends, and the merge decision: insert, lower fetched_at (and an inferred
  * issued_at) to this capture's if it is earlier, or extend by the leading points (head-dropping sources only).
  * A replay of the same captures writes nothing, whatever their order.
  */
@@ -162,11 +162,20 @@ export async function applyForecasts(
   touched: Touch[] = [],
 ): Promise<ForecastWritten> {
   const out: ForecastWritten = { n_new: 0, n_changed: 0, writes: 0, ambiguous: 0, collision: 0 };
+  // #218: the partitions of every run of the payload in one call, over the earliest first valid time to the latest
+  // last one (each run's points are sorted and never empty). The function refuses the union only when it would refuse
+  // one of the runs (from before 2000, or past now + 400 days, with the same SQLSTATE; its 3,700-day rule cannot bite
+  // while the end is within now + 400 days), and the transaction rolls back either way. It may create an empty month
+  // between two runs' ranges that per-run calls left out (KG-478).
+  if (runs.length > 0) {
+    const from = new Date(Math.min(...runs.map((r) => firstValid(r.run))));
+    const to = new Date(Math.max(...runs.map((r) => lastValid(r.run))));
+    await sql`SELECT ensure_partitions(${from}::timestamptz, ${to}::timestamptz)`.execute(tx);
+  }
   for (const { seriesId, run } of runs) {
     const first = new Date(firstValid(run));
     const last = lastValid(run);
     const hash = runHash(run);
-    await sql`SELECT ensure_partitions(${first}::timestamptz, ${new Date(last)}::timestamptz)`.execute(tx);
     const d = mergeDecision(await storedRuns(tx, seriesId, source, last), run, hash.toString('hex'), headDrops);
     if (d.kind === 'ambiguous') {
       out.ambiguous++;
