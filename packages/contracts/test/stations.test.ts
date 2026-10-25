@@ -57,6 +57,21 @@ describe('station registry', () => {
     expect(validateStations(sample, sources).problems).toEqual([]);
   });
 
+  // #212: the 2-day cap of the public at-T bound, on every row, owner rows included.
+  it.each([
+    ['plain P2DT1H', lobith, 'P2DT1H'],
+    ['plain P1W', lobith, 'P1W'],
+    ['owner P3D', ownerIndex, 'P3D'],
+  ])('refuses a staleness_limit over P2D: %s', (_name, index, staleness_limit) => {
+    expect(problemsWith(index, (r) => (r.staleness_limit = staleness_limit))).toMatch(/staleness_limit exceeds P2D/);
+  });
+
+  it.each(['P2D', 'PT48H'])('accepts a staleness_limit of %s', (staleness_limit) => {
+    expect(problemsWith(lobith, (r) => (r.staleness_limit = staleness_limit))).not.toMatch(
+      /staleness_limit exceeds P2D/,
+    );
+  });
+
   it.each(files)('%s names registered sources and never widens an audience', (f) => {
     expect(validateStations(load(dir + f), sources).problems).toEqual([]);
   });
