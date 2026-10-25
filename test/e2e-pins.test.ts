@@ -32,12 +32,37 @@ describe('e2e job pins', () => {
     expect(env('CADDY_IMAGE')).toBe(from);
   });
 
+  // #217: `alone` are the projects a leg runs after the rest of it, one test at a time.
+  const legs: { projects: string; alone?: string }[] = parse(ci).jobs.e2e.strategy.matrix.include;
+  const words = (s = '') => s.split(' ').filter((w) => w !== '');
+
   it('runs every Playwright project in exactly one leg of the e2e matrix', () => {
-    const legs: { projects: string }[] = parse(ci).jobs.e2e.strategy.matrix.include;
-    const inLegs = legs.flatMap((leg) => leg.projects.split(' '));
+    const inLegs = legs.flatMap((leg) => [...words(leg.projects), ...words(leg.alone)]);
     const config = read('apps/web/e2e/playwright.config.ts');
     const projects = new Set([...config.matchAll(/\bname: '([a-z0-9-]+)'/g)].map((m) => m[1]));
     expect(new Set(inLegs).size).toBe(inLegs.length);
     expect(new Set(inLegs)).toEqual(projects);
+  });
+
+  it('runs Lighthouse and fps alone: after the rest of their leg, one test at a time, without their dependencies', () => {
+    expect(legs.flatMap((leg) => words(leg.alone)).sort()).toEqual(['fps', 'lighthouse']);
+    expect(ci).toContain('--no-deps --workers=1 --output=test-results/alone || rc=$?');
+  });
+});
+
+describe('the ci gate', () => {
+  const jobs: Record<string, { needs?: string[]; steps: { uses?: string }[] }> = parse(ci).jobs;
+
+  it('needs every other job of the workflow', () => {
+    expect([...(jobs.ci?.needs ?? [])].sort()).toEqual(
+      Object.keys(jobs)
+        .filter((name) => name !== 'ci')
+        .sort(),
+    );
+  });
+
+  it('starts every job with harden-runner', () => {
+    for (const [name, job] of Object.entries(jobs))
+      expect(job.steps[0]?.uses, name).toMatch(/^step-security\/harden-runner@/);
   });
 });
