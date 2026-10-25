@@ -1,6 +1,7 @@
 import { type ApiStation, type Meta, ReachRiver, RiversManifest, toSnapshot, WATERBODY_KINDS } from '@rws/contracts';
 import { holdForecasts } from '@rws/core/forecast-hold';
 import { z } from 'zod';
+import { MODES } from '../url/url.ts';
 import {
   type Contracts,
   lenient,
@@ -30,10 +31,40 @@ export class HttpError extends Error {
 }
 
 export type Fetcher = (path: string, signal?: AbortSignal) => Promise<Response>;
-export const browserFetch: Fetcher = (path, signal) =>
-  fetch(path, { signal: signal ?? null, redirect: 'error', headers: { accept: 'application/json' } });
-
 const STATIC = '/data/v1/';
+const request: Fetcher = (path, signal) =>
+  fetch(path, { signal: signal ?? null, redirect: 'error', headers: { accept: 'application/json' } });
+const early = new Map<string, Promise<Response>>();
+
+/**
+ * O4 (#220): the home route's first reads, started in main.tsx before Temporal. The first read of each path takes the
+ * answer once and still parses it with the site's contract (getJson); a later read fetches again. The early request
+ * has no signal (nothing can cancel it before a query exists); a rejection reaches the reader as it would have.
+ */
+export function prefetchStatic(names: readonly string[]): void {
+  for (const n of names) {
+    const p = request(STATIC + n);
+    p.catch(() => {}); // a separate chain: the reader still gets the rejection, an unread one is never unhandled
+    early.set(STATIC + n, p);
+  }
+}
+
+/**
+ * meta.json and stations.json, plus status.json unless the URL names a valid mode (useMode then never reads it).
+ * Not `readSearch`: its `t` needs Temporal, which is not loaded yet. The mode test is readSearch's (`isMode`, url.ts).
+ */
+export function bootFiles(search: string): string[] {
+  const mode = new URLSearchParams(search).get('mode');
+  const files = ['meta.json', 'stations.json'];
+  return mode !== null && (MODES as readonly string[]).includes(mode) ? files : [...files, 'status.json'];
+}
+
+export const browserFetch: Fetcher = (path, signal) => {
+  const p = early.get(path);
+  if (p === undefined) return request(path, signal);
+  early.delete(path);
+  return p;
+};
 const aborted = (signal?: AbortSignal) => signal?.aborted === true;
 
 /** One parsed answer and whether Caddy marked it as its stand-in for a dead API. */

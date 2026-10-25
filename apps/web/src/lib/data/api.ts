@@ -59,7 +59,7 @@ const live = (on: boolean) => (on ? { refetchInterval: LIVE_MS, refetchIntervalI
  * /runtime-config.json, once: one query for the audience and the site's operator, contact and CDN (P10b, plan C8). A
  * failure is retried (three times, with backoff) and never becomes "public" (lib/config/runtime.ts; review round 1).
  */
-const runtimeConfigQuery = {
+export const runtimeConfigQuery = {
   queryKey: ['runtime-config'],
   queryFn: ({ signal }: { signal: AbortSignal }) => loadRuntimeConfig(undefined, signal),
   staleTime: Number.POSITIVE_INFINITY,
