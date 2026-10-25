@@ -369,6 +369,30 @@ jobs:
           pnpm check
           pnpm test:integration apps/server/test/db/audience.int.test.ts
 
+  # #217: the offline tests of the host scripts, a job of their own (163–220 s of the deploy job, which they need nothing
+  # of). Docker, nft and systemctl are stubs in them; caddy-edge.test.sh runs the web image's pinned Caddy through the
+  # runner's Docker without a network.
+  deploy-host:
+    name: deploy-host
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Host tools the tests need (Ubuntu's signed repository)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nftables zstd >/dev/null
+      - name: Offline tests of the host scripts (rws-update, rws-deploy, backups, drill, tick)
+        run: |
+          for t in deploy/tests/*.test.sh; do echo "== $t"; "$t"; done
+
   deploy:
     name: deploy
     runs-on: ubuntu-24.04
@@ -394,13 +418,11 @@ jobs:
           scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
           echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
-      - name: Host tools the tests need (Ubuntu's signed repository)
+      # run.sh installs both again with Docker, but flushes the runner's nft ruleset before that.
+      - name: Host tools run.sh needs from the start (Ubuntu's signed repository)
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq nftables zstd >/dev/null
-      - name: Offline tests of the host scripts (rws-update, rws-deploy, backups, drill, tick)
-        run: |
-          for t in deploy/tests/*.test.sh; do echo "== $t"; "$t"; done
       - name: systemd-analyze verify on the units (scripts at their ExecStart paths)
         run: |
           for f in deploy/bin/rws-*; do [[ $f == *.sh ]] || sudo ln -sfn "$PWD/$f" "/usr/local/bin/${f##*/}"; done
@@ -437,9 +459,11 @@ jobs:
   # api (apps/server/test/e2e/api.ts: a seeded throw-away database on the
   # service container, the real routes on a fixed clock) on the runner.
   # One leg per browser engine: the 838 tests were about 65 test-minutes, 34 minutes on one runner's two workers (main,
-  # 39574e4), which software WebGL keeps CPU-bound. Every leg sets up the same api and Caddies (about 3 minutes); the
-  # Chromium leg also holds the Chromium-only projects, with Lighthouse and fps last and alone (LIGHTHOUSE_AFTER).
-  # test/e2e-pins.test.ts checks that every Playwright project is in exactly one leg.
+  # 39574e4), which software WebGL keeps CPU-bound. #217: a fourth leg, owner-perf, takes the owner projects of Chromium
+  # and WebKit and the CVD and screens pictures, then Lighthouse and fps (`alone`: after the rest of the leg, one test at
+  # a time, so that nothing else is on the CPU). Every leg sets up the same api and Caddies; the api's seed (about 3
+  # minutes) runs while the e2e build, the tiles and the image pulls do. test/e2e-pins.test.ts checks that every
+  # Playwright project is in exactly one leg, and that Lighthouse and fps run alone.
   e2e:
     name: e2e (${{ matrix.browser }})
     runs-on: ubuntu-24.04
@@ -449,14 +473,19 @@ jobs:
       matrix:
         include:
           - browser: chromium
-            projects: chromium owner-chromium no-webgl2 cvd visual lighthouse fps
-            artifact: e2e-test-results
+            projects: chromium no-webgl2 visual
+            artifact: e2e-test-results-chromium
           - browser: firefox
             projects: firefox owner-firefox
             artifact: e2e-test-results-firefox
           - browser: webkit
-            projects: webkit owner-webkit
+            projects: webkit
             artifact: e2e-test-results-webkit
+          # The CVD, screens, Lighthouse and fps output keeps the artifact name it always had.
+          - browser: owner-perf
+            projects: owner-chromium owner-webkit cvd
+            alone: lighthouse fps
+            artifact: e2e-test-results
     permissions:
       contents: read
     services:
@@ -474,6 +503,7 @@ jobs:
       PLAYWRIGHT_IMAGE: mcr.microsoft.com/playwright:v1.64.0-noble@sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f
       DATABASE_URL: postgres://postgres:postgres@localhost:5432/rws?sslmode=disable
       E2E_PROJECTS: ${{ matrix.projects }}
+      E2E_ALONE: ${{ matrix.alone }}
     steps:
       - uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
@@ -490,9 +520,7 @@ jobs:
           scripts/install-pnpm.sh "$RUNNER_TEMP/pnpm"
           echo "$RUNNER_TEMP/pnpm/bin" >>"$GITHUB_PATH"
       - run: pnpm install --frozen-lockfile
-      - name: The e2e build (the production pages plus /_spike/ and /en/_spike/)
-        run: pnpm -F web build:e2e
-      - name: The e2e api on the runner (seeded throw-away database, fixed clock 2026-10-26T12:00Z) and its static files
+      - name: Start the e2e api on the runner (seeded throw-away database, fixed clock 2026-10-26T12:00Z) and its static files
         env:
           # P10a (C4): the docker0 gateway, which `--add-host=api:host-gateway` resolves to; the owner api (a second
           # listener of the same process) is on the runner's primary address, which the owner Caddy reaches as api-owner.
@@ -505,10 +533,28 @@ jobs:
         run: |
           E2E_OWNER_API_HOST=$(hostname -I | cut -d' ' -f1)
           export E2E_OWNER_API_HOST
+          # #217: it seeds while the next step builds. A server is never waited for: the steps below check its PID
+          # (`kill -0`), and the runner stops it with the job's other orphan processes.
           node apps/server/test/e2e/api.ts >"$RUNNER_TEMP/e2e-api.log" 2>&1 &
+          echo "$!" >"$RUNNER_TEMP/e2e-api.pid"
+      - name: While it seeds, the e2e build (the production pages plus /_spike/ and /en/_spike/), the tiles and the two images
+        run: |
+          set -euo pipefail
+          docker pull -q "$CADDY_IMAGE" >"$RUNNER_TEMP/pull-caddy.log" 2>&1 &
+          caddy_pull=$!
+          docker pull -q "$PLAYWRIGHT_IMAGE" >"$RUNNER_TEMP/pull-playwright.log" 2>&1 &
+          playwright_pull=$!
+          pnpm -F web build:e2e
+          node apps/web/e2e/prepare-tiles.ts "$RUNNER_TEMP/tiles" "$RUNNER_TEMP/rivers" "$RUNNER_TEMP/downloads"
+          if ! wait "$caddy_pull"; then cat "$RUNNER_TEMP/pull-caddy.log"; exit 1; fi
+          if ! wait "$playwright_pull"; then cat "$RUNNER_TEMP/pull-playwright.log"; exit 1; fi
+      - name: The e2e api is up
+        run: |
+          pid=$(cat "$RUNNER_TEMP/e2e-api.pid")
           # P11b: the seed and the public publish of nine settled days take about 3 minutes (174 s on a dev box).
           for _ in $(seq 1 300); do
             if grep -q '^e2e api listening' "$RUNNER_TEMP/e2e-api.log"; then exit 0; fi
+            kill -0 "$pid" 2>/dev/null || break
             sleep 1
           done
           cat "$RUNNER_TEMP/e2e-api.log"
@@ -520,7 +566,6 @@ jobs:
       - name: Serve it through the real Caddy image and site.caddy, in both phases (HTTPS on localhost:443 and :8444; api:8080 is the runner)
         run: |
           set -euo pipefail
-          node apps/web/e2e/prepare-tiles.ts "$RUNNER_TEMP/tiles" "$RUNNER_TEMP/rivers" "$RUNNER_TEMP/downloads"
           mkdir -p "$RUNNER_TEMP/ops"
           serve() { # name port RWS_DOMAIN phase
             docker run -d --name "$1" -p "127.0.0.1:$2:$2" --add-host=api:host-gateway \
@@ -590,22 +635,37 @@ jobs:
       # Headless Firefox finds no GL driver without an X display (FEATURE_FAILURE_WEBGL_EXHAUSTED_DRIVERS):
       # the image's own Xvfb gives it one, with Mesa's software renderer (ADR-0016). --init: xvfb-run waits for
       # Xvfb's ready signal, which a PID 1 never gets, so without an init process it hangs silently.
-      - name: Playwright (this leg's projects) in the pinned Playwright image
-        # The slowest leg's tests take about 13 minutes (the whole suite took 34 on one runner).
+      - name: Playwright (this leg's projects, then the ones that run alone) in the pinned Playwright image
+        # The slowest leg's step took 1,136 s before #217 (run 40115392921; the whole suite took 34 minutes on one runner).
         timeout-minutes: 30
         run: |
+          kill -0 "$(cat "$RUNNER_TEMP/e2e-api.pid")" || { echo "the e2e api is gone" >&2; tail -n 100 "$RUNNER_TEMP/e2e-api.log"; exit 1; }
           # P10a: the owner projects reach the owner Caddy (WebKit does not resolve *.localhost itself).
           # The password reaches the container by name only (-e E2E_OWNER_PW takes it from the step's environment).
+          pw() {
+            docker run --rm --init --network host --ipc=host \
+              --add-host owner.localhost:127.0.0.1 \
+              -e CI=true -e E2E_BASE_URL=https://localhost -e E2E_BASE_URL_LAUNCH=https://localhost:8444 \
+              -e E2E_OWNER_URL=https://owner.localhost:8443 -e E2E_OWNER_PW \
+              -v "$PWD:/work" -w /work/apps/web \
+              "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
+              node_modules/.bin/playwright test -c e2e/playwright.config.ts "$@"
+          }
           args=()
           for p in $E2E_PROJECTS; do args+=(--project="$p"); done
-          docker run --rm --init --network host --ipc=host \
-            --add-host owner.localhost:127.0.0.1 \
-            -e CI=true -e E2E_BASE_URL=https://localhost -e E2E_BASE_URL_LAUNCH=https://localhost:8444 \
-            -e E2E_OWNER_URL=https://owner.localhost:8443 -e E2E_OWNER_PW \
-            -v "$PWD:/work" -w /work/apps/web \
-            "$PLAYWRIGHT_IMAGE" xvfb-run --auto-servernum --server-args='-screen 0 1280x1024x24' \
-            node_modules/.bin/playwright test -c e2e/playwright.config.ts "${args[@]}"
-      # CVD screenshots, Lighthouse reports and each failed test's context (the Chromium leg keeps the old name).
+          rc=0
+          pw "${args[@]}" || rc=$?
+          if [ -n "$E2E_ALONE" ]; then
+            # #217: Lighthouse and fps after the rest of the leg, one test at a time (--workers=1), without their
+            # dependencies (LIGHTHOUSE_AFTER only orders them after the other Chromium projects, which other legs run).
+            # Their own output folder: a run empties its output folder first, and test-results/ holds the CVD and
+            # screens pictures of the run above.
+            alone=()
+            for p in $E2E_ALONE; do alone+=(--project="$p"); done
+            pw "${alone[@]}" --no-deps --workers=1 --output=test-results/alone || rc=$?
+          fi
+          exit "$rc"
+      # CVD screenshots, Lighthouse reports and each failed test's context (the owner-perf leg keeps the old name).
       - name: Upload the Playwright results
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -637,7 +697,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [check, integration, dbmate, bench, bench-4000, bench-q2, shellcheck, fresh-start, hook, deploy, e2e]
+    needs: [check, integration, dbmate, bench, bench-4000, bench-q2, shellcheck, fresh-start, hook, deploy-host, deploy, e2e]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}

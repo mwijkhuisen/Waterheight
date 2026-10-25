@@ -166,7 +166,7 @@ export async function applyForecasts(
   // last one (each run's points are sorted and never empty). The function refuses the union only when it would refuse
   // one of the runs (from before 2000, or past now + 400 days, with the same SQLSTATE; its 3,700-day rule cannot bite
   // while the end is within now + 400 days), and the transaction rolls back either way. It may create an empty month
-  // between two runs' ranges that per-run calls left out (KG-478).
+  // between two runs' ranges that per-run calls left out (KG-479).
   if (runs.length > 0) {
     const from = new Date(Math.min(...runs.map((r) => firstValid(r.run))));
     const to = new Date(Math.max(...runs.map((r) => lastValid(r.run))));

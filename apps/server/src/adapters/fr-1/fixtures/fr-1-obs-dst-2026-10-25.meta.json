@@ -1,0 +1,14 @@
+{
+  "spec": "fr-1-obs",
+  "variant": "default",
+  "source": "FR-1",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/FR-1/fr-1-obs/2026/10/25/031641Z-e480f4fbde3d570c.zst",
+  "recorded_at": "2026-10-25T03:16:00Z",
+  "status": 206,
+  "url": "https://hubeau.eaufrance.fr/api/v2/hydrometrie/observations_tr?code_entite=A*%2CB*%2CD*%2CE1*%2CE2*%2CE3*&size=20000&fields=code_site%2Ccode_station%2Cgrandeur_hydro%2Cdate_obs%2Cresultat_obs%2Ccode_qualification_obs%2Ccode_statut&date_debut_obs=2026-10-24T23%3A01%3A00Z",
+  "bytes": 3420057,
+  "source_sha256": "e480f4fbde3d570ccbb904305eb55880fd6234f7d9bbdd73a5a50d017faa53f3",
+  "trimmed": "the rows of data whose code_station is B720000001, all other keys kept (count stays the walk's total)"
+}

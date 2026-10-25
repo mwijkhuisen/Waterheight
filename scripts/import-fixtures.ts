@@ -1,12 +1,13 @@
 // Turns payloads the owner exported from the production raw archive (Action D2;
 // the read-only export command is in the P5a PR) into adapter fixtures:
 //
-//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b|--lu5-other] <export dir>
+//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b|--lu5-other|--dst] <export dir>
 //
 // (`--p5b`: the P5b export and its rules, `IMPORTS_P5B`; `--p7a`: `IMPORTS_P7A`; `--p8a`: the NL-1 forecast captures
 // of `IMPORTS_P8A`, whole bodies; `--p8a-maaseik`: the maaseik Q captures of `IMPORTS_P8A_MAASEIK`; `--p8b`: the
 // CH-4 and FR-4 forecasts of `IMPORTS_P8B`, whole bodies; `--lu5-other`: the LU-5 files of other senders of
-// `IMPORTS_LU5_OTHER` (#72), whole bodies; without a flag the P5a list.)
+// `IMPORTS_LU5_OTHER` (#72), whole bodies; `--dst`: the real DST night of 2026-10-25, `IMPORTS_DST` (#55), from
+// the two exports unpacked as `<export dir>/1` and `<export dir>/2`; without a flag the P5a list.)
 //
 // The export holds `<name>.raw` (the archived body) and `<name>.line.json` (its
 // manifest line). Each payload listed below is copied to
@@ -447,7 +448,105 @@ export function cutP7a(
   };
 }
 
-function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' | 'p8b' | 'lu5-other'): void {
+/** #55: the one station each DST subset keeps, the series the DST harness checks. */
+export const FR1_STATIONS: readonly string[] = ['B720000001'];
+export const NL2_CODES: readonly string[] = ['lobith.bovenrijn.tolkamer'];
+export const CH1_IDS: readonly string[] = ['2289'];
+
+type DstRule = 'whole' | 'lu1-rows' | 'de7-blocks' | 'fr1-stations' | 'nl2-codes' | 'ch1-rows';
+type Dst = {
+  name: string;
+  source: 'DE-1' | 'DE-7' | 'LU-1' | 'NL-1' | 'NL-2' | 'FR-1' | 'CH-1';
+  fixture: string;
+  rule: DstRule;
+  n?: number;
+};
+
+/** The payloads of one export whose names end in their fetch time (HHMM or HHMMSS), each a fixture `<stem>-2026-10-25t<HHMM>z`. */
+const stamped = (dir: '1' | '2', stem: string, source: Dst['source'], rule: DstRule, stamps: readonly string[]) =>
+  stamps.map((t) => ({ name: `${dir}/${stem}-${t}`, source, fixture: `${stem}-2026-10-25t${t.slice(0, 4)}z`, rule }));
+
+/**
+ * #55 (Actions D3 and D2, the owner's exports of 2026-10-25): the fall-back night of 2026-10-25 (the local hour
+ * 02:00–02:59 twice, from 01:00Z), the fixtures of `apps/server/test/adapters/dst-2026-10-25.test.ts`. Export 1
+ * (`p5b-dst-export.sh`, #55's body: the first payload of each source fetched after 03:00Z, and the NL-2 snapshots
+ * 00:55–02:05Z) is unpacked as `<export dir>/1`, export 2 (`p5b-dst-export-2.sh`, #55's verification comment: the
+ * NL-1 forecast captures before 23:50Z, the CH-1 snapshots 00:04–01:54Z, the NL-1 obs and FR-1 captures after 03:00Z)
+ * as `<export dir>/2`. Whole: DE-1 Perl W (PT6H), the NL-1 forecast capture of 23:25Z (NL-1 is never cut) and the NL-1
+ * obs captures of 02:51Z and 03:11Z (16 of the night's 18 instants each, all of them together). Cut: DE-7 and LU-1 by
+ * the P5b rules (LU-1's last `LU1_LABELS` labels hold both passes of 02:00–02:45); page 1 of the 03:16Z FR-1 run to
+ * the rows of `FR1_STATIONS` (it is sorted newest first across all stations, so no first or last n rows hold one
+ * station's night); each NL-2 snapshot to the features of `NL2_CODES` and each CH-1 snapshot to the rows of
+ * `CH1_IDS` (both are lists of the latest value per series).
+ */
+export const IMPORTS_DST: readonly Dst[] = [
+  { name: '1/de-1-series-dst', source: 'DE-1', fixture: 'de-1-series-dst-2026-10-25', rule: 'whole' },
+  { name: '1/de-7-messwerte-dst', source: 'DE-7', fixture: 'de-7-messwerte-dst-2026-10-25', rule: 'de7-blocks' },
+  { name: '1/lu-1-csv-dst', source: 'LU-1', fixture: 'lu-1-csv-dst-2026-10-25', rule: 'lu1-rows', n: LU1_LABELS },
+  ...stamped('1', 'nl-2-wfs-dst', 'NL-2', 'nl2-codes', [
+    '0055',
+    '0105',
+    '0115',
+    '0125',
+    '0135',
+    '0145',
+    '0155',
+    '0205',
+  ]),
+  { name: '2/nl-1-fc-1h-dst-232500', source: 'NL-1', fixture: 'nl-1-fc-1h-dst-2026-10-25', rule: 'whole' },
+  { name: '2/fr-1-obs-dst-031600', source: 'FR-1', fixture: 'fr-1-obs-dst-2026-10-25', rule: 'fr1-stations' },
+  ...stamped('2', 'nl-1-obs-key-dst', 'NL-1', 'whole', ['025100', '031100']),
+  ...stamped('2', 'ch-1-lindas-dst', 'CH-1', 'ch1-rows', [
+    '000400',
+    '001400',
+    '002400',
+    '003400',
+    '004400',
+    '010400',
+    '011400',
+    '012400',
+    '013400',
+    '014400',
+    '015400',
+  ]),
+];
+
+/** The body a #55 rule keeps, and what it says it kept (false: the archived bytes unchanged). */
+export function cutDst(rule: DstRule, raw: Buffer, n = 0): { body: Buffer; trimmed: string | false } {
+  if (rule === 'whole') return { body: raw, trimmed: false };
+  if (rule === 'lu1-rows' || rule === 'de7-blocks') return cutP5b(rule, raw, n);
+  if (rule === 'ch1-rows') {
+    const { lines: all, eol } = lines(raw.toString('utf8'));
+    const rows = all.slice(1).filter((l) => CH1_IDS.includes(l.slice(0, l.indexOf(','))));
+    return {
+      body: Buffer.from(join_([all[0] as string, ...rows], eol)),
+      trimmed: `the header and the rows whose id is ${CH1_IDS.join(', ')}`,
+    };
+  }
+  const doc = JSON.parse(raw.toString('utf8')) as Doc;
+  if (rule === 'fr1-stations') {
+    doc.data = (doc.data as Doc[]).filter((r) => FR1_STATIONS.includes(r.code_station as string));
+    return {
+      body: Buffer.from(JSON.stringify(doc)),
+      trimmed: `the rows of data whose code_station is ${FR1_STATIONS.join(', ')}, all other keys kept (count stays the walk's total)`,
+    };
+  }
+  if (rule === 'nl2-codes') {
+    // A snapshot whose counts differ from its features is refused as paged (parseCollection), so they follow.
+    const features = (doc.features as { properties: Doc }[]).filter((f) =>
+      NL2_CODES.includes(f.properties.CODE as string),
+    );
+    const count = features.length;
+    Object.assign(doc, { features, totalFeatures: count, numberMatched: count, numberReturned: count });
+    return {
+      body: Buffer.from(JSON.stringify(doc)),
+      trimmed: `the features whose properties.CODE is ${NL2_CODES.join(', ')}, with totalFeatures, numberMatched and numberReturned set to their count, all other keys kept`,
+    };
+  }
+  throw new Error(`no rule ${rule satisfies never}`);
+}
+
+function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' | 'p8b' | 'lu5-other' | 'dst'): void {
   type Entry = {
     name: string;
     source: string;
@@ -465,18 +564,21 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' |
     'p8a-maaseik': IMPORTS_P8A_MAASEIK,
     p8b: IMPORTS_P8B,
     'lu5-other': IMPORTS_LU5_OTHER,
+    dst: IMPORTS_DST,
   };
-  const list = lists[mode];
-  for (const { name, source, fixture, keep, last, rule, n } of list) {
+  // Every body is read, checked and cut before the first write, so a bad export leaves the tree as it was (#55 SR-1).
+  const outs = lists[mode].map(({ name, source, fixture, keep, last, rule, n }) => {
     const raw = readFileSync(join(dir, `${name}.raw`));
     const line = JSON.parse(readFileSync(join(dir, `${name}.line.json`), 'utf8')) as Line;
     if (sha256(raw) !== line.sha256) throw new Error(`${name}: the body is not the archived object (sha256)`);
     const { body, trimmed } =
       mode === 'p7a'
         ? cutP7a(rule as (typeof IMPORTS_P7A)[number]['rule'], raw)
-        : rule === undefined
-          ? cut(source as Import['source'], raw, keep, last === true)
-          : cutP5b(rule as (typeof IMPORTS_P5B)[number]['rule'], raw, n);
+        : mode === 'dst'
+          ? cutDst(rule as DstRule, raw, n)
+          : rule === undefined
+            ? cut(source as Import['source'], raw, keep, last === true)
+            : cutP5b(rule as (typeof IMPORTS_P5B)[number]['rule'], raw, n);
     const meta = {
       spec: line.spec,
       variant: line.variant,
@@ -492,10 +594,13 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' |
       source_sha256: line.sha256,
       trimmed,
     };
+    return { source, fixture, body, meta, trimmed, key: line.key };
+  });
+  for (const { source, fixture, body, meta, trimmed, key } of outs) {
     const out = join(root, 'apps/server/src/adapters', source.toLowerCase(), 'fixtures');
     writeFileSync(join(out, `${fixture}.raw`), body);
     writeFileSync(join(out, `${fixture}.meta.json`), `${JSON.stringify(meta, null, 2)}\n`);
-    console.log(`${fixture}: ${body.length} B${trimmed === false ? '' : ` (${trimmed})`} ← ${line.key}`);
+    console.log(`${fixture}: ${body.length} B${trimmed === false ? '' : ` (${trimmed})`} ← ${key}`);
   }
 }
 
@@ -508,12 +613,13 @@ if (import.meta.main) {
     '--p8a-maaseik': 'p8a-maaseik',
     '--p8b': 'p8b',
     '--lu5-other': 'lu5-other',
+    '--dst': 'dst',
   } as const;
   const mode = flag !== undefined && Object.hasOwn(modes, flag) ? modes[flag as keyof typeof modes] : 'p5a';
   const dir = process.argv[mode === 'p5a' ? 2 : 3];
   if (dir === undefined) {
     console.error(
-      'usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b|--lu5-other] <export dir>',
+      'usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b|--lu5-other|--dst] <export dir>',
     );
     process.exitCode = 64;
   } else main(dir, mode);

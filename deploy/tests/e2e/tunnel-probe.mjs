@@ -113,17 +113,13 @@ check(
 // One marked request for tunnel.sh's log check: the masked client_ip must be 198.51.100.0, the peer 172.30.41.0.
 await get('/tunnel-probe-xff', { 'x-forwarded-for': '6.6.6.6, 198.51.100.9' });
 
-// Nothing but caddy:80 and Cloudflare: the internal services, the host and the outside.
-for (const t of list('PROBE_CLOSED')) {
-  const r = await connect(t);
-  check(r !== 'open', `${t}: ${r} (must not connect)`);
-}
-for (const t of list('PROBE_DROPPED')) {
-  const r = await connect(t);
-  check(r === 'timeout', `${t}: ${r} (the firewall drops it)`);
-}
-for (const t of list('PROBE_REFUSED')) {
-  const r = await connect(t);
-  check(r === 'refused', `${t}: ${r} (the firewall lets it out; nothing listens)`);
-}
+// Nothing but caddy:80 and Cloudflare: the internal services, the host and the outside. The attempts run at once (each
+// waits up to 4 s; #217), then every one is checked in this order.
+const probes = [
+  ...list('PROBE_CLOSED').map((t) => [t, (r) => r !== 'open', 'must not connect']),
+  ...list('PROBE_DROPPED').map((t) => [t, (r) => r === 'timeout', 'the firewall drops it']),
+  ...list('PROBE_REFUSED').map((t) => [t, (r) => r === 'refused', 'the firewall lets it out; nothing listens']),
+];
+const results = await Promise.all(probes.map(([t]) => connect(t)));
+for (const [i, [t, ok, why]] of probes.entries()) check(ok(results[i]), `${t}: ${results[i]} (${why})`);
 agent.destroy();

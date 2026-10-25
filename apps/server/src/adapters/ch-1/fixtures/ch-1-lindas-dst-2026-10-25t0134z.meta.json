@@ -1,0 +1,14 @@
+{
+  "spec": "ch-1-lindas",
+  "variant": "river",
+  "source": "CH-1",
+  "synthetic": false,
+  "from": "archive",
+  "archive_key": "raw/CH-1/ch-1-lindas/2026/10/25/013400Z-19d5900443aa8088.zst",
+  "recorded_at": "2026-10-25T01:34:00Z",
+  "status": 200,
+  "url": "https://ld.admin.ch/query",
+  "bytes": 35195,
+  "source_sha256": "19d5900443aa808812329ce4c1556c693e1d4104592528629ff8f63bf38c5f53",
+  "trimmed": "the header and the rows whose id is 2289"
+}

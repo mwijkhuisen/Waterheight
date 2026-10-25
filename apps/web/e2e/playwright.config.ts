@@ -58,8 +58,9 @@ const chromium = { ...devices['Desktop Chrome'], viewport };
 const webkit = { ...devices['Desktop Safari'], viewport };
 
 // The projects Lighthouse waits for, so that it measures with no other browser on the CPU (see `workers`). Only the
-// Chromium ones: CI runs Firefox and WebKit on runners of their own (ci.yml, the e2e legs), and a dependency on them
-// would pull them into the Chromium leg. A local run of every project can overlap them; `--project=lighthouse` cannot.
+// Chromium ones: a local run of every project can still overlap Firefox and WebKit; `--project=lighthouse` cannot. CI
+// (#217) runs lighthouse and fps in the owner-perf leg after the rest of that leg, with --no-deps and --workers=1
+// (ci.yml), so that these dependencies never pull the chromium leg's projects in.
 const LIGHTHOUSE_AFTER = [
   'chromium',
   'no-webgl2',
@@ -133,7 +134,7 @@ export default defineConfig({
           // Lighthouse (C8): the spec starts Playwright's Chromium itself with --remote-debugging-port=9222 and
           // --ignore-certificate-errors, because a browser Playwright launches has no debugging port (lighthouse.spec.ts).
           // It runs after the other Chromium projects (`dependencies`, LIGHTHOUSE_AFTER), alone, so parallel workers
-          // never skew its scores; to run it on its own, add --no-deps.
+          // never skew its scores; to run it on its own, add --no-deps (CI does, with --workers=1).
           {
             name: 'lighthouse',
             testMatch: /lighthouse\.spec\.ts$/,
