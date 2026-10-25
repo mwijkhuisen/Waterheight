@@ -174,7 +174,9 @@ describe('the real DST set of 2026-10-25', () => {
         instants.push(latest);
       }
       if (snapshots === true) {
-        // Never back: a label put on the wrong pass of the repeated hour is an hour off.
+        // Never back: a label put on the wrong pass of the repeated hour is an hour off. The 70-minute window
+        // (A§7.4 step 2) alone would let an earlier-pass instant through when the true lag is under 10 minutes (here
+        // 14–25); this ordering catches it at any lag, once a snapshot of the same pass precedes it.
         const all = instants.flat().map(iso);
         expect(all).toEqual(all.toSorted());
         return;
@@ -182,12 +184,13 @@ describe('the real DST set of 2026-10-25', () => {
       const grid = Array.from({ length: (TO - FROM) / (stepMin * MIN) }, (_, i) => iso(FROM + i * stepMin * MIN));
       for (const [i, ts] of instants.entries()) {
         const got = ts.map(iso);
-        // Each payload: on the grid, and each instant once.
-        expect([fixtures[i], got.filter((t) => !grid.includes(t)), got.length - new Set(got).size]).toEqual([
+        // Each payload: instants in the window (no capture rides on another), on the grid, and each one once.
+        expect([
           fixtures[i],
-          [],
-          0,
-        ]);
+          got.length > 0,
+          got.filter((t) => !grid.includes(t)),
+          got.length - new Set(got).size,
+        ]).toEqual([fixtures[i], true, [], 0]);
       }
       // All payloads together: the whole grid, none missing.
       expect([...new Set(instants.flat())].sort((a, b) => a - b).map(iso)).toEqual(grid);
