@@ -40,10 +40,7 @@ describe('once (render/series.ts)', () => {
 
   it('does not keep a read that failed: the next call reads again, and keeps that one', async () => {
     const c = ctx();
-    const read = vi
-      .fn<() => Promise<string>>()
-      .mockRejectedValueOnce(new Error('connection'))
-      .mockResolvedValue('ok');
+    const read = vi.fn<() => Promise<string>>().mockRejectedValueOnce(new Error('connection')).mockResolvedValue('ok');
     await expect(once(c, 'k', read)).rejects.toThrow('connection');
     expect(await once(c, 'k', read)).toBe('ok');
     expect(await once(c, 'k', read)).toBe('ok');
