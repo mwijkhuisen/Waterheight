@@ -4,6 +4,12 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## O1, the CI gate and the dev loop (#217)
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-477 | ci | **The O1 targets are only partly met (measured, CI run 40173880746 on d7dd54a):** the longest job is now the webkit leg (19.8 min; its Playwright step 945 s for the one `webkit` project, about 1,850 test-s on 2 workers), so the ≤ 19 min gate target is missed on a slow runner; `test/contract-check.test.ts` takes 26.8–29.5 s in CI against the 20 s target (CLI spawns and the real recordings, about 16 s locally); and that run's gate was 29.3 min because its jobs queued 2 to 13 min at the account's concurrent-job limit (a Dependabot PR's ci, loadtest and release runs at the same time), which the two extra jobs (`deploy-host`, the fourth e2e leg) add to. | A sharded webkit leg, Playwright workers 2 → 3 or Vitest's worker count (measure first; out of #217's scope); the owner accepts the residuals | open [U] |
+
 ## #213 NL-1 placeholder values
 
 | ID | Area | Gap | What closes it / who | Status |
