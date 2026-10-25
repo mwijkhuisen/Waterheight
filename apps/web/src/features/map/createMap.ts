@@ -80,6 +80,8 @@ export async function createMap(
       locale: mapLocale(lang),
       ...options,
     });
+    // O4 (#220): the base map's first idle (style + first tiles; no data) is the time-to-map mark of e2e/time-to-map.spec.ts.
+    map.once('idle', () => performance.mark('rws:map-idle'));
     // #205: zoom buttons without a compass, so nothing may rotate the map (there is no reset-north): `dragRotate` is off
     // in the options, the touch twist and Shift+arrow here. The buttons' words are mapLocale's.
     map.touchZoomRotate.disableRotation();
