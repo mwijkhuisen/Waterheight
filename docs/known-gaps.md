@@ -284,7 +284,7 @@ What P10f leaves (PHASES §47). It closes KG-326 and rewrites KG-245.
 
 | ID | Area | Gap | What closes it / who | Status |
 |---|---|---|---|---|
-| KG-338 | web, ci | **The four visual baselines show the old top bar.** `dst-0000z`, `dst-0100z`, `flood-q` and `lowwater-delta` of `apps/web/e2e/visual.spec.ts` include the name and the mark, so the `visual` project fails until they are regenerated: CI writes the new PNGs on the first run (artifact `e2e-test-results`) | The owner looks at the four PNGs, then they are committed to `apps/web/e2e/visual/__screenshots__/` (the CLAUDE.md rule for baselines) | open |
+| KG-338 | web, ci | **The four visual baselines show the old top bar.** `dst-0000z`, `dst-0100z`, `flood-q` and `lowwater-delta` of `apps/web/e2e/visual.spec.ts` include the name and the mark, so the `visual` project fails until they are regenerated: CI writes the new PNGs on the first run (artifact `e2e-visual-baselines`; the diffs in `e2e-test-results-chromium` since #217, `e2e-test-results` before) | The owner looks at the four PNGs, then they are committed to `apps/web/e2e/visual/__screenshots__/` (the CLAUDE.md rule for baselines) | open |
 
 ## #132 Caddy memory and the per-source connection cap
 
