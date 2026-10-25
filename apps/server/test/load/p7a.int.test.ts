@@ -1,8 +1,11 @@
 import { readFileSync } from 'node:fs';
+import { Kysely, PostgresDialect } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildP7aFixtureArchive, recorded, writePayload } from '../../../../scripts/fixture-archive.ts';
 import { VIEWS } from '../../src/db/audience.ts';
+import type { DB } from '../../src/db/generated.ts';
 import { computeHealth } from '../../src/load/health.ts';
+import { Loader } from '../../src/load/pipeline.ts';
 import { parsedOkIn } from '../../src/load/prune.ts';
 import { replay } from '../../src/load/replay.ts';
 import { type Harness, harness } from './harness.ts';
@@ -524,5 +527,47 @@ describe('P7a through the loader', { timeout: 300_000 }, () => {
     );
     expect(h.alerts.map((a) => [a.code, a.fields.code])).toEqual(senders.map(() => ['quarantined', 'not_cap']));
     expect(await q("SELECT count(*)::int AS n FROM warning_area WHERE source_id = 'LU-5'")).toEqual([{ n: 19 }]);
+  });
+
+  it('#218: a ch-2-pq payload that re-states every reference confirms them in one statement, seen_* as before', async () => {
+    // The recorded body once more, after its 12:00 load above: it is the newest statement of every open CH-2 range
+    // (the archive's only CH-2 payload), so each is a confirmation.
+    const wl = recorded('ch-2-pq-relative', 'CH-2');
+    const when = new Date('2026-10-04T13:00:00Z');
+    await writePayload(h.archive, {
+      source: 'CH-2',
+      spec: 'ch-2-pq',
+      variant: 'default',
+      at: when,
+      body: wl.body,
+      url: wl.url,
+      retention: 'forever',
+    });
+    const open = `SELECT count(*)::int AS n,
+                         count(*) FILTER (WHERE seen_at = $1 AND seen_batch = $2::bigint)::int AS confirmed
+                  FROM reference_value WHERE source_id = 'CH-2' AND upper_inf(valid)`;
+    const [before] = await q(open, [when, 0]);
+    // The loader on a second Kysely over its pool that counts the confirming statements, in either form (one per key
+    // before #218, one per payload now); never destroyed, it shares the pool.
+    let confirms = 0;
+    const db = new Kysely<DB>({
+      dialect: new PostgresDialect({ pool: h.load.pool }),
+      log: (e) => {
+        if (e.level === 'query' && /UPDATE reference_value(\s+rv)?\s+SET seen_at/.test(e.query.sql)) confirms++;
+      },
+    });
+    await new Loader({ db, reader: h.reader, alert: () => undefined, now: () => LATER }).tick();
+    const [batch] = await q(
+      "SELECT id::text AS id, parse_status, n_new, n_changed FROM ingest_batch WHERE source_id = 'CH-2' AND fetched_at = $1",
+      [when],
+    );
+    expect(batch).toMatchObject({ parse_status: 'ok', n_new: 0, n_changed: 0 });
+    // The recorded subset: 8 open ranges (production re-states WL2–WL5 of every CH-1 station).
+    expect((before as Row).n).toBeGreaterThan(1);
+    expect((await q(open, [when, (batch as Row).id]))[0]).toEqual({
+      n: (before as Row).n,
+      confirmed: (before as Row).n,
+    });
+    expect(confirms).toBe(1);
   });
 });
