@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { AxeBuilder } from '@axe-core/playwright';
 import { type BrowserContext, expect, type Locator, type Page } from '@playwright/test';
+import { routeOf } from '../src/lib/routes.ts';
 import { expectClean, instrument, type Log } from './clean.ts';
 
 // Helpers of the P10a specs (p10a, owner, no-webgl2, cvd): the "clean page" session, the e2e build's test hook
@@ -323,11 +324,14 @@ export async function mapReady(page: Page) {
 }
 
 /**
- * O4 (#220): the station panel is a lazy chunk, so with `s=` in the URL the aside may not exist yet, and "0 charts ===
- * 0 panels" would hold vacuously. Wait for it (a station the page does not know has no panel: do not call this for it).
+ * O4 (#220): the station panel is a lazy chunk, so with `s=` in the home route's URL the aside may not exist yet, and
+ * "0 charts === 0 panels" would hold vacuously. Wait for it (a station the page does not know has no panel: do not call
+ * this for it). Only the home route has a panel; an information page keeps `s=` in its view links.
  */
 async function panelMounted(page: Page) {
-  if (new URL(page.url()).searchParams.has('s')) await expect(panelOf(page).first()).toBeAttached();
+  const url = new URL(page.url());
+  if (url.searchParams.has('s') && routeOf(url.pathname)?.id === 'home')
+    await expect(panelOf(page).first()).toBeAttached();
 }
 
 /** The values on screen are those of the page's t (nothing is marked busy) and every chart has drawn its points. */
