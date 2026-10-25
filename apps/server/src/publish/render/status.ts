@@ -1,17 +1,19 @@
 import { constants } from 'node:fs';
 import { open } from 'node:fs/promises';
 import { join } from 'node:path';
-import { type ClassCoverage, type ForecastCoverage, floorBucket } from '@rws/contracts';
+import type { ClassCoverage, ForecastCoverage } from '@rws/contracts';
 import { z } from 'zod';
 import { forecastCoverage } from '../../api/forecast.ts';
-import { Detail, lastCommit, latestTwinChecks, loaderRow, ownerCounts, sourceRows } from '../../api/health.ts';
-import { classCoverage, readStates } from '../../api/states.ts';
+import { Detail, latestTwinChecks, loaderRow, ownerCounts, sourceRows } from '../../api/health.ts';
+import { classCoverage } from '../../api/states.ts';
 import { iso, snapshot } from '../../api/util.ts';
-import { attributionFor, sourceDates } from '../../attribution.ts';
+import { attributionFor } from '../../attribution.ts';
 import { CaptureStatus } from '../../capture/status.ts';
 import { errorCode } from '../../db/pool.ts';
 import type { PublisherStatus, RenderCtx } from '../cycle.ts';
-import { familySources } from './sources.ts';
+import { commitOf, datesOf } from './series.ts';
+import { statesNow } from './snapshot.ts';
+import { familySourcesOf } from './sources.ts';
 
 // P9a (A§11.3): status.json, which absorbs /status/capture.json and /status/ops.json. Coarse on purpose: states, times
 // and counts; no URL, host, version, address or error text ever leaves (the capture and ops files are mapped field by
@@ -81,22 +83,25 @@ const orNull = async <T>(read: () => Promise<T>, log?: RenderCtx['log']): Promis
   }
 };
 
+/**
+ * #218: the loader's last commit, the source dates and the classification are the cycle's own reads, made when
+ * latest.json was rendered (the same instant latest.json and meta.latestFrom describe); the source, twin and loader
+ * rows are read here, at the end of the cycle.
+ */
 export async function status(c: RenderCtx, p: PublisherStatus): Promise<unknown> {
   const now = new Date(c.now);
-  const t = floorBucket(c.now);
-  const opts = { now: c.now, current: true, sections: c.sections, cache: c.cache };
   const isPublic = c.family === 'public';
 
   const read = await snapshot(c.db, async (tx) => ({
     rows: await sourceRows(tx, c.family),
     twins: await latestTwinChecks(tx, c.family, now),
-    commit: await lastCommit(tx, c.family, now),
     // The public family only (the owner role cannot read these views).
     owner: isPublic ? await ownerCounts(tx) : null,
     loader: isPublic ? await loaderRow(tx) : undefined,
   }));
-  const known = new Set((await familySources(c.db, c.family)).map((s) => s.id));
-  const dates = await sourceDates(c.db, c.family, c.attribution);
+  const commit = await commitOf(c);
+  const known = new Set((await familySourcesOf(c)).map((s) => s.id));
+  const dates = await datesOf(c);
 
   const sources = read.rows.map((r) => {
     const d = Detail.safeParse(r.detail);
@@ -129,7 +134,7 @@ export async function status(c: RenderCtx, p: PublisherStatus): Promise<unknown>
     twins: { ok: read.twins.filter((x) => x.ok).length, failing: read.twins.filter((x) => !x.ok).length },
     ops: opsOf(await readInput(c.inputs, 'ops.json')),
     loader: {
-      lastCommit: iso(read.commit),
+      lastCommit: iso(commit),
       lagP95S: lags.length === 0 ? null : Math.max(...lags),
       backlogAgeS: read.loader?.backlog_age_s ?? null,
     },
@@ -144,14 +149,14 @@ export async function status(c: RenderCtx, p: PublisherStatus): Promise<unknown>
   if (isPublic) {
     return {
       ...body,
-      classification: await orNull(async () => classCoverage(await readStates(c.db, 'public', t, opts)), c.log),
+      classification: await orNull(async () => classCoverage(await statesNow(c)), c.log),
       forecastCoverage: await orNull(() => forecastCoverage(c.db, 'public', c.now), c.log),
       ownerSources: read.owner ?? { healthy: 0, total: 0 },
     };
   }
   // The owner role cannot read the public-only views, so the "public" half of the owner file is the owner read
   // restricted to the public series (and the stations that have one), and forecastCoverage's public split.
-  const states = await orNull(() => readStates(c.db, 'owner', t, opts), c.log);
+  const states = await orNull(() => statesNow(c), c.log);
   const pub = (s: NonNullable<typeof states>): ClassCoverage => {
     const series = s.series.filter((x) => s.publicSeries.has(x.series));
     const stations = new Set(series.map((x) => x.station));

@@ -203,6 +203,26 @@ export type UpsertMode = 'live' | 'fill' | 'backfill';
 type Series = Pick<SeriesRow, 'id' | 'off' | 'sameAudience' | 'staleness_ms' | 'aggregate'>;
 
 /**
+ * Each series' staleness limit and the provider aggregate series of a registry map, built once per map (#218): the
+ * loader reads a source's map once a process (seriesOf), and `off` and `sameAudience` come from the same map.
+ */
+const derivedOf = new WeakMap<
+  ReadonlyMap<string, Series>,
+  { staleness: ReadonlyMap<number, number>; aggregates: ReadonlySet<number> }
+>();
+function derived(ids: ReadonlyMap<string, Series>) {
+  let d = derivedOf.get(ids);
+  if (d === undefined) {
+    d = {
+      staleness: new Map([...ids.values()].map((s) => [s.id, s.staleness_ms])),
+      aggregates: new Set([...ids.values()].flatMap((s) => (s.aggregate === undefined ? [] : [s.id]))),
+    };
+    derivedOf.set(ids, d);
+  }
+  return d;
+}
+
+/**
  * Q6: the idempotent upsert with its revision log, plus obs_latest and the
  * rollups of the touched buckets. Rules that keep it correct:
  *  - the input is `real[]`, so a value is compared as the type it is stored in;
@@ -410,58 +430,58 @@ export async function upsertObs(
   const changed = written.filter((w) => w.changed);
   if (changed.length === 0) return { ...none, writes: written.length, skipped };
   // P9a: a changed value at ts is what every bucket up to ts + the staleness limit shows (LOCF).
-  const staleness = new Map([...ids.values()].map((s) => [s.id, s.staleness_ms]));
   // P14b: an aggregate series (role twin) is in no published file, so its change dirties nothing.
-  const aggregates = new Set([...ids.values()].flatMap((s) => (s.aggregate === undefined ? [] : [s.id])));
+  const { staleness, aggregates } = derived(ids);
   for (const w of changed) {
     if (aggregates.has(w.series_id)) continue;
     const at = w.ts.getTime();
     touched.push({ series: w.series_id, from: at, to: at + (staleness.get(w.series_id) ?? 0) });
   }
 
-  const wSid = changed.map((w) => w.series_id);
-  // P14b: a provider's daily aggregate (FR-2 QmnJ, HIXnJ) is in no rollup of ours.
-  const notAggregate = sql`NOT EXISTS (SELECT 1 FROM series s WHERE s.id = w.series_id AND s.aggregate IS NOT NULL)`;
-  const wTs = changed.map((w) => w.ts);
-  // The rollups of every (series, bucket) this batch touched, recomputed from obs (catalogue §6.4 query 3). The
-  // `date_bin(o.ts) = t.bucket` the range implies is a hash key (#190): with a low estimate for obs (fresh partitions)
-  // the planner hashed on series_id alone and range-filtered every (bucket, row) pair of a series, 1.5 s for 15,000 rows.
-  await sql`
-    INSERT INTO obs_1h AS r (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
-    SELECT o.series_id, t.bucket, min(o.value), max(o.value), avg(o.value)::real,
-           (array_agg(o.value ORDER BY o.ts DESC))[1], count(*)::int, bit_or(o.qc)
-    FROM (SELECT DISTINCT w.series_id, date_bin('1 hour', w.ts, ${ORIGIN}) AS bucket
-          FROM unnest(${wSid}::int[], ${wTs}::timestamptz[]) AS w(series_id, ts)
-          WHERE ${notAggregate}) t
-    JOIN obs o ON o.series_id = t.series_id AND o.ts >= t.bucket AND o.ts < t.bucket + interval '1 hour'
-              AND date_bin('1 hour', o.ts, ${ORIGIN}) = t.bucket
-              AND o.ts >= ${dayFrom}::timestamptz AND o.ts < ${dayUntil}::timestamptz
-    GROUP BY o.series_id, t.bucket
-    ON CONFLICT (series_id, bucket) DO UPDATE
-      SET vmin = EXCLUDED.vmin, vmax = EXCLUDED.vmax, vavg = EXCLUDED.vavg, vlast = EXCLUDED.vlast,
-          n = EXCLUDED.n, qc_or = EXCLUDED.qc_or
-      WHERE (r.vmin, r.vmax, r.vavg, r.vlast, r.n, r.qc_or)
-            IS DISTINCT FROM (EXCLUDED.vmin, EXCLUDED.vmax, EXCLUDED.vavg, EXCLUDED.vlast, EXCLUDED.n, EXCLUDED.qc_or)`.execute(
-    tx,
-  );
-  await sql`
-    INSERT INTO obs_1d AS r (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
-    SELECT o.series_id, t.bucket, min(o.value), max(o.value), avg(o.value)::real,
-           (array_agg(o.value ORDER BY o.ts DESC))[1], count(*)::int, bit_or(o.qc)
-    FROM (SELECT DISTINCT w.series_id, date_bin('1 day', w.ts, ${ORIGIN}) AS bucket
-          FROM unnest(${wSid}::int[], ${wTs}::timestamptz[]) AS w(series_id, ts)
-          WHERE ${notAggregate}) t
-    JOIN obs o ON o.series_id = t.series_id AND o.ts >= t.bucket AND o.ts < t.bucket + interval '1 day'
-              AND date_bin('1 day', o.ts, ${ORIGIN}) = t.bucket
-              AND o.ts >= ${dayFrom}::timestamptz AND o.ts < ${dayUntil}::timestamptz
-    GROUP BY o.series_id, t.bucket
-    ON CONFLICT (series_id, bucket) DO UPDATE
-      SET vmin = EXCLUDED.vmin, vmax = EXCLUDED.vmax, vavg = EXCLUDED.vavg, vlast = EXCLUDED.vlast,
-          n = EXCLUDED.n, qc_or = EXCLUDED.qc_or
-      WHERE (r.vmin, r.vmax, r.vavg, r.vlast, r.n, r.qc_or)
-            IS DISTINCT FROM (EXCLUDED.vmin, EXCLUDED.vmax, EXCLUDED.vavg, EXCLUDED.vlast, EXCLUDED.n, EXCLUDED.qc_or)`.execute(
-    tx,
-  );
+  // P14b: a provider's daily aggregate (FR-2 QmnJ, HIXnJ) is in no rollup of ours: the registry map says which, as
+  // for the dirty rows above (#218: no per-row NOT EXISTS on series), and a batch of aggregates alone recomputes none.
+  const rolled = changed.filter((w) => !aggregates.has(w.series_id));
+  if (rolled.length > 0) {
+    const wSid = rolled.map((w) => w.series_id);
+    const wTs = rolled.map((w) => w.ts);
+    // The rollups of every (series, bucket) this batch touched, recomputed from obs (catalogue §6.4 query 3). The
+    // `date_bin(o.ts) = t.bucket` the range implies is a hash key (#190): with a low estimate for obs (fresh partitions)
+    // the planner hashed on series_id alone and range-filtered every (bucket, row) pair of a series, 1.5 s for 15,000 rows.
+    await sql`
+      INSERT INTO obs_1h AS r (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
+      SELECT o.series_id, t.bucket, min(o.value), max(o.value), avg(o.value)::real,
+             (array_agg(o.value ORDER BY o.ts DESC))[1], count(*)::int, bit_or(o.qc)
+      FROM (SELECT DISTINCT w.series_id, date_bin('1 hour', w.ts, ${ORIGIN}) AS bucket
+            FROM unnest(${wSid}::int[], ${wTs}::timestamptz[]) AS w(series_id, ts)) t
+      JOIN obs o ON o.series_id = t.series_id AND o.ts >= t.bucket AND o.ts < t.bucket + interval '1 hour'
+                AND date_bin('1 hour', o.ts, ${ORIGIN}) = t.bucket
+                AND o.ts >= ${dayFrom}::timestamptz AND o.ts < ${dayUntil}::timestamptz
+      GROUP BY o.series_id, t.bucket
+      ON CONFLICT (series_id, bucket) DO UPDATE
+        SET vmin = EXCLUDED.vmin, vmax = EXCLUDED.vmax, vavg = EXCLUDED.vavg, vlast = EXCLUDED.vlast,
+            n = EXCLUDED.n, qc_or = EXCLUDED.qc_or
+        WHERE (r.vmin, r.vmax, r.vavg, r.vlast, r.n, r.qc_or)
+              IS DISTINCT FROM (EXCLUDED.vmin, EXCLUDED.vmax, EXCLUDED.vavg, EXCLUDED.vlast, EXCLUDED.n, EXCLUDED.qc_or)`.execute(
+      tx,
+    );
+    await sql`
+      INSERT INTO obs_1d AS r (series_id, bucket, vmin, vmax, vavg, vlast, n, qc_or)
+      SELECT o.series_id, t.bucket, min(o.value), max(o.value), avg(o.value)::real,
+             (array_agg(o.value ORDER BY o.ts DESC))[1], count(*)::int, bit_or(o.qc)
+      FROM (SELECT DISTINCT w.series_id, date_bin('1 day', w.ts, ${ORIGIN}) AS bucket
+            FROM unnest(${wSid}::int[], ${wTs}::timestamptz[]) AS w(series_id, ts)) t
+      JOIN obs o ON o.series_id = t.series_id AND o.ts >= t.bucket AND o.ts < t.bucket + interval '1 day'
+                AND date_bin('1 day', o.ts, ${ORIGIN}) = t.bucket
+                AND o.ts >= ${dayFrom}::timestamptz AND o.ts < ${dayUntil}::timestamptz
+      GROUP BY o.series_id, t.bucket
+      ON CONFLICT (series_id, bucket) DO UPDATE
+        SET vmin = EXCLUDED.vmin, vmax = EXCLUDED.vmax, vavg = EXCLUDED.vavg, vlast = EXCLUDED.vlast,
+            n = EXCLUDED.n, qc_or = EXCLUDED.qc_or
+        WHERE (r.vmin, r.vmax, r.vavg, r.vlast, r.n, r.qc_or)
+              IS DISTINCT FROM (EXCLUDED.vmin, EXCLUDED.vmax, EXCLUDED.vavg, EXCLUDED.vlast, EXCLUDED.n, EXCLUDED.qc_or)`.execute(
+      tx,
+    );
+  }
 
   const mine = changed.filter((w) => counted.has(w.series_id));
   let newest: Date | null = null;

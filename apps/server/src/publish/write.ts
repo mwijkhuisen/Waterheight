@@ -124,11 +124,11 @@ export class Output {
   }
 
   /**
-   * JSON-encodes `body` and writes it if changed; returns the bytes written (0: unchanged). An immutable file
+   * Writes `text` (a JSON document) if changed; returns the bytes written (0: unchanged). An immutable file
    * (settled, frames of a day, a dated warnings file) is written once and not remembered (`remember` false).
    */
-  async put(rel: string, body: unknown, remember = true): Promise<number> {
-    const bytes = Buffer.from(JSON.stringify(body));
+  async put(rel: string, text: string, remember = true): Promise<number> {
+    const bytes = Buffer.from(text);
     const hash = createHash('sha256').update(bytes).digest('hex');
     if (this.#hashes.get(rel) === hash) return 0;
     await writeAtomic(this.root, rel, bytes);

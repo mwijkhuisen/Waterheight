@@ -115,6 +115,9 @@ export async function applyReferences(
           seen_batch = ${batch}::bigint
         WHERE ${where(r, lo)}`.execute(tx);
 
+  // #218: the unchanged keys, confirmed by one statement after the loop (ch-2-pq re-states WL2–WL5 of every CH-1
+  // station every 10 min, under the loader lock). None of them is written by another statement of this payload.
+  const confirmed: { r: ResolvedRef; lo: Date | null }[] = [];
   for (const r of wanted.values()) {
     const cur = newest.get(keyOf(r.id, r));
     if (cur === undefined) {
@@ -136,8 +139,7 @@ export async function applyReferences(
       note('new', r.counted);
       touch(r.id, cur.hi > fetchedAt ? cur.hi : fetchedAt);
     } else if (sameRef(cur, r)) {
-      await sql`UPDATE reference_value SET seen_at = ${fetchedAt}::timestamptz, seen_batch = ${batch}::bigint
-                WHERE ${where(r, cur.lo)}`.execute(tx);
+      confirmed.push({ r, lo: cur.lo });
     } else {
       // A change: from the provider's own new start of validity when it states a later one, else from this fetch.
       const from = r.valid_from !== null && (cur.lo === null || new Date(r.valid_from) > cur.lo);
@@ -155,6 +157,19 @@ export async function applyReferences(
       note('changed', r.counted);
     }
     writes += 1;
+  }
+  if (confirmed.length > 0) {
+    // The key of `where`, per row: the source, the key's five columns and the range's lower bound.
+    await sql`
+      UPDATE reference_value rv SET seen_at = ${fetchedAt}::timestamptz, seen_batch = ${batch}::bigint
+      FROM unnest(${confirmed.map((k) => k.r.id)}::int[], ${confirmed.map((k) => k.r.kind)}::text[],
+                  ${confirmed.map((k) => k.r.season_from_md)}::int2[], ${confirmed.map((k) => k.r.season_to_md)}::int2[],
+                  ${confirmed.map((k) => k.r.priority)}::int2[],
+                  ${confirmed.map((k) => k.lo?.toISOString() ?? null)}::timestamptz[])
+           AS k(series_id, kind, season_from_md, season_to_md, priority, lo)
+      WHERE rv.source_id = ${source} AND rv.series_id = k.series_id AND rv.kind = k.kind
+        AND rv.season_from_md = k.season_from_md AND rv.season_to_md = k.season_to_md AND rv.priority = k.priority
+        AND lower(rv.valid) IS NOT DISTINCT FROM k.lo`.execute(tx);
   }
 
   for (const cur of stored) {

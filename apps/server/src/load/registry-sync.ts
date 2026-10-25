@@ -226,7 +226,9 @@ function nl4Bounds(input: RegistryInput, idOf: ReadonlyMap<string, number>): Bou
   const classes = new Map<string, ThresholdRow[]>();
   for (const row of input.thresholds?.rows ?? []) {
     const key = `${row.description}\n${row.code}`;
-    classes.set(key, [...(classes.get(key) ?? []), row]);
+    const list = classes.get(key) ?? [];
+    list.push(row);
+    classes.set(key, list);
   }
   const out: Bound[] = [];
   for (const s of input.stations) {
@@ -301,7 +303,11 @@ export async function syncRegistry(
     }
 
     const byStation = new Map<string, Station[]>();
-    for (const row of input.stations) byStation.set(row.id, [...(byStation.get(row.id) ?? []), row]);
+    for (const row of input.stations) {
+      const list = byStation.get(row.id) ?? [];
+      list.push(row);
+      byStation.set(row.id, list);
+    }
     if (rivers !== undefined) {
       for (const r of rivers.rivers.rivers) {
         const names = JSON.stringify({ nl: r.name_nl, en: r.name_en, sources: r.names });

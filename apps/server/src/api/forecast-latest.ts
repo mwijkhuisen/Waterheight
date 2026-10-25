@@ -68,7 +68,11 @@ const iso = (ms: number) => new Date(ms).toISOString();
 export function buildForecastLatest(rows: LatestRows, opts: LatestOpts): ForecastLatest {
   const { now } = opts;
   const byRun = new Map<string, PointRow[]>();
-  for (const p of rows.points) byRun.set(p.run, [...(byRun.get(p.run) ?? []), p]);
+  for (const p of rows.points) {
+    const list = byRun.get(p.run) ?? [];
+    list.push(p);
+    byRun.set(p.run, list);
+  }
   const superseded = (run: CurrentRun, at: number) => run.source === 'DE-2' && de2Superseded(run, at, opts.ruhrortCm);
   const runs: ForecastLatest['runs'] = [];
   const order = [...rows.runs].sort(

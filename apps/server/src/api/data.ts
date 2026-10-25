@@ -138,9 +138,18 @@ const flag = (flags: unknown, key: string): boolean | null => {
  * the registration time. Only from DATA_FLOOR on (P14a): a backfill of the
  * history before it leaves the public window and this date as they were (D9).
  */
-// ponytail: dataSince is a GROUP BY over the whole daily rollup, cached 300 s; an uncached /stations took 580 ms at
-// 3,000 series × 365 days. Store the first-data day per series once the registry passes 1,000 active series or an
-// uncached /stations passes 500 ms.
+// ponytail: dataSince reads every day since DATA_FLOOR of every series, cached 300 s. Through the view the series
+// drive the join, so it is a range of obs_1d_pkey per series and a backfill's history before DATA_FLOOR is never read
+// (bench-q1 fails otherwise): 122-154 ms to execute at 4,000 series × 61 days, an uncached /stations 168-340 ms
+// (#218, five bench-q1 runs on one machine); 580 ms at 3,000 × 365 (P4a). A LATERAL first-bucket probe per series was
+// slower (241-343 ms to execute): the view stays a subquery, so a sort sits above each range. Store the first-data
+// day per series once an uncached /stations passes 500 ms (bench-q1 prints it).
+/** The first day with data of each series from DATA_FLOOR on (readStations; scripts/bench-q1.ts checks its plan). */
+export const dataSince = (family: ChannelAudience) =>
+  sql<{ series_id: number; since: Date }>`
+    SELECT series_id, min(bucket) AS since FROM ${sql.table(VIEWS[family].obs1d)}
+    WHERE bucket >= ${DATA_FLOOR}::timestamptz GROUP BY series_id`;
+
 export async function readStations(db: Kysely<DB>, family: ChannelAudience): Promise<Stations> {
   const v = VIEWS[family];
   const { stations, series, since } = await snapshot(db, async (tx) => ({
@@ -157,15 +166,15 @@ export async function readStations(db: Kysely<DB>, family: ChannelAudience): Pro
                EXTRACT(EPOCH FROM staleness_limit)::float8 AS staleness_s
         FROM ${sql.table(v.series)} WHERE active ORDER BY station_id, id`.execute(tx)
     ).rows,
-    since: (
-      await sql<{ series_id: number; since: Date }>`
-        SELECT series_id, min(bucket) AS since FROM ${sql.table(v.obs1d)}
-        WHERE bucket >= ${DATA_FLOOR}::timestamptz GROUP BY series_id`.execute(tx)
-    ).rows,
+    since: (await dataSince(family).execute(tx)).rows,
   }));
   const sinceOf = new Map(since.map((r) => [r.series_id, r.since]));
   const byStation = new Map<string, SeriesRow[]>();
-  for (const s of series) byStation.set(s.station_id, [...(byStation.get(s.station_id) ?? []), s]);
+  for (const s of series) {
+    const list = byStation.get(s.station_id) ?? [];
+    list.push(s);
+    byStation.set(s.station_id, list);
+  }
   return {
     stations: stations.flatMap((st) => {
       const list = byStation.get(st.id);

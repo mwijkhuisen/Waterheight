@@ -366,7 +366,7 @@ describe('the published forecast holds what the naive Q2 gives', { timeout: 600_
         fc.integer({ min: 1, max: 288 }),
         fc.record(Object.fromEntries(keys.map((k) => [k, runsFor]))),
         async (step, plan) => {
-          const now = NOW + counter++; // forecastOnce memoises per clock; each run is its own cycle
+          const now = NOW + counter++; // each run is its own cycle: a fresh context (the per-cycle memo) at its own clock
           const t = NOW + step * 10 * MIN;
           await seedRuns(plan as Record<string, RunSpec[]>);
           const c = await ctx(now);

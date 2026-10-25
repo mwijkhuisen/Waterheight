@@ -1,8 +1,9 @@
 import { DAY_MS, dayStartMs, WarningsFile } from '@rws/contracts';
 import { sql } from 'kysely';
-import { attributionFor, sourceDates } from '../../attribution.ts';
+import { attributionFor } from '../../attribution.ts';
 import { VIEWS } from '../../db/audience.ts';
 import type { RenderCtx } from '../cycle.ts';
+import { datesOf } from './series.ts';
 
 // P9a (A§9.1): warnings/latest.geojson (the areas valid now) and the areas valid at any time of one UTC day:
 // warnings/YYYY-MM-DD.json once the day has ended (written once), warnings/today.json for the current day (#86). One
@@ -47,7 +48,7 @@ export async function warnings(c: RenderCtx, day: string | null): Promise<unknow
     FROM ${sql.table(VIEWS[c.family].warning)}
     WHERE ${day === null ? sql`valid @> ${from}::timestamptz` : sql`valid && tstzrange(${from}, ${to}, '[)')`}
     ORDER BY source_id, area_key, lower(valid), id LIMIT ${MAX_FEATURES}`.execute(c.db);
-  const dates = day === null ? await sourceDates(c.db, c.family, c.attribution) : undefined;
+  const dates = day === null ? await datesOf(c) : undefined;
   return {
     type: 'FeatureCollection',
     schemaVersion: 1,

@@ -1,12 +1,20 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CANARIES } from '@rws/contracts';
+import { CANARIES, floorBucket } from '@rws/contracts';
+import { Kysely, PostgresDialect } from 'kysely';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { classCoverage, readStates, StaticCache } from '../../src/api/states.ts';
+import { DisplayWindow } from '../../src/api/window.ts';
 import type { ChannelAudience } from '../../src/db/audience.ts';
+import type { DB } from '../../src/db/generated.ts';
+import type { Db } from '../../src/db/pool.ts';
 import { publishTail } from '../../src/load/migrate.ts';
+import { vigicruesSections } from '../../src/load/tables.ts';
+import { Publisher, type RenderCtx, type Renderers } from '../../src/publish/cycle.ts';
 import { publishOnce } from '../../src/publish/index.ts';
 import { RENDERERS } from '../../src/publish/render/index.ts';
+import { Output } from '../../src/publish/write.ts';
 import { type Harness, harness } from '../load/harness.ts';
 import { OWNER_IDS } from './s2-ctx.ts';
 import { contract, walk } from './tree.ts';
@@ -25,6 +33,8 @@ const dirs: string[] = [];
 
 type Tree = { files: Map<string, string> };
 const trees = {} as Record<ChannelAudience, Tree>;
+/** Each publisher's pool (rws_owner_api allows 4 connections): the #218 describe below reuses them. */
+const pools = {} as Record<ChannelAudience, Db>;
 
 const q = (text: string, values: unknown[] = []) => h.t.admin.query(text, values);
 const iso = (ms: number) => new Date(ms).toISOString();
@@ -119,7 +129,8 @@ beforeAll(async () => {
   ] as const) {
     const dir = mkdtempSync(join(tmpdir(), `rws-canary-${family}-`));
     dirs.push(dir);
-    await publishOnce(h.dbAs(role, 3).db, family, dir, { now: NOW, render: RENDERERS });
+    pools[family] = h.dbAs(role, 3);
+    await publishOnce(pools[family].db, family, dir, { now: NOW, render: RENDERERS });
     trees[family] = { files: walk(dir) };
   }
 }, 300_000);
@@ -240,5 +251,137 @@ describe('the files of both publishers', { timeout: 300_000 }, () => {
     expect(recent.length).toBeGreaterThan(100);
     for (const rel of recent.slice(0, 10)) expect(text(rel), rel).toContain(CANARIES.owner.real);
     expect([...files.keys()].some((r) => r.startsWith('settled/') || r.startsWith('frames/'))).toBe(false);
+  });
+});
+
+// #218: the reads the renderers of a cycle share (render/series.ts `once`, hung on the cycle's RenderCtx), on this seed
+// plus a loader commit and dated source health, so the shared commit and dates are real values. Last in the file: the
+// trees above were written before these rows.
+describe('the reads a cycle shares (#218)', { timeout: 300_000 }, () => {
+  const FAMILIES = ['public', 'owner'] as const;
+  const COMMIT = iso(NOW - 300_000);
+  /** Every render with its own copy of the context: nothing is shared, each render reads for itself as before. */
+  const unshared = Object.fromEntries(
+    Object.entries(RENDERERS).map(([name, fn]) => [
+      name,
+      (c: RenderCtx, ...a: unknown[]) => (fn as (c: RenderCtx, ...x: unknown[]) => Promise<unknown>)({ ...c }, ...a),
+    ]),
+  ) as Renderers;
+  /** status.json's lastDayRender.seconds is a wall-clock duration (cycle.ts): the one field two runs may differ in. */
+  const comparable = (files: Map<string, string>) =>
+    new Map(
+      [...files].map(([rel, text]) => {
+        if (rel !== 'status.json') return [rel, text] as const;
+        const s = JSON.parse(text);
+        if (s.publisher.lastDayRender !== null) s.publisher.lastDayRender.seconds = 0;
+        return [rel, JSON.stringify(s)] as const;
+      }),
+    );
+  const publish = async (family: ChannelAudience, render: Renderers) => {
+    const dir = mkdtempSync(join(tmpdir(), `rws-o2-${family}-`));
+    dirs.push(dir);
+    await publishOnce(pools[family].db, family, dir, { now: NOW, render });
+    return comparable(walk(dir));
+  };
+  /** One statement each (unique in src): readFacts, sourceDates, lastCommit and the current bucket's states. */
+  const FRAGMENTS = {
+    facts: 'AS history_window_s',
+    dates: 'AS provider_updated',
+    commit: 'max(loaded_at)',
+    statesNow: 'SELECT source_id, last_fetch_ok FROM',
+  } as const;
+
+  beforeAll(async () => {
+    await q(
+      `INSERT INTO ingest_batch (id, source_id, spec_id, archive_key, fetched_at, adapter_version, parse_status, loaded_at)
+       VALUES (9001, 'NL-1', 'nl-1-obs-key', 'o2/9001', $1, 1, 'ok', $2)`,
+      [iso(NOW - 600_000), COMMIT],
+    );
+    const dated = await q(
+      `INSERT INTO source_health (source_id, last_fetch_ok, newest_ts, status, detail)
+       SELECT DISTINCT a.source_id, $1::timestamptz, $2::timestamptz, 'ok',
+              CASE WHEN a.source_id = 'DE-6' THEN jsonb_build_object('provider_updated', $3::text) ELSE '{}' END
+       FROM attribution a WHERE a.date_kind IS NOT NULL
+       ON CONFLICT (source_id) DO UPDATE
+         SET last_fetch_ok = EXCLUDED.last_fetch_ok, newest_ts = EXCLUDED.newest_ts, detail = EXCLUDED.detail`,
+      [iso(NOW - 120_000), iso(NOW - 600_000), iso(NOW - 900_000)],
+    );
+    expect(dated.rowCount).toBeGreaterThan(0);
+  });
+
+  it('every file is byte-identical to the one each render reading for itself writes; both families at once', async () => {
+    const shared = await Promise.all(FAMILIES.map((f) => publish(f, RENDERERS)));
+    for (const [i, family] of FAMILIES.entries()) {
+      const files = shared[i] as Map<string, string>;
+      const alone = await publish(family, unshared);
+      expect([...files.keys()].sort()).toEqual([...alone.keys()].sort());
+      expect([...files].filter(([rel, text]) => alone.get(rel) !== text).map(([rel]) => rel)).toEqual([]);
+      // The shared commit and dates are real values here, not nulls that would match anyway.
+      expect(JSON.parse(files.get('meta.json') as string).latestFrom).toBe(COMMIT);
+      expect(JSON.parse(files.get('status.json') as string).loader.lastCommit).toBe(COMMIT);
+      expect(
+        JSON.parse(files.get('sources.json') as string).sources.some((s: { date: unknown }) => s.date !== null),
+      ).toBe(true);
+      // Run side by side, no read crossed families: no withheld canary anywhere, no owner canary in a public file.
+      const never: string[] = [CANARIES.withheld.text, CANARIES.withheld.real];
+      if (family === 'public') never.push(CANARIES.owner.text, CANARIES.owner.real);
+      for (const [rel, text] of files) for (const s of never) expect(text, `${rel} has ${s}`).not.toContain(s);
+    }
+  });
+
+  it('a cycle reads the facts, dates, last commit and current states once; the next cycle, same clock, again', async () => {
+    for (const family of FAMILIES) {
+      const seen = { facts: 0, dates: 0, commit: 0, statesNow: 0 };
+      // A second Kysely over the family's pool that sees every statement (never destroyed: it shares the pool).
+      const db = new Kysely<DB>({
+        dialect: new PostgresDialect({ pool: pools[family].pool }),
+        log: (e) => {
+          if (e.level !== 'query') return;
+          for (const [k, f] of Object.entries(FRAGMENTS)) if (e.query.sql.includes(f)) seen[k as keyof typeof seen]++;
+        },
+      });
+      // The static rows (with their own sourceDates read) are the app's 60 s cache, not this memo: read beforehand.
+      const cache = new StaticCache(60_000, () => NOW);
+      await cache.get(pools[family].db, family);
+      const dir = mkdtempSync(join(tmpdir(), `rws-o2-count-${family}-`));
+      dirs.push(dir);
+      const publisher = new Publisher({
+        db,
+        family,
+        out: new Output(dir),
+        render: RENDERERS,
+        window: new DisplayWindow(db, { error: () => undefined }, family),
+        now: () => NOW,
+        build: 'dev',
+        sections: vigicruesSections(),
+        cache,
+        inputs: undefined,
+        log: { error: () => undefined },
+        brownout: () => false,
+        budgetMs: Number.POSITIVE_INFINITY,
+        settledPerCycle: Number.POSITIVE_INFINITY,
+        strict: true,
+      });
+      await publisher.cycle();
+      expect([family, seen]).toEqual([family, { facts: 1, dates: 1, commit: 1, statesNow: 1 }]);
+      await publisher.cycle();
+      expect([family, seen]).toEqual([family, { facts: 2, dates: 2, commit: 2, statesNow: 2 }]);
+    }
+  });
+
+  it("status.json's classification from latest.json's read (tide rows included) equals its own read's", async () => {
+    for (const family of FAMILIES) {
+      const opts = {
+        now: NOW,
+        current: true,
+        sections: vigicruesSections(),
+        cache: new StaticCache(60_000, () => NOW),
+      };
+      const t = floorBucket(NOW);
+      const own = await readStates(pools[family].db, family, t, opts);
+      const shared = await readStates(pools[family].db, family, t, { ...opts, tide: true });
+      expect(shared.tide).toBeDefined();
+      expect(classCoverage(shared)).toEqual(classCoverage(own));
+    }
   });
 });
