@@ -28,6 +28,7 @@ import {
   timebarOf,
   urlsFrom,
   type W,
+  warningAreas,
   XSS,
 } from './helpers.ts';
 
@@ -295,8 +296,26 @@ test('O3: paused steps and a playback read each warnings file at most once', asy
       await page.waitForTimeout(400);
     }
   };
+  // The areas of 08:00Z hold until 18:00Z: once they are on the map, a step within the file sets no new data (the
+  // warnings keep their identity, so the map's setData effect does not run).
+  await expect.poll(() => warningAreas(page)).toEqual(['e2e-2', 'e2e-ended']);
+  await page.evaluate(() => {
+    const w = window as unknown as W & { __o3WarningSets?: number };
+    const source = w.__rws?.map?.getSource('warnings') as unknown as { setData: (d: unknown) => unknown } | undefined;
+    if (source === undefined) throw new Error('no warnings source');
+    const set = source.setData.bind(source);
+    w.__o3WarningSets = 0;
+    source.setData = (d) => {
+      w.__o3WarningSets = (w.__o3WarningSets ?? 0) + 1;
+      return set(d);
+    };
+  });
   await steps('ArrowRight', 4);
   await expect.poll(() => param(page, 't')).toBe('2026-10-25T08:40Z');
+  expect(
+    await page.evaluate(() => (window as unknown as { __o3WarningSets?: number }).__o3WarningSets),
+    'no warnings setData for steps within one file and one valid set',
+  ).toBe(0);
   await play(page).click();
   await expect(pause(page)).toBeVisible();
   await page.waitForTimeout(1_500);

@@ -104,7 +104,7 @@ async function tabTo(page: Page, match: (arg: string) => boolean, arg: string, w
   expect(await page.evaluate(match, arg), `${what} is reachable by Tab (after ${tabs} presses)`).toBe(true);
 }
 
-/** The ids of the series of every chart of the page (the first is the observations). */
+/** The ids of the series of every chart of the page (O3: the marker series of the now and selected lines first, then the observations). */
 const chartSeriesIds = (page: Page) =>
   page.evaluate(() => {
     const out: string[] = [];
@@ -168,7 +168,7 @@ test('the tidal panel: measured, astronomical, derived surge, the day of high an
   await expect
     .poll(() => chartSeriesIds(page))
     .toEqual(expect.arrayContaining(['obs', 'astro', 'surge-up-base', 'surge-up']));
-  expect((await chartSeriesIds(page))[0]).toBe('obs');
+  expect((await chartSeriesIds(page)).slice(0, 2)).toEqual(['marker', 'obs']);
   await expect(panelOf(page).getByText(nl('tide_legend_astro'), { exact: true })).toBeVisible();
   await expect(panelOf(page).getByText(nl('tide_legend_surge_up'), { exact: true })).toBeVisible();
 
