@@ -238,7 +238,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | buildkit | image | v0.33.0 | installed | moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3 | Apache-2.0 | release.yml builder (setup-buildx driver) |
 | buildkit-syft-scanner | image | 1.12.0 | installed | docker/buildkit-syft-scanner:1.12.0@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9 | Apache-2.0 | release.yml SBOM generator (Syft) |
 | croner | npm | 10.0.1 | installed | – | MIT | apps/server: capture scheduler (P1) |
-| undici | npm | 8.11.2 | installed | – | MIT | apps/server: SSRF-guarded fetch client (P1) |
+| undici | npm | 8.12.2 | installed | – | MIT | apps/server: SSRF-guarded fetch client (P1) |
 | fast-xml-parser | npm | 5.11.2 | installed | – | MIT | apps/server: CAP/XLSX validity, entities off (P1); the NL-4 parser (`adapters/nl-4/parse.ts`, P2b; P5 parsers) |
 | csv-parse | npm | 7.0.2 | planned | – | MIT | P2/P5 |
 | fflate | npm | 0.8.3 | installed | – | MIT | apps/server: streamed ZIP guard (P1); the NL-4 converter reads the workbook through it (`readXlsx` in `http/guards.ts`, P2b; P5 parsers) |
