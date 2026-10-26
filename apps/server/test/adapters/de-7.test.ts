@@ -703,6 +703,26 @@ describe('pegel_stationen.txt (the LANUK thresholds, P7a)', () => {
     expect(code(() => parseStationFile(Buffer.alloc(0)))).toBe('csv_empty');
   });
 
+  it('a decimal comma (the weekly file since 2026-10-26, #231) reads as a point; nothing else is relaxed', () => {
+    const [c] = parseRows([st('110,0;125,0;145,0', '9,0', '30,5', '130,25')]);
+    expect(c).toEqual({ station: NO, info: [110, 125, 145], mnw: 9, mw: 30.5, mhw: 130.25 });
+    expect(c).toEqual(parseRows([st('110.0;125.0;145.0', '9.0', '30.5', '130.25')])[0]);
+    for (const v of ['1.234,5', '1,234.5', '9,0,0', '9.0.0', '9,1234', '9,', ',9', '-,5', '9,0 ', '1e3']) {
+      expect([v, code(() => parseRows([st(';;', v)]))]).toEqual([v, 'bad_value']);
+    }
+  });
+
+  it('property: a threshold with a decimal comma is the same number as with a point', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: -99999, max: 99999 }), fc.stringMatching(/^\d{1,3}$/), (whole, frac) => {
+        const dot = `${whole}.${frac}`;
+        const [a] = parseRows([st(';;', dot)]);
+        const [b] = parseRows([st(';;', dot.replace('.', ','))]);
+        return a?.mnw === Number(dot) && b?.mnw === a?.mnw;
+      }),
+    );
+  });
+
   it('is UTF-8 (a BOM is tolerated, bytes that are not UTF-8 are encoding drift) and capped at MAX_STATION_ROWS', () => {
     expect(parseStationFile(Buffer.from(`\uFEFF${stationFile([st(';;')])}`))).toHaveLength(1);
     expect(code(() => parseStationFile(Buffer.from([0xff, 0xfe])))).toBe('encoding');

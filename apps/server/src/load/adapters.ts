@@ -581,8 +581,9 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
   },
   // LANUK NRW W at 15 (some 5) minutes: messwerte.zip holds 7 days, pegeldaten.zip 2 months (the seed and,
   // weekly, the thresholds of P7: pegel_messwerte.txt as obs, pegel_stationen.txt as references). Both re-state what earlier payloads said.
+  // Version 2 (#231): the thresholds of `pegel_stationen.txt` may carry a decimal comma.
   'DE-7': {
-    version: 1,
+    version: 2,
     specs: {
       'de-7-messwerte': {
         maxBytes: 8 * MIB,
