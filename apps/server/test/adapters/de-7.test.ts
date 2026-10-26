@@ -174,6 +174,28 @@ describe('golden files (real payloads)', () => {
     expect(new Set(ts.slice(1).map((t, i) => t - (ts[i] as number)))).toEqual(new Set([900_000]));
   });
 
+  it('the weekly pegeldaten.zip of 2026-10-26 (exported, batch 505700): thresholds with a decimal comma load (#231)', async () => {
+    const name = 'de-7-pegeldaten-comma';
+    const { body } = rawFixture('DE-7', name);
+    // The real file writes every threshold with a decimal comma; the observation members keep the point.
+    const stations = Buffer.from(unzipSync(body)['pegel_stationen.txt'] as Uint8Array).toString('utf8');
+    expect(stations).toContain(';Stah;2829100000100;282;Rureinzugsgebiet;200,0;245,0;265,0;31,0;65,0;211,0;');
+    const out = (await pegelSpec?.run(body, loadCtx(name))) as Normalised;
+    expect(flat(out)).toEqual(golden(name, flat(out)));
+    const refs = (key: string) => out.references?.filter((r) => r.series === key).map((r) => [r.kind, r.value]);
+    // The same numbers as the seed of 2026-09-30 wrote with a point.
+    expect(refs('2829100000100/W')).toEqual([
+      ['LANUV_MNW', 31],
+      ['LANUV_MW', 65],
+      ['LANUV_MHW', 211],
+      ['LANUV_INFO_1', 200],
+      ['LANUV_INFO_2', 245],
+      ['LANUV_INFO_3', 265],
+    ]);
+    expect(out.references?.every((r) => Number.isFinite(r.value))).toBe(true);
+    expect(of(out, '2829100000100').length).toBeGreaterThan(0);
+  });
+
   it('the loader window drops old points of the seed but never the thresholds', async () => {
     const name = 'de-7-pegeldaten-blocks';
     const { fetchedAt } = loadCtx(name);
