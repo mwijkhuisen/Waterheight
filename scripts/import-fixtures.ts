@@ -1,13 +1,14 @@
 // Turns payloads the owner exported from the production raw archive (Action D2;
 // the read-only export command is in the P5a PR) into adapter fixtures:
 //
-//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b|--lu5-other|--dst] <export dir>
+//   node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b|--lu5-other|--dst|--de7-comma] <export dir>
 //
 // (`--p5b`: the P5b export and its rules, `IMPORTS_P5B`; `--p7a`: `IMPORTS_P7A`; `--p8a`: the NL-1 forecast captures
 // of `IMPORTS_P8A`, whole bodies; `--p8a-maaseik`: the maaseik Q captures of `IMPORTS_P8A_MAASEIK`; `--p8b`: the
 // CH-4 and FR-4 forecasts of `IMPORTS_P8B`, whole bodies; `--lu5-other`: the LU-5 files of other senders of
 // `IMPORTS_LU5_OTHER` (#72), whole bodies; `--dst`: the real DST night of 2026-10-25, `IMPORTS_DST` (#55), from
-// the two exports unpacked as `<export dir>/1` and `<export dir>/2`; without a flag the P5a list.)
+// the two exports unpacked as `<export dir>/1` and `<export dir>/2`; `--de7-comma`: the weekly pegeldaten.zip of
+// 2026-10-26 whose thresholds carry a decimal comma, `IMPORTS_DE7_COMMA` (#231); without a flag the P5a list.)
 //
 // The export holds `<name>.raw` (the archived body) and `<name>.line.json` (its
 // manifest line). Each payload listed below is copied to
@@ -262,6 +263,15 @@ export const IMPORTS_P5B: readonly {
   { name: 'de-1-series-c263ea53-seed', source: 'DE-1', fixture: 'de-1-series-perl-w-seed', rule: 'de1-last', n: 300 },
   { name: 'de-7-messwerte-005000-1', source: 'DE-7', fixture: 'de-7-messwerte-archive', rule: 'de7-blocks' },
   { name: 'de-7-pegeldaten-seed', source: 'DE-7', fixture: 'de-7-pegeldaten-blocks', rule: 'de7-seed-blocks' },
+];
+
+/**
+ * #231 (Action D2, the owner's export of 2026-10-26): the weekly pegeldaten.zip fetched 2026-10-26 04:30Z (batch
+ * 505700), the first whose `pegel_stationen.txt` writes the thresholds with a decimal comma. Cut by the P5b rule of
+ * the seed (`de7-seed-blocks`).
+ */
+export const IMPORTS_DE7_COMMA: readonly (typeof IMPORTS_P5B)[number][] = [
+  { name: 'de-7-pegeldaten-505700', source: 'DE-7', fixture: 'de-7-pegeldaten-comma', rule: 'de7-seed-blocks' },
 ];
 
 /** The body a P5b rule keeps, and what it says it kept. */
@@ -546,7 +556,10 @@ export function cutDst(rule: DstRule, raw: Buffer, n = 0): { body: Buffer; trimm
   throw new Error(`no rule ${rule satisfies never}`);
 }
 
-function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' | 'p8b' | 'lu5-other' | 'dst'): void {
+function main(
+  dir: string,
+  mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' | 'p8b' | 'lu5-other' | 'dst' | 'de7-comma',
+): void {
   type Entry = {
     name: string;
     source: string;
@@ -565,6 +578,7 @@ function main(dir: string, mode: 'p5a' | 'p5b' | 'p7a' | 'p8a' | 'p8a-maaseik' |
     p8b: IMPORTS_P8B,
     'lu5-other': IMPORTS_LU5_OTHER,
     dst: IMPORTS_DST,
+    'de7-comma': IMPORTS_DE7_COMMA,
   };
   // Every body is read, checked and cut before the first write, so a bad export leaves the tree as it was (#55 SR-1).
   const outs = lists[mode].map(({ name, source, fixture, keep, last, rule, n }) => {
@@ -614,12 +628,13 @@ if (import.meta.main) {
     '--p8b': 'p8b',
     '--lu5-other': 'lu5-other',
     '--dst': 'dst',
+    '--de7-comma': 'de7-comma',
   } as const;
   const mode = flag !== undefined && Object.hasOwn(modes, flag) ? modes[flag as keyof typeof modes] : 'p5a';
   const dir = process.argv[mode === 'p5a' ? 2 : 3];
   if (dir === undefined) {
     console.error(
-      'usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b|--lu5-other|--dst] <export dir>',
+      'usage: node scripts/import-fixtures.ts [--p5b|--p7a|--p8a|--p8a-maaseik|--p8b|--lu5-other|--dst|--de7-comma] <export dir>',
     );
     process.exitCode = 64;
   } else main(dir, mode);
