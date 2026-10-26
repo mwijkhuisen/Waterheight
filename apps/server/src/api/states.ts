@@ -297,7 +297,7 @@ const seriesByStation = (series: readonly SeriesRow[]) => {
   return out;
 };
 
-const refIn = (r: RefRow): RefIn => ({
+const toRefIn = (r: RefRow): RefIn => ({
   source: r.source_id,
   kind: r.kind,
   value: r.value,
@@ -309,6 +309,28 @@ const refIn = (r: RefRow): RefIn => ({
   priority: r.priority,
   label: r.basis_label,
 });
+
+// #212 (A8): what derives from one static entry, or from one reference row, is built once per entry or row (the
+// static and day-of-year rows are the cache's objects for its TTL), as the routes' `sourceMaps`; classify() and
+// classSeries() only read them.
+const refIns = new WeakMap<RefRow, RefIn>();
+const refIn = (r: RefRow): RefIn => {
+  let x = refIns.get(r);
+  if (x === undefined) {
+    x = toRefIn(r);
+    refIns.set(r, x);
+  }
+  return x;
+};
+const indexes = new WeakMap<Static, { stationOf: Map<string, StationRow>; seriesOf: Map<string, SeriesRow[]> }>();
+const indexOf = (st: Static) => {
+  let x = indexes.get(st);
+  if (x === undefined) {
+    x = { stationOf: new Map(st.stations.map((s) => [s.id, s])), seriesOf: seriesByStation(st.series) };
+    indexes.set(st, x);
+  }
+  return x;
+};
 
 const areaIn = (w: WarningRow, fresh: boolean): AreaIn => ({
   source: w.source_id,
@@ -452,8 +474,7 @@ export async function readStates(
     return ok !== null && opts.now - ok <= (CLASS_WINDOW_MIN[source] ?? 45) * 60_000;
   };
 
-  const stationOf = new Map(stations.map((s) => [s.id, s]));
-  const seriesOf = seriesByStation(series);
+  const { stationOf, seriesOf } = indexOf(fixed);
   const obsOf = new Map(rows.obs.map((o) => [o.series_id, o]));
   const zeroOf = new Map(zeros.map((z) => [z.series_id, z]));
   const refsOf = new Map<number, RefIn[]>();
@@ -666,8 +687,7 @@ export async function readHourStates(
   });
 
   const seriesById = new Map(fixed.series.map((s) => [s.id, s]));
-  const seriesOf = seriesByStation(fixed.series);
-  const stationOf = new Map(fixed.stations.map((s) => [s.id, s]));
+  const { stationOf, seriesOf } = indexOf(fixed);
   // The NL-4 season day of each hour's instant, computed once per hour, not per cell.
   const instantOf = (h: number) => Math.min(from + (h + 1) * HOUR_MS - 1, opts.now);
   const mdOf: number[] = [];

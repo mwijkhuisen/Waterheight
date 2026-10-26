@@ -29,12 +29,15 @@ export async function syncOwnerCanary(tx: Tx): Promise<number> {
     await sql`
       INSERT INTO station (id, name, country, tier) VALUES (${CANARY_STATION}, 'Owner canary', 'NL', 2)
       ON CONFLICT (id) DO NOTHING`.execute(tx);
+    // #212 (D-6): the series is marked `owner` itself (its effective audience is owner by its source either way), the
+    // one series exempt from the 2-day staleness cap that the public at-T function's bound relies on; an older row
+    // without the mark gets it here.
     const { rows } = await sql<{ id: number }>`
       INSERT INTO series (station_id, source_id, quantity, value_kind, provider_key, native_unit, to_canonical, datum,
-                          native_step, expected_step, staleness_limit, role, active)
+                          native_step, expected_step, staleness_limit, role, active, audience)
       VALUES (${CANARY_STATION}, ${source}, 'H', 'stage', ${CANARY_KEY}, 'cm', 1, 'LOCAL', '1 hour', '1 hour',
-              '36500 days', 'primary', true)
-      ON CONFLICT (source_id, provider_key) DO UPDATE SET active = true
+              '36500 days', 'primary', true, 'owner')
+      ON CONFLICT (source_id, provider_key) DO UPDATE SET active = true, audience = 'owner'
       RETURNING id`.execute(tx);
     const series = (rows[0] as { id: number }).id;
     await sql`SELECT ensure_partitions(${CANARY_AT}::timestamptz, ${CANARY_AT}::timestamptz)`.execute(tx);

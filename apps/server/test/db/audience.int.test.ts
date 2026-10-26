@@ -2,6 +2,7 @@ import { CANARIES, CANARY_RENDERINGS } from '@rws/contracts';
 import { effective } from '@rws/core';
 import type pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { STALENESS_CAP } from '../../../../scripts/gen-views.ts';
 import {
   FORECAST_AT,
   familyViews,
@@ -274,12 +275,17 @@ describe('the value of every series at T (A§8 Q1)', () => {
     }
   });
 
-  it('the two functions are one template: the same body except the audience set', async () => {
+  it('the two functions are one template: the same body except the audience set and the public cap (#212)', async () => {
     const src = async (fn: string) =>
       (await t.admin.query<{ s: string }>('SELECT prosrc AS s FROM pg_proc WHERE proname = $1', [fn])).rows[0]?.s ?? '';
     const pub = await src(OBS_AT.public);
+    const owner = await src(OBS_AT.owner);
+    // The public family's constant bound (the owner family keeps the canary's 100-year limit, so it has none).
+    const cap = `\n      AND o.ts > p_t - ${STALENESS_CAP}`;
     expect(pub).toContain("e.audience IN ('public')");
-    expect(pub.replace("IN ('public')", "IN ('public', 'owner')")).toBe(await src(OBS_AT.owner));
+    expect(pub).toContain(cap);
+    expect(owner).not.toContain(STALENESS_CAP);
+    expect(pub.replace(cap, '').replace("IN ('public')", "IN ('public', 'owner')")).toBe(owner);
   });
 });
 
