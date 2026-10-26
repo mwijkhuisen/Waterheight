@@ -20,11 +20,12 @@ FROM caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f43
 # revision is pinned (BOM row). Alpine keeps only a branch's newest revision: once r1 is replaced the build fails, and
 # the pin moves, or goes when the caddy image carries the fix. Caddy is a static Go binary and does not link zlib (apk
 # and busybox do), so this clears the image's finding, not a path into Caddy.
-# #221 (owner 2026-10-25, release-age override): brotli-libs 1.2.0-r0 (CVE-2026-111497, Critical) the same way; only
-# the base's libcurl links it, never Caddy. 1.2.1-r0 was built 2026-10-22, under the 7-day release age.
+# Owner 2026-10-26: the base's curl 8.22.0-r0 (CVE-2026-92392, High) goes, and with it libcurl and the libraries only
+# it links (brotli-libs, c-ares, libidn2, libpsl, libunistring, nghttp2-libs, zstd-libs). Nothing here runs curl: the
+# healthchecks and the e2e checks use busybox wget. This also retires #221's brotli-libs pin.
 ARG ZLIB_VERSION=1.3.2-r1
-ARG BROTLI_VERSION=1.2.1-r0
-RUN apk add --no-cache "zlib=${ZLIB_VERSION}" "brotli-libs=${BROTLI_VERSION}" \
+RUN apk add --no-cache "zlib=${ZLIB_VERSION}" \
+  && apk del curl \
   && cp /usr/bin/caddy /usr/bin/caddy.plain \
   && mv /usr/bin/caddy.plain /usr/bin/caddy \
   && mkdir -p /data/access /config \
