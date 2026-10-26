@@ -4815,8 +4815,9 @@ What PR A of issue #212 changed: the at-T reads that kept `bench-4000` over its 
 | 40239820331 attempt 2 | 4f83b4b | EPYC 9V45 | 29.8 ms | 5.8 ms | 86.0 ms | OK |
 | 40239820331 attempt 3 | 4f83b4b | EPYC 9V45 | 31.9 ms | 6.2 ms | 88.5 ms | OK |
 | 40239820331 attempt 4 | 4f83b4b | EPYC 7763 | **51.3 ms** | 11.0 ms | 146.9 ms | REPORT (Q1) |
+| 40290194650 | d0a0757 (docs only) | EPYC 9V74 | **51.8 ms** | 10.0 ms | 142.0 ms | REPORT (Q1) |
 
-  Attempt 4 is a 7763 run whose Q1 median breaks 50 ms, so D-5 applied (stop and ask; the bench's Q1 form, limits, instants and seed counts unchanged). **Owner decision D-7 (2026-10-26): PR A lands with `--report-timings` kept on `bench-4000`**; `bench` (3,000) stays the hard gate, KG-463 stays open with these numbers, and #212 stays open for the flag. Local A8 run (5800X): `/snapshot` cold p95 111.9 ms against 118.4 ms without it, within this machine's run-to-run noise.
+  The two 9V74 runs of the same code measured a Q1 median of 41.4 and 51.8 ms: at 4,000 series the median varies by about 10 ms between runs of one runner type, so the limit is not met reliably on either the 7763 or the 9V74. Attempt 4 is a 7763 run whose Q1 median breaks 50 ms, so D-5 applied (stop and ask; the bench's Q1 form, limits, instants and seed counts unchanged). **Owner decision D-7 (2026-10-26): PR A lands with `--report-timings` kept on `bench-4000`**; `bench` (3,000) stays the hard gate, KG-463 stays open with these numbers, and #212 stays open for the flag. Local A8 run (5800X): `/snapshot` cold p95 111.9 ms against 118.4 ms without it, within this machine's run-to-run noise.
 
 - **Criteria.**
   - [ ] [CI] `bench` (3,000) and `bench-4000` create the history partitions and pass every limit hard on two consecutive runs on an AMD EPYC 7763, with `--report-timings` gone from `ci.yml` (D-4). Not met: D-5 applied (a 7763 Q1 median of 51.3 ms), and the flag stays on by owner decision D-7 (KG-463).
