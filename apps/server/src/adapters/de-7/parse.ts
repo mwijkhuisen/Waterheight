@@ -128,7 +128,8 @@ export function parseText(text: string, member: Member, opts: { ascii: boolean }
 }
 
 // `pegel_stationen.txt` (pegeldaten.zip, UTF-8, `;`, CRLF): the station master with LANUK's thresholds, in cm above
-// the gauge zero as strings ("110.0"), empty = none. It has no site_no column; the registry decides which stations load.
+// the gauge zero as strings ("110.0"; since the weekly file of 2026-10-26 with a decimal comma, "110,0", #231),
+// empty = none. It has no site_no column; the registry decides which stations load.
 
 export const STATIONS_HEADER =
   'station_latitude;station_longitude;station_name;station_no;catchment_no;catchment_name;LANUV_Info_1;LANUV_Info_2;LANUV_Info_3;LANUV_MNW;LANUV_MW;LANUV_MHW;station_carteasting;station_cartnorthing;CATCHMENT_SIZE;DIST_TO_CONFL';
@@ -138,7 +139,8 @@ export const MAX_STATION_ROWS = 1_000;
 /** The member is read whole, so it has a byte cap (load/adapters.ts): 1,011 bytes in the trimmed fixture, about 50 KB whole. */
 export const STATIONS_MAX_BYTES = 1024 * 1024;
 
-const THRESHOLD = /^-?\d{1,5}(?:\.\d{1,3})?$/;
+/** A decimal point or a decimal comma, never both and never a thousands separator. */
+const THRESHOLD = /^-?\d{1,5}(?:[.,]\d{1,3})?$/;
 
 /** The columns this reader keeps: the station number and the six thresholds (NaN = none). */
 export type StationThresholds = {
@@ -171,7 +173,7 @@ export function parseStationFile(body: Uint8Array): StationThresholds[] {
   const num = (raw: string): number => {
     if (raw === '') return Number.NaN;
     if (!THRESHOLD.test(raw)) throw new SchemaDrift('bad_value');
-    return Number(raw);
+    return Number(raw.replace(',', '.'));
   };
   return rows.map((r) => {
     if (!STATION.test(r[no as number] as string)) throw new SchemaDrift('station_no');

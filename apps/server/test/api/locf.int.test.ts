@@ -69,6 +69,9 @@ const EDGES = {
   // A slow gauge (25 h): one second inside the limit, and exactly at it.
   slowInside: { limitMin: 1500, obs: [at(-100_000, 70, 1), at(-89_999, 71, 1)] },
   slowAtLimit: { limitMin: 1500, obs: [at(-95_000, 80, 1), at(-90_000, 81, 1)] },
+  // The 2-day cap of the public at-T bound (#212): a 2880-minute limit, one second inside it and exactly at it.
+  capInside: { limitMin: 2880, obs: [at(-180_000, 90, 1), at(-172_799, 91, 1)] },
+  capAtLimit: { limitMin: 2880, obs: [at(-180_000, 95, 1), at(-172_800, 96, 1)] },
   // The latest value 10 minutes old, an older one and a newer one after T.
   tenMinutesBefore: { limitMin: 45, obs: [at(-1800, 4, 1), at(-600, 5, 2), at(60, 6, 1)] },
 } as const;
@@ -85,6 +88,8 @@ const EXPECTED_EDGE: Record<Edge, { ts: number; value: number; qc: number } | nu
   secondBefore: { ts: T - SEC, value: 7, qc: 5 },
   slowInside: { ts: T - 89_999 * SEC, value: 71, qc: 1 },
   slowAtLimit: null,
+  capInside: { ts: T - 172_799 * SEC, value: 91, qc: 1 },
+  capAtLimit: null,
   tenMinutesBefore: { ts: T - 600 * SEC, value: 5, qc: 2 },
 };
 

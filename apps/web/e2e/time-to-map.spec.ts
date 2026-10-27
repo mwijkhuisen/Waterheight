@@ -15,8 +15,12 @@ const MARK = 'rws:map-idle';
 const DOWN = (1.6 * 1_000_000) / 8;
 const UP = (750 * 1000) / 8;
 
-/** The first snapshot read of the home route: `recent/<day>/<hhmm>.json` (other recent/ files may exist). */
-const SNAPSHOT = /^\/data\/v1\/recent\/\d{4}-\d{2}-\d{2}\/\d{4}\.json$/;
+/**
+ * The first snapshot read of the home route: the page's now is the earlier of this browser's clock and the e2e data's
+ * (`NOW`, 2026-10-26T12:00Z; App.tsx), so `recent/<day>/<hhmm>.json` before that instant and `latest.json` from it on
+ * (other recent/ files may exist).
+ */
+const SNAPSHOT = /^\/data\/v1\/(?:latest|recent\/\d{4}-\d{2}-\d{2}\/\d{4})\.json$/;
 const first = (requests: { path: string; at: number }[], re: RegExp) => requests.find((r) => re.test(r.path))?.at;
 
 const median = (v: number[]) => [...v].sort((a, b) => a - b)[Math.floor(v.length / 2)] ?? Number.NaN;

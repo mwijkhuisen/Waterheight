@@ -174,6 +174,28 @@ describe('golden files (real payloads)', () => {
     expect(new Set(ts.slice(1).map((t, i) => t - (ts[i] as number)))).toEqual(new Set([900_000]));
   });
 
+  it('the weekly pegeldaten.zip of 2026-10-26 (exported, batch 505700): thresholds with a decimal comma load (#231)', async () => {
+    const name = 'de-7-pegeldaten-comma';
+    const { body } = rawFixture('DE-7', name);
+    // The real file writes every threshold with a decimal comma; the observation members keep the point.
+    const stations = Buffer.from(unzipSync(body)['pegel_stationen.txt'] as Uint8Array).toString('utf8');
+    expect(stations).toContain(';Stah;2829100000100;282;Rureinzugsgebiet;200,0;245,0;265,0;31,0;65,0;211,0;');
+    const out = (await pegelSpec?.run(body, loadCtx(name))) as Normalised;
+    expect(flat(out)).toEqual(golden(name, flat(out)));
+    const refs = (key: string) => out.references?.filter((r) => r.series === key).map((r) => [r.kind, r.value]);
+    // The same numbers as the seed of 2026-09-30 wrote with a point.
+    expect(refs('2829100000100/W')).toEqual([
+      ['LANUV_MNW', 31],
+      ['LANUV_MW', 65],
+      ['LANUV_MHW', 211],
+      ['LANUV_INFO_1', 200],
+      ['LANUV_INFO_2', 245],
+      ['LANUV_INFO_3', 265],
+    ]);
+    expect(out.references?.every((r) => Number.isFinite(r.value))).toBe(true);
+    expect(of(out, '2829100000100').length).toBeGreaterThan(0);
+  });
+
   it('the loader window drops old points of the seed but never the thresholds', async () => {
     const name = 'de-7-pegeldaten-blocks';
     const { fetchedAt } = loadCtx(name);
@@ -701,6 +723,26 @@ describe('pegel_stationen.txt (the LANUK thresholds, P7a)', () => {
     expect(code(() => parseRows([st(';;', 'abc')]))).toBe('bad_value');
     expect(code(() => parseRows([st(';;', '', '', '', 'x1')]))).toBe('station_no');
     expect(code(() => parseStationFile(Buffer.alloc(0)))).toBe('csv_empty');
+  });
+
+  it('a decimal comma (the weekly file since 2026-10-26, #231) reads as a point; nothing else is relaxed', () => {
+    const [c] = parseRows([st('110,0;125,0;145,0', '9,0', '30,5', '130,25')]);
+    expect(c).toEqual({ station: NO, info: [110, 125, 145], mnw: 9, mw: 30.5, mhw: 130.25 });
+    expect(c).toEqual(parseRows([st('110.0;125.0;145.0', '9.0', '30.5', '130.25')])[0]);
+    for (const v of ['1.234,5', '1,234.5', '9,0,0', '9.0.0', '9,1234', '9,', ',9', '-,5', '9,0 ', '1e3']) {
+      expect([v, code(() => parseRows([st(';;', v)]))]).toEqual([v, 'bad_value']);
+    }
+  });
+
+  it('property: a threshold with a decimal comma is the same number as with a point', () => {
+    fc.assert(
+      fc.property(fc.integer({ min: -99999, max: 99999 }), fc.stringMatching(/^\d{1,3}$/), (whole, frac) => {
+        const dot = `${whole}.${frac}`;
+        const [a] = parseRows([st(';;', dot)]);
+        const [b] = parseRows([st(';;', dot.replace('.', ','))]);
+        return a?.mnw === Number(dot) && b?.mnw === a?.mnw;
+      }),
+    );
   });
 
   it('is UTF-8 (a BOM is tolerated, bytes that are not UTF-8 are encoding drift) and capped at MAX_STATION_ROWS', () => {

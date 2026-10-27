@@ -14,6 +14,7 @@ import {
   TWIN_CHECK_COLUMNS,
   VIEWS,
 } from '../apps/server/src/db/audience.ts';
+import { STALENESS_CAP_MS } from '../packages/contracts/src/stations.ts';
 
 // Writes the view migration (A§6 "Audiences, views and roles"). The four
 // families (display and api, public and owner) come from ONE template: the
@@ -263,13 +264,29 @@ JOIN source src ON src.id = s.source_id;`;
 const view = (name: string, body: string) => `CREATE VIEW ${name} WITH (security_barrier = true) AS${body};`;
 
 /**
+ * #212 (D-1): the cap on the staleness limit of every series the public family can see, which makes the constant
+ * bound of the public Q1 exact: `validateStations`' own STALENESS_CAP_MS (packages/contracts; the registry sync is
+ * the only production writer of public series) as SQL, and a follow-up adds a CHECK (D-6). The owner canary
+ * (36500 days, load/canary.ts) is exempt, so the owner Q1 has no such bound.
+ */
+export const STALENESS_CAP = `interval '${STALENESS_CAP_MS / 86_400_000} days'`;
+
+/**
  * A§8 Q1 as a function (see OBS_AT in audience.ts). SECURITY DEFINER, because
  * the readers have no grant on the tables: a plain SQL body without dynamic
  * SQL, a fixed search_path with pg_temp last, the time zone fixed to UTC (the
  * caller's session setting never reaches it), every relation schema-qualified,
  * and EXECUTE for the family's roles only.
+ *
+ * `v1` is the body of the first views migration (frozen: an applied migration never changes); `capped` (#212,
+ * AT_T_PLANS_MIGRATION, the public family only) adds a constant lower bound beside the per-series one. A bound that
+ * depends on the lateral row prunes the obs partitions only per rescan, so every history partition back to the
+ * 1950s stays in the plan; the constant one prunes them at executor start-up. It removes no row while every visible
+ * series keeps its limit within STALENESS_CAP.
  */
-const obsAt = (name: string, p: Params) => `CREATE FUNCTION ${name}(p_t timestamptz)
+export const obsAt = (name: string, p: Params, v: 'v1' | 'capped' = 'v1') => {
+  if (v === 'capped' && p.audience !== 'public') throw new Error('gen-views: only the public Q1 is capped');
+  return `CREATE${v === 'v1' ? '' : ' OR REPLACE'} FUNCTION ${name}(p_t timestamptz)
 RETURNS TABLE (series_id int, ts timestamptz, value real, qc int2)
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
@@ -282,7 +299,7 @@ AS $$
   CROSS JOIN LATERAL (
     SELECT o.ts, o.value, o.qc
     FROM public.obs o
-    WHERE o.series_id = e.series_id AND o.ts <= p_t AND o.ts > p_t - s.staleness_limit
+    WHERE o.series_id = e.series_id AND o.ts <= p_t AND o.ts > p_t - s.staleness_limit${v === 'v1' ? '' : `\n      AND o.ts > p_t - ${STALENESS_CAP}`}
       AND ${historyAllowed('e', 'o.ts')}
     ORDER BY o.ts DESC
     LIMIT 1) o
@@ -290,6 +307,7 @@ AS $$
 $$;
 REVOKE ALL ON FUNCTION ${name}(timestamptz) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION ${name}(timestamptz) TO ${FAMILY_ROLES[p.audience].join(', ')};`;
+};
 
 // The columns code reads must be the columns the views select (audience.ts row types).
 function assertColumns(body: string, columns: readonly string[], what: string): void {
@@ -642,11 +660,12 @@ export const TIDE_AT_MIGRATION = new URL('../db/migrations/20261118000001_views_
 const EXTREME_WINDOW = "interval '15 hours'";
 
 /**
- * P18a D-2: a series carries tide only at a station flagged tidal. ONE fragment, the driver of the TIDE_AT functions
+ * P18a D-2: a series carries tide only at a station flagged tidal. ONE predicate, the driver of the TIDE_AT functions
  * and the filter of the api tide views, so `/snapshot` and `/series` agree on which series carry tide.
  */
+const TIDAL_FLAG = "st.flags ->> 'tidal' = 'true'";
 const tidalStation = (e: string) =>
-  `EXISTS (SELECT 1 FROM public.station st WHERE st.id = ${e}.station_id AND st.flags ->> 'tidal' = 'true')`;
+  `EXISTS (SELECT 1 FROM public.station st WHERE st.id = ${e}.station_id AND ${TIDAL_FLAG})`;
 
 /**
  * P18a as a function (see TIDE_AT in audience.ts), built like `obsAt`: the active visible primary series at tidal
@@ -656,8 +675,17 @@ const tidalStation = (e: string) =>
  * in the window before T, and the oldest astronomical one in the window after T (never a measured one after T, which
  * a settled snapshot must not know). Every row passes the history rule; each probe is a range or one step on the
  * primary key (series_id, kind, ts).
+ *
+ * `v1` is the body of TIDE_AT_MIGRATION (frozen). `fenced` (#212 F1, AT_T_PLANS_MIGRATION) drives the series from
+ * the tidal stations: the planner expects about 10 rows of series_eff and would otherwise probe station_pkey once per
+ * series (4,000 probes for 100 tidal series); `OFFSET 0` keeps it from flattening the subquery back into that plan.
+ * station.id is the key, so the join yields each series at most once, exactly the rows of the EXISTS.
  */
-const tideAt = (name: string, p: Params) => `CREATE FUNCTION ${name}(p_t timestamptz)
+export const tideAt = (
+  name: string,
+  p: Params,
+  v: 'v1' | 'fenced' = 'v1',
+) => `CREATE${v === 'v1' ? '' : ' OR REPLACE'} FUNCTION ${name}(p_t timestamptz)
 RETURNS TABLE (series_id int, kind text, hilo text, ts timestamptz, value real)
 LANGUAGE sql STABLE SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
@@ -666,10 +694,17 @@ ROWS 1500
 AS $$
   WITH tidal AS MATERIALIZED (
     SELECT e.series_id, e.lic_history_export, e.history_window, s.staleness_limit
-    FROM public.series_eff e
+${
+  v === 'v1'
+    ? `    FROM public.series_eff e
     JOIN public.series s ON s.id = e.series_id
     WHERE s.active AND ${seriesVisible('e', p)}
-      AND ${tidalStation('e')}
+      AND ${tidalStation('e')}`
+    : `    FROM (SELECT st.id FROM public.station st WHERE ${TIDAL_FLAG} OFFSET 0) st
+    JOIN public.series_eff e ON e.station_id = st.id
+    JOIN public.series s ON s.id = e.series_id
+    WHERE s.active AND ${seriesVisible('e', p)}`
+}
   )
   SELECT e.series_id, d.kind, d.hilo, d.ts, d.value
   FROM tidal e
@@ -738,6 +773,42 @@ DROP VIEW ${VIEWS.public.api.tide};
 `;
 }
 
+export const AT_T_PLANS_MIGRATION = new URL('../db/migrations/20261119000001_views_at_t_plans.sql', import.meta.url);
+
+/**
+ * #212: the public Q1 gains the constant bound (`obsAt` `capped`) and both TIDE_AT functions the fenced driver
+ * (`tideAt` `fenced`); same signatures, owner, SECURITY DEFINER, settings and grants. The owner Q1 is not touched.
+ * Down replaces them with the frozen bodies.
+ */
+export function atTPlansMigration(): string {
+  const orReplace = (sql: string) => sql.replace('CREATE FUNCTION', 'CREATE OR REPLACE FUNCTION');
+  const p = (audience: ChannelAudience): Params => ({ audience, api: false });
+  const up = [
+    obsAt(OBS_AT.public, p('public'), 'capped'),
+    ...(['public', 'owner'] as const).map((a) => tideAt(TIDE_AT[a], p(a), 'fenced')),
+  ];
+  const down = [
+    orReplace(obsAt(OBS_AT.public, p('public'))),
+    ...(['public', 'owner'] as const).map((a) => orReplace(tideAt(TIDE_AT[a], p(a)))),
+  ];
+  return `-- GENERATED by scripts/gen-views.ts from apps/server/src/db/audience.ts. Do not edit:
+-- change the generator and run it again (CI fails on a difference).
+--
+-- #212: the plans of the "at T" functions, same rows. The public Q1 gains a constant lower bound, T minus the
+-- 2-day cap on the staleness limit of every public series (the registry refuses more; the owner canary's 100 years
+-- are why the owner Q1 keeps its bound per series only), so the history partitions are pruned at executor start-up
+-- instead of per series. Both "tide rows at T" functions find their series from the tidal stations through a fenced
+-- subquery (OFFSET 0 keeps the planner from turning it back into one station_pkey probe per series). Same
+-- signatures, owner, SECURITY DEFINER, settings and grants.
+
+-- migrate:up
+${up.join('\n\n')}
+
+-- migrate:down
+${down.join('\n\n')}
+`;
+}
+
 if (import.meta.main) {
   const files: [URL, string][] = [
     [VIEWS_MIGRATION, viewsMigration()],
@@ -745,6 +816,7 @@ if (import.meta.main) {
     [PUBLISH_MIGRATION, publishMigration()],
     [HISTORY_MIGRATION, historyMigration()],
     [TIDE_AT_MIGRATION, tideAtMigration()],
+    [AT_T_PLANS_MIGRATION, atTPlansMigration()],
     ...(Object.entries(LATER) as [keyof typeof LATER, URL][]).map(([l, url]): [URL, string] => [
       url,
       laterMigration(l),

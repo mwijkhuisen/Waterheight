@@ -272,10 +272,10 @@ CREATE FUNCTION public.own_tide_at(p_t timestamp with time zone) RETURNS TABLE(s
     AS $$
   WITH tidal AS MATERIALIZED (
     SELECT e.series_id, e.lic_history_export, e.history_window, s.staleness_limit
-    FROM public.series_eff e
+    FROM (SELECT st.id FROM public.station st WHERE st.flags ->> 'tidal' = 'true' OFFSET 0) st
+    JOIN public.series_eff e ON e.station_id = st.id
     JOIN public.series s ON s.id = e.series_id
     WHERE s.active AND e.audience IN ('public', 'owner') AND e.role = 'primary' AND e.lic_display
-      AND EXISTS (SELECT 1 FROM public.station st WHERE st.id = e.station_id AND st.flags ->> 'tidal' = 'true')
   )
   SELECT e.series_id, d.kind, d.hilo, d.ts, d.value
   FROM tidal e
@@ -373,6 +373,7 @@ CREATE FUNCTION public.pub_obs_at(p_t timestamp with time zone) RETURNS TABLE(se
     SELECT o.ts, o.value, o.qc
     FROM public.obs o
     WHERE o.series_id = e.series_id AND o.ts <= p_t AND o.ts > p_t - s.staleness_limit
+      AND o.ts > p_t - interval '2 days'
       AND (e.lic_history_export OR o.ts >= statement_timestamp() - e.history_window)
     ORDER BY o.ts DESC
     LIMIT 1) o
@@ -391,10 +392,10 @@ CREATE FUNCTION public.pub_tide_at(p_t timestamp with time zone) RETURNS TABLE(s
     AS $$
   WITH tidal AS MATERIALIZED (
     SELECT e.series_id, e.lic_history_export, e.history_window, s.staleness_limit
-    FROM public.series_eff e
+    FROM (SELECT st.id FROM public.station st WHERE st.flags ->> 'tidal' = 'true' OFFSET 0) st
+    JOIN public.series_eff e ON e.station_id = st.id
     JOIN public.series s ON s.id = e.series_id
     WHERE s.active AND e.audience IN ('public') AND e.role = 'primary' AND e.lic_display
-      AND EXISTS (SELECT 1 FROM public.station st WHERE st.id = e.station_id AND st.flags ->> 'tidal' = 'true')
   )
   SELECT e.series_id, d.kind, d.hilo, d.ts, d.value
   FROM tidal e
@@ -3083,4 +3084,5 @@ INSERT INTO public.schema_migrations (version) VALUES
     ('20261115000003'),
     ('20261116000001'),
     ('20261117000001'),
-    ('20261118000001');
+    ('20261118000001'),
+    ('20261119000001');
