@@ -64,7 +64,7 @@ RUN pnpm install --frozen-lockfile \
 # The layout is part of the P1a ↔ P1b contract: capture reads <root>/registry
 # next to <root>/apps/server/dist; migrate runs <root>/bin/dbmate on
 # <root>/db/migrations; basemap runs <root>/bin/pmtiles.
-FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:a3bb283a564754266646d6029c5b6aa4f760b9415dae1398db8d7f8142ee1375
+FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:96455baef11b178fc135b32206e3922c515dbed2400676c94f907f8f84e6abf6
 WORKDIR /app
 COPY --from=build /out /app
 COPY --from=go /gobin /app/bin
