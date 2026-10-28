@@ -61,8 +61,8 @@ const rawDirOf = (env: Readonly<Record<string, string | undefined>>) => env.RWS_
 
 /**
  * The shortest capture cadence per source (what "fresh" means for its fetches), the cadence of every spec, and the
- * seed-only sources: a seed spec and no cron spec (CH-3). A source with neither is judged on its fetch age, so a
- * spec set to `cron: null` by mistake cannot hide its source's staleness (review SR-6).
+ * seed-only sources: a seed spec and no cron spec (none since #235 gave CH-3 a daily cron). A source with neither is
+ * judged on its fetch age, so a spec set to `cron: null` by mistake cannot hide its source's staleness (review SR-6).
  */
 export function cadences(specs: readonly LoadedSpec[]): {
   source: Map<string, number>;

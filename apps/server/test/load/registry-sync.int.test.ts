@@ -122,9 +122,9 @@ describe('registry sync', { timeout: 60_000 }, () => {
       // P16b: the 18 structure-internal NL-1 rows (lock chambers, gate slots, pumping stations).
       { source_id: 'NL-1', n: 18 },
     ]);
-    // DE-1 238, NL-1 85, FR-1 550, FR-3 26, CH-1 412, CH-2 380, DE-7 251 and LU-1 42 series, and from P5c the owner
+    // DE-1 238, NL-1 85, FR-1 550, FR-3 67 (#235: 26 before), CH-1 412, CH-2 380, DE-7 251 and LU-1 42 series, and from P5c the owner
     // audience's BE-3 607 and LU-2 39 (registry/stations/*.yaml); P14b: + 71 FR-1 aggregate twins (FR-2 QmnJ, HIXnJ).
-    expect(await h.count('series')).toBe(3045);
+    expect(await h.count('series')).toBe(3086);
     // A cm series without a published gauge zero has a local datum: 8 before P5b, and the 41 LU-1 gauges in cm
     // (their zeros are LU-4's, an owner source; Esch-Sure is a level in m NG95). The 251 DE-7 gauges are NHN.
     const local = (
@@ -135,12 +135,12 @@ describe('registry sync', { timeout: 60_000 }, () => {
     const tier = (await h.t.admin.query('SELECT tier, count(*)::int AS n FROM station GROUP BY 1 ORDER BY 1')).rows;
     expect(tier).toEqual([
       // DE-1: 41 and 158; NL-1: 31 and 41 (P5a: the 7 Belgian points); FR-1: 40 and 264 (review CR-4: the bold
-      // Torgny); CH-1: 17 and 210; the 15 FR-3 and 207 CH-2 twin stations are tier 2. P5b: DE-7 9 and 242; LU-1 11
+      // Torgny); CH-1: 17 and 210; the 38 FR-3 (#235; 15 before) and 207 CH-2 twin stations are tier 2. P5b: DE-7 9 and 242; LU-1 11
       // (Bollendorf, withheld, among them) and 31 (28 primary, 3 twins).
       // P5c: BE-3 19 and 313, LU-2 39 (twins, tier 2).
       // P16b: the 29 coast, estuary and lake stations of the sea tier are tier 1 (319 new NL-1 stations).
       { tier: 1, n: 197 },
-      { tier: 2, n: 1810 },
+      { tier: 2, n: 1833 },
     ]);
   });
 
@@ -185,7 +185,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
       { source_id: 'DE-7', role: 'primary', n: 251 },
       { source_id: 'FR-1', role: 'mirror', n: 6 },
       { source_id: 'FR-1', role: 'primary', n: 298 },
-      { source_id: 'FR-3', role: 'twin', n: 15 },
+      { source_id: 'FR-3', role: 'twin', n: 38 },
       { source_id: 'LU-1', role: 'primary', n: 39 },
       { source_id: 'LU-1', role: 'twin', n: 3 },
       { source_id: 'LU-2', role: 'twin', n: 39 },
@@ -234,7 +234,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     const result = await syncRegistry(owner.db, readRegistry());
     await owner.close();
     // P5c: 332 BE-3 and 39 LU-2 stations; 7 public twin pairs, 38 BE-3 and 39 LU-1/LU-2 owner pairs.
-    expect(result).toMatchObject({ stations: 2007, series: 3045, deactivated: 0, twins: 84, references: 2311 });
+    expect(result).toMatchObject({ stations: 2030, series: 3086, deactivated: 0, twins: 84, references: 2311 });
     expect((await h.t.admin.query('SELECT id, provider_key, active FROM series ORDER BY id')).rows).toEqual(before);
   });
 
@@ -540,7 +540,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     const dir = mkdtempSync(`${tmpdir()}/rws-registry-`);
     cpSync(new URL('../../../../registry/', import.meta.url), dir, { recursive: true });
     const url = pathToFileURL(`${dir}/`);
-    expect(readRegistry(url).stations).toHaveLength(3045);
+    expect(readRegistry(url).stations).toHaveLength(3086);
     // An owner source that loses its private_basis.
     const sources = read(`${dir}/sources.yaml`, 'utf8');
     writeFileSync(
@@ -555,7 +555,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     writeFileSync(`${dir}/permissions/BE-3.md`, '---\nsource: BE-3\n---\n');
     expect(() => readRegistry(url)).toThrow(/permissions/);
     rmSync(`${dir}/permissions/BE-3.md`);
-    expect(readRegistry(url).stations).toHaveLength(3045);
+    expect(readRegistry(url).stations).toHaveLength(3086);
     // A withholding record names registered series that are audience off, else the sync refuses it.
     const record = read(`${dir}/permissions/LU-1.md`, 'utf8');
     writeFileSync(`${dir}/permissions/LU-1.md`, record.replace('[Bollendorf, Gemünd_Our]', '[Bollendorf, Diekirch]'));

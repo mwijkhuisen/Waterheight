@@ -656,13 +656,16 @@ specs:
     max_bytes: 8388608
     retention: forever
     validity: { format: json, required: [data], count: data, min: 1 }
+  # #235: the daily gap-fill of FR-1. The FR-1 tier-1 series Vigicrues publishes (registry/seed/fr-3-series.csv, held
+  # equal to them by test/registry-fr1.test.ts), once a day after the backfill window, 2 s apart (R-059). Each answer
+  # is the whole series Vigicrues keeps (no time-range parameter). The seed (done 2026-09-30) never runs again.
   - id: fr-3-obs
     source: FR-3
     version: 1
-    cron: null
+    cron: "5 7 * * *"
     request:
       url: https://www.vigicrues.gouv.fr/services/observations.json/index.php?CdStationHydro={code}&GrdSerie={grd}&FormatSortie=simple
-    variants: { seed: fr-3, each: { grd: [H, Q] }, key: [code, grd] }
+    variants: { seed: fr-3-series, key: [code, grd], space_ms: 2000 }
     max_bytes: 4194304
     retention: obs
     validity: { format: json, required: [Serie], reject: [error_msg], count: Serie.ObssHydro, min: 1 }
@@ -739,7 +742,8 @@ specs:
     cron: "40 2 * * 0"
     request:
       url: https://www.vigicrues.gouv.fr/services/station.json/index.php?CdStationHydro={code}
-    variants: { seed: fr-3, key: [code], space_ms: 2000 }
+    # The 15 key stations only (the `weekly` rows of fr-3.csv; owner, #235): the stations #235 added are gap-fill only.
+    variants: { seed: fr-3, where: { history: weekly }, key: [code], space_ms: 2000 }
     max_bytes: 4194304
     retention: forever
     validity: { format: json, required: [CdStationHydro], reject: [error_msg] }
@@ -856,13 +860,16 @@ specs:
     max_bytes: 4194304
     retention: obs   # P7a: the daily copy and every payload whose wl_1..wl_4 changed are kept (load/prune.ts)
     validity: { format: json, required: [features], count: features, min: 150 }
+  # #235: the daily gap-fill of CH-1 (LINDAS states only its latest value). The 40-day plot of every tier-1 CH-1
+  # station (registry/seed/ch-3.csv), once a day after the backfill window, 2 s apart. The seed (done 2026-09-30) never
+  # runs again.
   - id: ch-3-40d
     source: CH-3
     version: 1
-    cron: null
+    cron: "50 6 * * *"
     request:
       url: https://www.hydrodaten.admin.ch/plots/p_q_40days/{id}_p_q_40days_de.json
-    variants: { seed: ch-3, key: [id] }
+    variants: { seed: ch-3, key: [id], space_ms: 2000 }
     max_bytes: 8388608
     retention: obs
     validity: { format: json, required: [plot.data], count: plot.data, min: 1 }

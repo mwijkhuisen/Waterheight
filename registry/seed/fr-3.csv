@@ -1,18 +1,43 @@
-# FR-3 key stations (catalogue §2.5, §3; the ~2-month Vigicrues seed and the weekly CruesHistoriques), each in the
-# recorded Hub'Eau referential.
-code,name
-B720000001,"La Meuse à Chooz - Trou du Diable ""DREAL"""
-A850061001,"La Moselle à Uckange"
-A302009050,"Le Rhin à Lauterbourg"
-A061005051,"Le Rhin à Strasbourg [sémaphore nord]"
-B540001001,"La Meuse à Charleville-Mézières"
-B502001001,"La Meuse à Sedan"
-B315002001,"La Meuse à Stenay"
-B611101001,"La Semoy à Haulmé"
-A940000101,"La Sarre en Allemagne [Hanweiler]"
-A743061001,"La Moselle à Metz [Pont des Morts]"
-A573061001,"La Moselle à Toul"
-A443064001,"La Moselle à Épinal"
-E240041101,"L'Escaut canalisée à Maulde"
-D019223001,"La Sambre canalisée à Marpent"
-E381126501,"La Lys à Bousbecque"
+# FR-3 stations (catalogue §2.5, §3): the FR-1 tier-1 stations Vigicrues publishes (#235; held equal to them by
+# test/registry-fr1.test.ts), each in the recorded Hub'Eau referential, plus Hanweiler (an FR-1 mirror). The daily
+# gap-fill asks the series of registry/seed/fr-3-series.csv; history `weekly` marks the 15 key stations of the
+# ~2-month seed and the weekly CruesHistoriques (fr-5-stations).
+code,name,history
+B720000001,"La Meuse à Chooz - Trou du Diable ""DREAL""",weekly
+A850061001,"La Moselle à Uckange",weekly
+A302009050,"Le Rhin à Lauterbourg",weekly
+A061005051,"Le Rhin à Strasbourg [sémaphore nord]",weekly
+B540001001,"La Meuse à Charleville-Mézières",weekly
+B502001001,"La Meuse à Sedan",weekly
+B315002001,"La Meuse à Stenay",weekly
+B611101001,"La Semoy à Haulmé",weekly
+A940000101,"La Sarre en Allemagne [Hanweiler]",weekly
+A743061001,"La Moselle à Metz [Pont des Morts]",weekly
+A573061001,"La Moselle à Toul",weekly
+A443064001,"La Moselle à Épinal",weekly
+E240041101,"L'Escaut canalisée à Maulde",weekly
+D019223001,"La Sambre canalisée à Marpent",weekly
+E381126501,"La Lys à Bousbecque",weekly
+A228003001,"L'Ill à Strasbourg [Chasseur Froid]",
+A692101001,"La Meurthe à Laneuveville-devant-Nancy [la Madeleine]",
+A701061001,"La Moselle à Custines",
+A793061002,"La Moselle à Hagondange",
+A920107050,"La Sarre à Sarralbe [centre]",
+A930108040,"La Sarre à Wittring",
+B222001001,"La Meuse à Saint-Mihiel",
+B402101001,"La Chiers à Longwy",
+B403101001,"La Chiers à Montigny-sur-Chiers",
+B422431101,"La Chiers en Belgique [Torgny]",
+B460101001,"La Chiers à Chauvency-le-Château",
+B463101001,"La Chiers à Carignan",
+B466010101,"La Chiers à Brévilly",
+B700001002,"La Meuse à Monthermé - Limnimètre",
+D016221001,"La Sambre canalisée à Berlaimont",
+D019801101,"La Sambre canalisée à Maubeuge [aval écluse]",
+E171551101,"L'Escaut canalisée à Neuville-sur-Escaut",
+E172751201,"L'Escaut canalisée à Trith-Saint-Léger",
+E201000501,"La Scarpe à Anzin-Saint-Aubin",
+E207111003,"La Scarpe canalisée à Brebières - Station partenaire VNF",
+E237110501,"La Scarpe canalisée à Mortagne-du-Nord",
+E364121002,"La Lys à Merville - DREAL",
+E367125002,"La Lys à Armentières - Station partenaire VNF",

@@ -4,7 +4,7 @@
 # through `node scripts/gen-fr5-sections.ts --extract <export dir>`. Reviewed corrections go in
 # registry/vigicrues-overrides.yaml, never here.
 #   registry/seed/fr-5-sections.csv  sha256 40e8e4d1f6528ae97e52c1b5b012b7fabd7e3e1ffcc2112838c57ad377d12187
-#   registry/stations/fr-1.yaml  sha256 24ad40a1a879bbfcef463127872c1f14d0740217de00cd0334dba1d787e39386
+#   registry/stations/fr-1.yaml  sha256 a999393e6d0f809225318f297ff17c716d091c75715e12da83b189be68ad3944
 # 56 sections of the territories 2, 3 and 29, 331 Vigicrues stations, of which 233 are FR-1 primary stage series of the public site (station) and 98 are not (null).
 # none: our public FR-1 stations on the French Escaut, Scarpe or Deûle, which no section covers.
 sections:

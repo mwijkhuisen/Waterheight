@@ -121,8 +121,13 @@ describe('status files', () => {
     const today = s.days.find((d) => d.source === 'NL-1' && d.date === '2026-10-02');
     expect(today?.scheduled).toBe(today ? today.ok + today.upstream_5xx + today.timeouts + today.other : -1);
     expect(Object.keys(today?.bytes ?? {}).every((id) => id.startsWith('nl-1-'))).toBe(true);
-    // Seed-only specs are not scheduled specs.
-    expect(s.specs.some((x) => x.spec === 'fr-3-obs' || x.spec === 'ch-3-40d')).toBe(false);
+    // fr-3-obs and ch-3-40d have a daily cron since #235: they are scheduled specs, no longer seed-only.
+    expect(
+      s.specs
+        .filter((x) => x.spec === 'fr-3-obs' || x.spec === 'ch-3-40d')
+        .map((x) => x.spec)
+        .sort(),
+    ).toEqual(['ch-3-40d', 'fr-3-obs']);
   });
 
   it('name at most 20 failed items, pattern-checked, an owner spec’s only in the owner file (#39)', async () => {

@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { REGISTRY_DIR, readSeed } from '../apps/server/src/capture/specs.ts';
 import { type PublicStation, SourcesFile, StationsFile, validateStations } from '../packages/contracts/src/index.ts';
 import {
   deriveSeries,
@@ -20,7 +21,7 @@ import { repoRoot } from './catalogue.ts';
 
 // registry/stations/fr-1.yaml and fr-3.yaml are generated (scripts/gen-fr1-stations.ts) from the recorded
 // Hub'Eau referentiel fixtures, the series list derived from a recording of one UTC day of live runs
-// (registry/seed/fr-1-series.csv), the 18 Belgian partners and the 15 FR-3 key stations: the committed files
+// (registry/seed/fr-1-series.csv), the 18 Belgian partners and the 38 FR-3 stations (#235): the committed files
 // are exactly the generator's output, and they hold what the catalogue (§3.1-§3.4, §0.6) says about the stations.
 
 const committed = { fr1: readFileSync(OUTPUT_FR1, 'utf8'), fr3: readFileSync(OUTPUT_FR3, 'utf8') };
@@ -101,6 +102,7 @@ const FORECAST = [
   'B611101001',
   'D019801101',
 ];
+// The 15 key stations of the first FR-3 list: the `weekly` rows of fr-3.csv, which FR-5 still reads (#235).
 const FR3 = [
   'A061005051',
   'A302009050',
@@ -416,8 +418,8 @@ describe('the FR-2 aggregate twins in registry/stations/fr-1.yaml (P14b)', () =>
     expect(fr1All.filter((r) => r.tier === 1)).toHaveLength(71);
   });
 
-  it('are in the FR-1 file only: FR-3 still holds its 26 twins and no aggregate', () => {
-    expect(fr3).toHaveLength(26);
+  it('are in the FR-1 file only: FR-3 holds its 67 twins (#235) and no aggregate', () => {
+    expect(fr3).toHaveLength(67);
     expect(fr3.some((r) => r.aggregate !== undefined || /Qmn|HIXn/.test(r.provider_key))).toBe(false);
   });
 
@@ -438,12 +440,12 @@ describe('registry/stations/fr-3.yaml', () => {
     expect(validateStations(parse(committed.fr3), sources).problems).toEqual([]);
   });
 
-  it('holds the twins of the 15 key stations of fr-3.csv: 26 rows (15 H, 11 Q), role twin, tier 2, never first_release', () => {
-    expect(inputs.fr3.map((r) => r.code)).toEqual(expect.arrayContaining(FR3));
-    expect(codes(fr3)).toEqual([...FR3].sort());
-    expect(fr3).toHaveLength(26);
-    expect(fr3.filter((r) => r.quantity === 'H')).toHaveLength(15);
-    expect(fr3.filter((r) => r.quantity === 'Q')).toHaveLength(11);
+  it('holds the twins of the 38 stations of fr-3.csv: 67 rows (38 H, 29 Q), role twin, tier 2, never first_release (#235)', () => {
+    expect(codes(fr3)).toEqual(inputs.fr3.map((r) => r.code).sort());
+    expect(inputs.fr3).toHaveLength(38);
+    expect(fr3).toHaveLength(67);
+    expect(fr3.filter((r) => r.quantity === 'H')).toHaveLength(38);
+    expect(fr3.filter((r) => r.quantity === 'Q')).toHaveLength(29);
     for (const r of fr3) {
       expect(r).toMatchObject({
         id: `fr.vigicrues.${r.provider_code}`,
@@ -502,12 +504,59 @@ describe('registry/stations/fr-3.yaml', () => {
   });
 
   it('has a twin for each quantity that FR-1 registers for the station, and only those', () => {
-    for (const code of FR3) {
+    for (const { code } of inputs.fr3) {
       const quantities = (of: PublicStation[]) => of.filter((r) => r.provider_code === code).map((r) => r.quantity);
       expect([code, quantities(fr3)]).toEqual([code, quantities(fr1)]);
     }
     // Strasbourg, Metz, Charleville and Hanweiler state a stage only.
     expect(fr3.filter((r) => r.provider_code === 'A743061001').map((r) => r.quantity)).toEqual(['H']);
+  });
+});
+
+describe('the FR-3 and CH-3 gap-fill lists (#235)', () => {
+  const tier1Primary = (of: PublicStation[]) =>
+    of.filter((r) => r.tier === 1 && r.role === 'primary' && r.audience === 'public');
+  // Not in the Vigicrues index (observations.json, H and Q) of 2026-10-28 08:00Z: three FR-1 tier-1 stations, so
+  // five series that fr-3.csv and fr-3-series.csv leave out (no request for a series Vigicrues lacks).
+  const NOT_ON_VIGICRUES = ['E131000202', 'E223000101', 'E364121001'];
+  const fr3Codes = readSeed(REGISTRY_DIR, 'fr-3').map((r) => r.code as string);
+  const fr3Series = readSeed(REGISTRY_DIR, 'fr-3-series').map((r) => `${r.code}/${r.grd}`);
+
+  it('ch-3.csv is exactly the CH-1 tier-1 stations', () => {
+    const ids = readSeed(REGISTRY_DIR, 'ch-3').map((r) => r.id as string);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect([...ids].sort()).toEqual(codes(tier1Primary(ch1)));
+  });
+
+  it('fr-3.csv holds the FR-1 tier-1 stations Vigicrues lists, plus Hanweiler (the FR-1 mirror), and nothing else', () => {
+    const tier1 = codes(tier1Primary(fr1));
+    expect(new Set(fr3Codes).size).toBe(fr3Codes.length);
+    for (const code of tier1.filter((c) => !NOT_ON_VIGICRUES.includes(c))) expect(fr3Codes, code).toContain(code);
+    for (const code of NOT_ON_VIGICRUES) {
+      expect(tier1).toContain(code);
+      expect(fr3Codes, code).not.toContain(code);
+    }
+    expect(fr3Codes.filter((c) => !tier1.includes(c))).toEqual(['A940000101']);
+  });
+
+  it('fr-3-series.csv is exactly the FR-1 tier-1 series at the fr-3.csv stations, without a duplicate', () => {
+    expect(new Set(fr3Series).size).toBe(fr3Series.length);
+    const want = tier1Primary(fr1)
+      .filter((r) => fr3Codes.includes(r.provider_code))
+      .map((r) => r.provider_key);
+    expect([...fr3Series].sort()).toEqual([...want].sort());
+  });
+
+  it('every fr-3-series key has an FR-3 twin row with the same provider key (else the normaliser fills nothing)', () => {
+    const twins = new Set(fr3.map((r) => r.provider_key));
+    for (const key of fr3Series) expect(twins.has(key), key).toBe(true);
+  });
+
+  it('the `weekly` rows of fr-3.csv are exactly the 15 original key stations (FR-5 reads them)', () => {
+    const weekly = readSeed(REGISTRY_DIR, 'fr-3')
+      .filter((r) => r.history === 'weekly')
+      .map((r) => r.code as string);
+    expect([...weekly].sort()).toEqual([...FR3].sort());
   });
 });
 
