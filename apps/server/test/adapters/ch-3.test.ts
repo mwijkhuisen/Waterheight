@@ -141,6 +141,25 @@ describe('golden files (real payloads)', () => {
     expect(out.dropped.too_old).toBeUndefined();
   });
 
+  it('Romanshorn (2032), a level-only station: one Wasserstand trace fills the level, no discharge series', () => {
+    const out = run('ch-3-40d-2032', '2032');
+    expect(out).toEqual(golden('ch-3-40d-2032', out));
+    expect(out.obs).toEqual([]);
+    // The plot is a single trace (`m ü.M.` alone) and CH-1 has no 2032/Q: nothing is unknown, nothing is Q.
+    expect(out.unknown).toBe(0);
+    expect(new Set((out.fill ?? []).map((r) => r.series))).toEqual(new Set(['2032/W']));
+    expect(out.fill?.length).toBeGreaterThan(0);
+    // Every value is the raw m ü.M. × 100 at the same instant, raw quality.
+    const trace = plot('ch-3-40d-2032')[0] as Trace;
+    const raw = new Map(trace.x.map((x, j) => [new Date(x).toISOString(), trace.y[j]]));
+    for (const r of out.fill ?? []) {
+      expect(r.value).toBeCloseTo((raw.get(r.ts) as number) * 100, 6);
+      expect(r.qc).toBe(QC.RAW);
+    }
+    // Points = rows + counted drops.
+    expect(trace.x.length).toBe((out.fill?.length ?? 0) + Object.values(out.dropped).reduce((a, b) => a + b, 0));
+  });
+
   it('the kept rows are published values, never an average: every fill value is a raw point at the same instant', () => {
     const traces = plot('ch-3-40d-2289');
     const out = run('ch-3-40d-2289', '2289');
@@ -152,12 +171,15 @@ describe('golden files (real payloads)', () => {
     }
   });
 
-  it('the plot has exactly two traces: Wasserstand (m ü.M.) and Abfluss (m³/s), in that order', () => {
+  it('the two-trace plots are Wasserstand (m ü.M.) then Abfluss (m³/s); the level-only plot is Wasserstand alone', () => {
     for (const name of ['ch-3-40d', 'ch-3-40d-2289', 'ch-3-40d-2473']) {
       expect(plot(name).map((t) => [t.name, t.meta.unit])).toEqual([
         ['Wasserstand', 'm ü.M.'],
         ['Abfluss', 'm³/s'],
       ]);
+    }
+    for (const name of ['ch-3-40d-2032-plot', 'ch-3-40d-2032']) {
+      expect(plot(name).map((t) => [t.name, t.meta.unit])).toEqual([['Wasserstand', 'm ü.M.']]);
     }
   });
 });
@@ -193,6 +215,32 @@ describe('the trimmed fixture is cut from the recording by the committed rule', 
     expect(doc.plot.layout).toEqual(source.plot.layout);
     expect(doc.hoverInfo).toEqual(source.hoverInfo);
   });
+
+  it('the level-only fixture (2032) is cut from its one-trace recording by the same rule', () => {
+    const rec = rawFixture('CH-3', 'ch-3-40d-2032-plot');
+    const src = JSON.parse(rec.body.toString('utf8'));
+    const cut = rawFixture('CH-3', 'ch-3-40d-2032');
+    const d = JSON.parse(cut.body.toString('utf8'));
+    expect(cut.meta).toMatchObject({
+      source: 'CH-3',
+      spec: 'ch-3-40d',
+      variant: '2032',
+      synthetic: false,
+      from: 'trimmed',
+      source_sha256: createHash('sha256').update(rec.body).digest('hex'),
+      trimmed: 'last 600 points of every trace',
+      url: rec.meta.url,
+    });
+    expect(rec.meta.url).toContain('/2032_p_q_40days_de.json');
+    expect(src.plot.data).toHaveLength(1);
+    expect(d.plot.data).toHaveLength(1);
+    const full = src.plot.data[0];
+    expect(d.plot.data[0].x).toEqual(full.x.slice(-600));
+    expect(d.plot.data[0].y).toEqual(full.y.slice(-600));
+    expect({ ...d.plot.data[0], x: undefined, y: undefined }).toEqual({ ...full, x: undefined, y: undefined });
+    expect(d.plot.layout).toEqual(src.plot.layout);
+    expect(d.hoverInfo).toEqual(src.hoverInfo);
+  });
 });
 
 describe('synthetic payloads [U]', () => {
@@ -213,15 +261,22 @@ describe('synthetic payloads [U]', () => {
   const series = (n: number, from = 0): Point[] => Array.from({ length: n }, (_, i) => [t(from + i * 5), 244 + i]);
   const norm = (traces: Trace[], c: Context = base) => normalisePlot(traces, c);
 
-  it('the trace rule: Wasserstand (m ü.M.) first, Abfluss (m³/s) second, exactly two; anything else is trace_order drift', () => {
+  it('the trace rule: a prefix of Wasserstand (m ü.M.) then Abfluss (m³/s); anything else is trace_order drift', () => {
     const w = W(series(2));
     const q = Q(series(2));
     expect(norm([w, q]).fill).toHaveLength(2);
+    // The level alone (a level-only station's plot) fills the level.
+    expect(of(norm([w]), '2289/W')).toHaveLength(1);
+    expect(of(norm([w]), '2289/Q')).toEqual([]);
     for (const traces of [
       [q, w],
-      [w],
+      [q],
       [w, q, q],
+      [w, q, w],
+      [w, w],
       [],
+      [trace('Wasserstand', 'm', series(2))],
+      [trace('Abfluss', 'm³/s', series(2))],
       [trace("Niveau d'eau", 'm ü.M.', series(2)), trace('Débit', 'm³/s', series(2))],
       [trace('Livello', 'm ü.M.', series(2)), trace('Portata', 'm³/s', series(2))],
       [trace('Wasserstand', 'm', series(2)), q],
@@ -232,6 +287,39 @@ describe('synthetic payloads [U]', () => {
     ]) {
       expect(() => norm(traces)).toThrow(expect.objectContaining({ code: 'trace_order' }));
     }
+  });
+
+  it('an exact 0 at an on-grid level is BAFU\'s "no value": dropped as sentinel, the neighbours kept; a discharge of 0 is kept', () => {
+    for (const zero of [0, -0]) {
+      const out = norm([
+        W([
+          [t(0), 244],
+          [t(10), zero],
+          [t(20), 245],
+        ]),
+        Q([
+          [t(0), 5],
+          [t(10), zero],
+          [t(20), 6],
+        ]),
+      ]);
+      expect(of(out, '2289/W').map((r) => r.value)).toEqual([24400, 24500]);
+      // Q of 0 is a reading.
+      expect(of(out, '2289/Q').map((r) => r.value)).toEqual([5, 0, 6]);
+      expect(out.dropped).toEqual({ sentinel: 1 });
+    }
+  });
+
+  it('an off-grid 0 at a level is thinned, not a sentinel (thin runs first)', () => {
+    const out = norm([
+      W([
+        [t(0), 244],
+        [t(5), 0],
+        [t(10), 245],
+      ]),
+    ]);
+    expect(of(out, '2289/W').map((r) => r.value)).toEqual([24400, 24500]);
+    expect(out.dropped).toEqual({ thinned: 1 });
   });
 
   it('a payload without a station id as its variant is bad_variant drift (the body does not name the station)', () => {
@@ -533,6 +621,22 @@ describe('property and fuzz tests', () => {
     traceOf('Abfluss', 'm³/s'),
     fc.constantFrom('2289', '2473', '2283', '2091', '999999'),
   );
+  // The level-only plot: Wasserstand alone, with a 0 (BAFU's "no value") in a large share of the points.
+  const levelPoint = fc.tuple(
+    x,
+    fc.oneof(fc.constant(0), fc.constant(-0), fc.double({ min: -50, max: 5000, noNaN: true })),
+  );
+  const levelOnly = fc.tuple(
+    fc.array(levelPoint, { maxLength: 80 }).map(
+      (ps): Trace => ({
+        name: 'Wasserstand',
+        x: ps.map((p) => p[0]),
+        y: ps.map((p) => p[1]),
+        meta: { unit: 'm ü.M.' },
+      }),
+    ),
+    fc.constantFrom('2289', '2473', '2032', '2091', '999999'),
+  );
 
   it('normalise yields valid, sorted, unique, on-grid, never-future fill rows and no obs; idempotent', () => {
     fc.assert(
@@ -562,6 +666,32 @@ describe('property and fuzz tests', () => {
         const dropped = Object.values(out.dropped).reduce((a, b) => a + b, 0);
         if (out.unknown === 0) expect(w.x.length + q.x.length).toBe(fill.length + dropped);
         expect(normalisePlot([w, q], { ...base, variant })).toEqual(out);
+      }),
+      { numRuns: 200 },
+    );
+  });
+
+  it('one trace (Wasserstand alone): the same invariants, and no fill row of a level has the value 0', () => {
+    fc.assert(
+      fc.property(levelOnly, ([w, variant]) => {
+        let out: Normalised;
+        try {
+          out = normalisePlot([w], { ...base, variant });
+        } catch (err) {
+          expect(err).toBeInstanceOf(SchemaDrift);
+          expect((err as SchemaDrift).code).toBe('duplicate_time');
+          return;
+        }
+        expect(out.obs).toEqual([]);
+        const fill = out.fill ?? [];
+        for (const r of fill) {
+          ObsRow.parse(r);
+          expect(r.value).not.toBe(0);
+          expect(r.series.endsWith('/W')).toBe(true);
+        }
+        const dropped = Object.values(out.dropped).reduce((a, b) => a + b, 0);
+        if (out.unknown === 0) expect(w.x.length).toBe(fill.length + dropped);
+        expect(normalisePlot([w], { ...base, variant })).toEqual(out);
       }),
       { numRuns: 200 },
     );
