@@ -1,6 +1,6 @@
 import type { Adapter } from '../../http/types.ts';
 
-// FR-3 Vigicrues observations (catalogue §2.5; the ~2-month seed only):
+// FR-3 Vigicrues observations (catalogue §2.5; scheduled daily since #235, after the ~2-month seed):
 // `ObssHydro` holds [epoch ms UTC, value] pairs.
 export const adapter: Adapter = {
   coverage(doc) {
