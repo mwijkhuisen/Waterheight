@@ -68,8 +68,8 @@ describe('check-bom', () => {
 
   it('fails when the bill of materials drifts from the pins', () => {
     const dir = scratch();
-    edit(dir, 'CLAUDE.md', '| vitest | npm | 5.0.4 |', '| vitest | npm | 5.0.5 |');
-    expect(checkBom(dir).join('\n')).toMatch(/vitest@5\.0\.4: the bill of materials says 5\.0\.5/);
+    edit(dir, 'CLAUDE.md', '| vitest | npm | 5.0.5 |', '| vitest | npm | 5.0.6 |');
+    expect(checkBom(dir).join('\n')).toMatch(/vitest@5\.0\.5: the bill of materials says 5\.0\.6/);
   });
 
   it('fails when a dependency has no row', () => {
