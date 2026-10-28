@@ -265,9 +265,13 @@ function derived(ids: ReadonlyMap<string, Series>) {
  *    row never replaces a live or backfill row, and any row of the series' own
  *    source replaces a fill row whatever its fetch time, so the rows, rollups
  *    and revisions are the same in either load order of a source and its fill;
- *  - `backfill` leaves obs_latest alone: history never makes a series look
- *    fresh or stale. The rollups of the buckets it changes are refreshed inline,
- *    as for every other row (plan §3.7).
+ *  - only `live` writes obs_latest. A backfill is history and never makes a
+ *    series look fresh or stale; a fill (#235) is another source's value and
+ *    never becomes the series' latest, however new it is: the latest stays
+ *    what the series' own source last stated, and a live row that later
+ *    replaces a fill row at that instant moves it. Fill and backfill rows still
+ *    count in obs and the rollups of the buckets they change, which are
+ *    refreshed inline, as for every other row (plan §3.7).
  * Returns the audience-counted numbers of the batch (n_new, n_changed, newest,
  * writes) and the per-row ledger classes (inserted, revised, skipped).
  */
@@ -396,7 +400,7 @@ export async function upsertObs(
     latest AS (
       INSERT INTO obs_latest AS l (series_id, ts, value, qc, batch_id)
       SELECT DISTINCT ON (series_id) series_id, ts, value, qc, ${batch}::bigint FROM up
-      WHERE ${mode}::text <> 'backfill'
+      WHERE ${mode}::text = 'live'
       ORDER BY series_id, ts DESC
       ON CONFLICT (series_id) DO UPDATE
         SET ts = EXCLUDED.ts, value = EXCLUDED.value, qc = EXCLUDED.qc, batch_id = EXCLUDED.batch_id

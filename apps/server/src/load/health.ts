@@ -25,8 +25,8 @@ export type HealthInputs = {
    */
   specCadenceS?: ReadonlyMap<string, number>;
   /**
-   * The sources captured by a seed only: a seed spec and no cron spec (CH-3; `cadences` in run.ts). They are not
-   * judged on how old their last fetch is; every other source is, a source with no spec at all included.
+   * The sources captured by a seed only: a seed spec and no cron spec (none since #235; `cadences` in run.ts). They
+   * are not judged on how old their last fetch is; every other source is, a source with no spec at all included.
    */
   seedOnly?: ReadonlySet<string>;
   /** p95 of "loaded at − fetched at" over the manifest lines fetched in the last hour, per source (ms). */
@@ -362,10 +362,10 @@ type Tier1 = { total: number; fresh: number; provider_stale: number };
  * (index probes on tier-1 series only); runs every minute.
  */
 export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promise<void> {
-  // Each tier-1 series: is its latest value fresh, and when was the payload fetched that last stated it. A latest
-  // row that another source filled (bit 512: FR-3 into FR-1, CH-3 into CH-1) says nothing about the series' own
-  // source: it is neither fresh nor provider-stale, and its fetch counts as unknown (review CR-3). A backfill row
-  // (512 too, P14a) never reaches obs_latest, and is history in any case.
+  // Each tier-1 series: is its latest value fresh, and when was the payload fetched that last stated it. Since #235
+  // only a live row reaches obs_latest (load/store.ts). A latest row a fill wrote before that (bit 512: FR-3 into
+  // FR-1, CH-3 into CH-1) stays until the series' own source states that instant or a later one, and says nothing
+  // about that source: it is neither fresh nor provider-stale, and its fetch counts as unknown (review CR-3).
   const tier1 = await sql<{ source_id: string; fresh: boolean; stated_at: Date | null; stated_by: string | null }>`
     SELECT s.source_id,
            COALESCE(l.ts > ${inputs.now}::timestamptz - s.staleness_limit AND (l.qc & ${QC.BACKFILLED}::int2) = 0,
@@ -453,7 +453,8 @@ export async function computeHealth(db: Kysely<DB>, inputs: HealthInputs): Promi
   await db.transaction().execute(async (tx) => {
     await lock(tx);
     for (const src of sources.rows) {
-      // A source captured by a seed only (CH-3: a seed spec, no cron spec) is not judged on how old its last fetch is.
+      // A source captured by a seed only (a seed spec, no cron spec; none since #235) is not judged on how old its
+      // last fetch is.
       const seedOnly = inputs.seedOnly?.has(src.id) === true;
       const cadenceMs = (inputs.cadenceS.get(src.id) ?? 3600) * 1000;
       const batch = batchOf.get(src.id);
