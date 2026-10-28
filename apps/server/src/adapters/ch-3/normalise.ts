@@ -25,7 +25,9 @@ import type { Trace } from './parse.ts';
 //  - the `_de` file's traces are a prefix of `Wasserstand` (m ü.M.) then
 //    `Abfluss` (m³/s): both, or `Wasserstand` alone (the level-only stations
 //    2032, 2043 and 2615, #235). Names, units and order are checked, because
-//    the other languages translate them (catalogue §2.7, CH-4);
+//    the other languages translate them (catalogue §2.7, CH-4). A plot without
+//    `Abfluss` at a station whose CH-1 series include a discharge counts one
+//    `missing_trace`, which the pipeline alerts (#235 review CR-1);
 //  - time: ISO 8601 with the provider's local offset;
 //  - unit and factor from the CH-1 series' registry row; a level never fills a
 //    series that CH-1 declares as a relative stage (`datum_mismatch`);
@@ -67,6 +69,9 @@ export function normalisePlot(traces: readonly Trace[], ctx: Context): Normalise
     traces.some((t, i) => t.name !== TRACES[i]?.name || t.meta.unit !== TRACES[i]?.unit)
   ) {
     throw new SchemaDrift('trace_order');
+  }
+  for (const want of TRACES.slice(traces.length)) {
+    if (ctx.fillRegistry?.has(`${ctx.variant}/${want.quantity}`)) count(out, 'missing_trace');
   }
   traces.forEach((trace, i) => {
     const want = TRACES[i] as (typeof TRACES)[number];

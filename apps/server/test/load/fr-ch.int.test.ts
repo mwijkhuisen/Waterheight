@@ -229,6 +229,24 @@ describe('gap-fill (FR-3 → FR-1, CH-3 → CH-1)', () => {
       await x.close();
     }
   }, 60_000);
+
+  it('alerts a CH-3 plot without Abfluss where CH-1 has a discharge series, once, and keeps nothing for it', async () => {
+    const x = await harness();
+    try {
+      // #235 review CR-1: the one-trace recording of 2032 under 2289, whose CH-1 series include 2289/Q.
+      await put(x, 'CH-3', 'ch-3-40d', 'ch-3-40d-2032', '2289');
+      await x.loader({ now: new Date('2026-10-29T00:00:00Z') }).tick();
+      expect(x.alerts).toEqual([{ code: 'missing_trace', fields: { source: 'CH-3', spec: 'ch-3-40d', n: 1 } }]);
+      // Not retained: the payload holds no discharge value a replay could load, so the object is not kept for it.
+      const { rows: b } = await x.t.admin.query('SELECT parse_status, n_skipped FROM ingest_batch');
+      expect(b).toEqual([{ parse_status: 'ok', n_skipped: 0 }]);
+      // The level still fills.
+      expect((await rows(x, 'CH-1', '2289/W')).length).toBeGreaterThan(0);
+      expect(await rows(x, 'CH-1', '2289/Q')).toEqual([]);
+    } finally {
+      await x.close();
+    }
+  }, 60_000);
 });
 
 describe('replay and health', () => {

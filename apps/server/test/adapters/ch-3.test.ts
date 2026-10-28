@@ -289,6 +289,21 @@ describe('synthetic payloads [U]', () => {
     }
   });
 
+  it('a plot without Abfluss where CH-1 has a discharge series counts one missing_trace; a level-only station none', () => {
+    // 2289 has 2289/Q in CH-1: the level still fills, the absent discharge trace is counted (the pipeline alerts it).
+    expect(fillRegistry.has('2289/Q')).toBe(true);
+    const out = norm([W(series(3))]);
+    expect(of(out, '2289/W')).toHaveLength(2);
+    expect(out.dropped).toEqual({ thinned: 1, missing_trace: 1 });
+    // 2032 has no discharge series in CH-1: its one-trace plot is complete.
+    expect(fillRegistry.has('2032/Q')).toBe(false);
+    const level = norm([W(series(3))], { ...base, variant: '2032' });
+    expect(of(level, '2032/W')).toHaveLength(2);
+    expect(level.dropped).toEqual({ thinned: 1 });
+    // Both traces: nothing is missing.
+    expect(norm([W(series(3)), Q(series(3))]).dropped.missing_trace).toBeUndefined();
+  });
+
   it('an exact 0 at an on-grid level is BAFU\'s "no value": dropped as sentinel, the neighbours kept; a discharge of 0 is kept', () => {
     for (const zero of [0, -0]) {
       const out = norm([
@@ -317,6 +332,7 @@ describe('synthetic payloads [U]', () => {
         [t(5), 0],
         [t(10), 245],
       ]),
+      Q([]),
     ]);
     expect(of(out, '2289/W').map((r) => r.value)).toEqual([24400, 24500]);
     expect(out.dropped).toEqual({ thinned: 1 });
@@ -689,7 +705,10 @@ describe('property and fuzz tests', () => {
           expect(r.value).not.toBe(0);
           expect(r.series.endsWith('/W')).toBe(true);
         }
-        const dropped = Object.values(out.dropped).reduce((a, b) => a + b, 0);
+        // `missing_trace` counts the absent Abfluss trace (where CH-1 has a discharge series), not a point.
+        const { missing_trace = 0, ...perPoint } = out.dropped;
+        expect(missing_trace).toBe(fillRegistry.has(`${variant}/Q`) ? 1 : 0);
+        const dropped = Object.values(perPoint).reduce((a, b) => a + b, 0);
         if (out.unknown === 0) expect(w.x.length).toBe(fill.length + dropped);
         expect(normalisePlot([w], { ...base, variant })).toEqual(out);
       }),
