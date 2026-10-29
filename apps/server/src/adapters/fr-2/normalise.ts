@@ -32,7 +32,9 @@ import type { ElabNullDay, ElabRecord } from './parse.ts';
 //  - unit and factor from the twin's registry row: QmnJ l/s (×0.001 → m³/s), HIXnJ mm (×0.1 → cm, a stage on the
 //    gauge zero of the station's H series, D16);
 //  - a null day (#242: no value, statut, méthode or qualification) is dropped as `no_value` right after the registry
-//    lookup, so a null day of an unregistered series is still `unknown`, and none reaches the rules below;
+//    lookup, so a null day of an unregistered series is still `unknown`, and none reaches the rules below: one outside
+//    the window or before the floor is `no_value` too, as it has no value to window. Its day must still exist (review
+//    CR-1): from the floor on, as for a daily value, a date the time rule cannot place is drift;
 //  - code_statut and qualification as FR-1 (`_shared/hubeau/quality.ts`): any other code withholds the value
 //    (`unknown_quality`, kept for a replay);
 //  - the window: a day outside the line's chunk (`ctx.backfill`, UTC days) or before 1950-01-01 is dropped as
@@ -99,6 +101,7 @@ export function normaliseElab(rows: readonly (ElabRecord | ElabNullDay)[], ctx: 
       continue;
     }
     if (r.resultat_obs_elab === null) {
+      if (r.date_obs_elab >= FLOOR_DAY) dayInstant(r.date_obs_elab);
       count(out, 'no_value');
       continue;
     }
