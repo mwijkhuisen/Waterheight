@@ -48,6 +48,26 @@ const CUTS: readonly Cut[] = [
   { name: 'fr-2-elab-uckange-qmnj-2026', from: 'fr-2-uckange-qmnj-2026', variant: 'A850061001/QmnJ', rule: false },
   { name: 'fr-2-elab-empty', from: 'fr-2-brevilly-hixnj-empty', variant: 'B466010101/HIXnJ', rule: false },
   { name: 'fr-2-elab-page', from: 'fr-2-uckange-qmnj-page', variant: 'A850061001/QmnJ', rule: false },
+  // #242: the null days (value, statut, méthode and qualification null), from the failing chunks of jobs 124 and 81.
+  {
+    name: 'fr-2-elab-iwuy-qmnj-null-days',
+    from: 'fr-2-iwuy-qmnj-1989',
+    variant: 'E131000202/QmnJ',
+    rule: 'the records of data with date_obs_elab from 1999-12-17 to 1999-12-30 (the answer opens on its first null day; its next record is 2000-09-27) and from 2009-08-23 to 2009-11-07 (71 null days between three valued days on either side), count adjusted',
+    cut: (all) =>
+      all.filter(
+        (r) =>
+          (dayOf(r) >= '1999-12-17' && dayOf(r) <= '1999-12-30') ||
+          (dayOf(r) >= '2009-08-23' && dayOf(r) <= '2009-11-07'),
+      ),
+  },
+  {
+    name: 'fr-2-elab-toul-hixnj-null-days',
+    from: 'fr-2-toul-hixnj-1950',
+    variant: 'A573061001/HIXnJ',
+    rule: 'the first 30 records of data (1959-05-03 to 1959-06-01, all null days), count 30',
+    cut: (all) => all.slice(0, 30),
+  },
 ];
 
 /**

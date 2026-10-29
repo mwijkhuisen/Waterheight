@@ -1,0 +1,14 @@
+{
+  "spec": "fr-2-backfill-elab",
+  "variant": "A573061001/HIXnJ",
+  "source": "FR-2",
+  "synthetic": false,
+  "from": "trimmed",
+  "recorded_at": "2026-10-29T12:47:18Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://hubeau.eaufrance.fr/api/v2/hydrometrie/obs_elab?code_entite=A573061001&grandeur_hydro_elab=HIXnJ&date_debut_obs_elab=1950-01-01&date_fin_obs_elab=1969-12-26&size=20000",
+  "bytes": 1393241,
+  "source_sha256": "ac7f585cb960acec385a8168da40555e33ba6b7d241d884c284e545a04efa8f7",
+  "trimmed": "the first 30 records of data (1959-05-03 to 1959-06-01, all null days), count 30"
+}

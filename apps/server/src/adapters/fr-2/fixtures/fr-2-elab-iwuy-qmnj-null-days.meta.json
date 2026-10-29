@@ -1,0 +1,14 @@
+{
+  "spec": "fr-2-backfill-elab",
+  "variant": "E131000202/QmnJ",
+  "source": "FR-2",
+  "synthetic": false,
+  "from": "trimmed",
+  "recorded_at": "2026-10-29T12:47:10Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://hubeau.eaufrance.fr/api/v2/hydrometrie/obs_elab?code_entite=E131000202&grandeur_hydro_elab=QmnJ&date_debut_obs_elab=1989-12-22&date_fin_obs_elab=2009-12-16&size=20000",
+  "bytes": 1106407,
+  "source_sha256": "c03cac7b38acc2e85eceb2becc64189e6dccf9ecd4dc39a6ee572e771201b2d5",
+  "trimmed": "the records of data with date_obs_elab from 1999-12-17 to 1999-12-30 (the answer opens on its first null day; its next record is 2000-09-27) and from 2009-08-23 to 2009-11-07 (71 null days between three valued days on either side), count adjusted"
+}

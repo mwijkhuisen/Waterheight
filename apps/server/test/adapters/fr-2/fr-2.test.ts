@@ -123,6 +123,42 @@ describe('golden files (real payloads)', () => {
     expect(out.provider_values).toBe(0);
   });
 
+  it('Iwuy QmnJ, job 124 (#242): the null days are no_value and no row, the valued days around them load', () => {
+    // The failing chunk 1989-12-22 .. 2009-12-16 of 2026-10-28, cut to its opening null day and a run of 71.
+    const out = run('fr-2-elab-iwuy-qmnj-null-days', window('1989-12-22', '2009-12-17'));
+    expect(out).toEqual(golden('fr-2-elab-iwuy-qmnj-null-days', out));
+    const data = load('fr-2-elab-iwuy-qmnj-null-days').raw.data as (ElabRecord | ElabNullDay)[];
+    expect([data.length, data.filter((r) => r.resultat_obs_elab === null).length]).toEqual([91, 72]);
+    expect([out.obs.length, out.dropped, out.unknown, out.provider_values, ledger(out)]).toEqual([
+      19,
+      { no_value: 72 },
+      0,
+      91,
+      91,
+    ]);
+    const k = 'E131000202/QmnJ';
+    // 1999-12-17 (a Paris day) is the answer's first record and a null day; 12-18 is its first row.
+    expect(find(out, k, '1999-12-16T23:00:00.000Z')).toBeUndefined();
+    expect(out.obs[0]?.ts).toBe('1999-12-17T23:00:00.000Z');
+    // 2009-08-26 .. 11-04 are null days between valued ones (UTC days).
+    expect(find(out, k, '2009-08-25T00:00:00.000Z')).toBeDefined();
+    expect(out.obs.filter((r) => r.ts >= '2009-08-26' && r.ts < '2009-11-05')).toEqual([]);
+    expect(find(out, k, '2009-11-05T00:00:00.000Z')).toBeDefined();
+    expect(out.obs.every((r) => r.qc === QC.VALIDATED)).toBe(true);
+  });
+
+  it('Toul HIXnJ, job 81 (#242): an answer of null days only is no row and all no_value', () => {
+    const out = run('fr-2-elab-toul-hixnj-null-days', window('1950-01-01', '1969-12-27'));
+    expect(out).toEqual(golden('fr-2-elab-toul-hixnj-null-days', out));
+    expect([out.obs, out.dropped, out.unknown, out.provider_values, ledger(out)]).toEqual([
+      [],
+      { no_value: 30 },
+      0,
+      30,
+      30,
+    ]);
+  });
+
   it('a page (HTTP 206, three records of a 366-day answer) parses, and says it has a next', () => {
     const { body } = load('fr-2-elab-page');
     expect(rawFixture('FR-2', 'fr-2-elab-page').meta.status).toBe(206);
