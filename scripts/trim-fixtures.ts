@@ -11,7 +11,9 @@
 //    - `ch-2-pq-empty`: the same document with `features: []`;
 //  - CH-3, from `ch-3-40d.raw` (Rheinfelden, 2091, 11,404 points a trace):
 //    `ch-3-40d-2091`, the last 600 points of every trace (the rule of
-//    scripts/import-fixtures.ts for the archived CH-3 plots, its own code).
+//    scripts/import-fixtures.ts for the archived CH-3 plots, its own code);
+//    from `ch-3-40d-2032-plot` (Romanshorn, the one-trace `Wasserstand` plot of a
+//    level-only station, #235): `ch-3-40d-2032`, by the same rule.
 //
 //  - P5b, text and ZIP recordings (the rule keeps whole lines or blocks, never edits one):
 //    - LU-1, from `lu-1-csv.raw`: `lu-1-csv-day`, the rows of `LU1_ROWS` and the last 96 labels (one day) with
@@ -136,6 +138,10 @@ function main(): void {
   cut('ch-3', 'ch-3-40d', (doc: Doc) => {
     const trimmed = TRIM['CH-3'](doc, 600, false);
     return [['ch-3-40d-2091', doc, trimmed, { variant: '2091' }]];
+  });
+  cut('ch-3', 'ch-3-40d-2032-plot', (doc: Doc) => {
+    const trimmed = TRIM['CH-3'](doc, 600, false);
+    return [['ch-3-40d-2032', doc, trimmed, { variant: '2032' }]];
   });
   cutBytes('lu-1', 'lu-1-csv', (raw) => [
     [

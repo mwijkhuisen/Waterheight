@@ -1,7 +1,7 @@
 import { boundedJson, cappedArray, type JsonCaps, parseStrict, SchemaDrift } from '@rws/core';
 import { z } from 'zod';
 
-// CH-3 hydrodaten 40-day plot JSON (catalogue §2.7; the seed only): a Plotly
+// CH-3 hydrodaten 40-day plot JSON (catalogue §2.7; scheduled daily since #235, after the seed): a Plotly
 // figure of one station, `p_q_40days/<id>_p_q_40days_de.json`. Only each
 // trace's name, unit and x/y arrays are read, strictly; Plotly's styling keys
 // and the layout (threshold bands, P7) are presentation and are not. Provider

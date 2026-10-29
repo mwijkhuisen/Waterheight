@@ -1,6 +1,6 @@
 import type { Adapter } from '../../http/types.ts';
 
-// CH-3 hydrodaten 40-day plot JSON (catalogue §2.7; the seed only): the first
+// CH-3 hydrodaten 40-day plot JSON (catalogue §2.7; scheduled daily since #235, after the seed): the first
 // trace's x axis holds local times with an explicit offset.
 export const adapter: Adapter = {
   coverage(doc) {

@@ -91,9 +91,9 @@ Add DE-10 RLP forecasts and alert regions on the day RLP gives permission (§0.2
 On the first run, pull every rolling window once so the database starts with weeks of history rather than none:
 - PEGELONLINE `measurements.json?start=P31D` for every curated W and Q series (31 days).
 - Hub'Eau `observations_tr` for the whole month, paged by cursor (1 month).
-- Vigicrues `observations.json` per curated French station, H and Q (about 66 days).
+- Vigicrues `observations.json` per curated French station, H and Q (the window differs per series: 31.5 days at Strasbourg and 72.6 days at Chooz on 2026-10-28 and 2026-09-29). Since #235 it runs daily for every tier-1 FR-1 series Vigicrues lists.
 - NRW `pegeldaten.zip` (2 months of 15-min W, 2 years of daily values) **[V]**. After that, `messwerte.zip` or layer 10.
-- CH-3 `p_q_40days` for the curated Swiss stations (40 days).
+- CH-3 `p_q_40days` for the curated Swiss stations (about 39–40 days). Since #235 it runs daily for the 17 tier-1 CH-1 stations.
 - LU-1 CSV (5 days; P5b: 7 days since 2026-09-30) and LU-2 JSON (7 days; owner audience from day one under the AGE personal-use terms, §0.8).
 - LU-5: every CAP dump since 2025-06 (833 files, 30 MB). This includes real AGE flood alerts (§0.4).
 - NLWKN 30 days, only if permitted.
@@ -314,7 +314,7 @@ Quantities: **H** = water level, **Q** = discharge, **F** = forecast, **T** = th
 | BE-5 | BE-Brussels | hydria.be (flowbru.be redirects to it) | – | no API found (UNVERIFIED) | – | – | – | – | – |
 | **FR-1** | FR | Hub'Eau Hydrométrie API v2 (from PHyC / SCV) | `https://hubeau.eaufrance.fr/api/v2/hydrometrie/` | yes | H (**mm**, relative to the gauge zero), Q (**l/s**) | Native 5/6/10/15 min (partner stations 60 min); the API is updated every 5 min; latency 15–75 min | 1 month | None | None documented. "Abusive" use may be refused. `size` is at most 20,000. CORS `*`, gzip |
 | FR-2 | FR | Hub'Eau `obs_elab` (daily and monthly aggregates) | `https://hubeau.eaufrance.fr/api/v2/hydrometrie/obs_elab` | yes | Daily and monthly Q; daily and monthly max H | Daily, 1–4 days late | Since 1953 at Chooz ("depuis 1900 pour certaines stations") | None | 20,000-row depth cap; at most 100 codes per call |
-| FR-3 | FR | Vigicrues `observations.json` | `https://www.vigicrues.gouv.fr/services/observations.json/index.php` | yes | H (m), Q (m³/s) | 5 min | About 2 months | None | `max-age=120`; returns the whole series every time (752–865 KB per station) |
+| FR-3 | FR | Vigicrues `observations.json` | `https://www.vigicrues.gouv.fr/services/observations.json/index.php` | yes | H (m), Q (m³/s) | 5 min | About 2 months | None | `max-age=120`; returns the whole series every time (observed 2026-10-28 and 2026-09-29: 67 KB for Strasbourg H, 31.5 days; 324 KB for Chooz H, 72.6 days; the window differs per series). Scheduled daily since #235 (see FR-3 below) |
 | **FR-4** | FR | Vigicrues forecasts | `https://www.vigicrues.gouv.fr/services/v1.1/prevision.json`, `https://www.vigicrues.gouv.fr/services/previsions.json/index.php` | yes | F: H/Q hourly P10/P50/P90, about 21 h ahead | **Only during events** (**correction** 2026-10-01 (#39): the national list is never empty (27–31 stations on 2026-09-29/10-01, none in A/B/D/E1–E3); NL-bound forecasts still only during events; FR-4 fetches only NL-bound stations) | Current run | None | – |
 | **FR-5** | FR | Vigicrues vigilance and reference data | `https://www.vigicrues.gouv.fr/services/InfoVigiCru.geojson`, `…/TerEntVigiCru.json`, `…/StaEntVigiCru.json`, `…/station.json/index.php` | yes | T: `NivInfViCr` 1–4 per river section (tronçon); `CruesHistoriques` flood heights per station. The station list of each section is in `TronEntVigiCru.json?CdEntVigiCru=<code>&TypEntVigiCru=8` (`aNMoinsUn`) [V] | Updated "au moins deux fois par jour" | Current | None | No ETag or Last-Modified; gate on `DtHrInfoVigiCru` |
 | FR-6 | FR | HydroPortail | `https://www.hydro.eaufrance.fr/` | yes (site only) | UI exports only | – | Long (UNVERIFIED) | UNVERIFIED | – |
@@ -406,7 +406,7 @@ Attribution strings are exact where a provider or report gives them. "Suggested"
 | LU-7 | UNVERIFIED | – | – | Later (backfill) | Formal request needed |
 | **CH-1** | BAFU 2020 conditions: *"Freie Nutzung"*; *"Die Angabe der Quelle wird empfohlen"*. 2019 conditions §6: download *"nicht häufiger als alle 10 Minuten"*. | **"Daten Oberflächengewässer: Abteilung Hydrologie, Bundesamt für Umwelt BAFU (Bezugsdatum)"**. Proposed EN: *"Swiss river data: Federal Office for the Environment FOEN, Hydrology Division (raw, unverified data; retrieved <date>)"*. NL: *"Zwitserse riviergegevens: Bundesamt für Umwelt BAFU, afdeling Hydrologie (ruwe, ongecontroleerde gegevens; opgehaald <datum>)"*. Disclaimer: *"In case of warnings, the Naturgefahrenbulletin on www.naturgefahren.ch is authoritative; forecasts are direct model output."* | M | **First release** (official live feed) | No history; cube marked `CreativeWorkStatus/Draft`; stale and duplicate stations |
 | **CH-2** | BAFU terms | As CH-1 | S | **First release** (thresholds, 24 h stats, fault notices) | Undocumented; string values with units |
-| CH-3 | BAFU terms | As CH-1 | S | One-off 40-day backfill at go-live | Undocumented; about 900 KB per station |
+| CH-3 | BAFU terms | As CH-1 | S | One-off 40-day backfill at go-live; daily since #235 (17 tier-1 stations, 06:50Z, 2 s apart) | Undocumented; about 900 KB per station with both traces, 230–455 KB for a level-only station (observed 2026-10-28) |
 | **CH-4** | 2019 §8: forecasts *"dürfen frei verwendet werden"*. Explaining how to read them is recommended. Warnings on small and medium rivers are the cantons' responsibility. | As CH-1, plus a forecast explanation | S | **First release** | No run ID; undocumented |
 | **CH-5** | BAFU terms | As CH-1 | S | **First release** | Undocumented; `ID` not unique across types in CH-6 |
 | CH-6 | opendata.swiss "Open use" (source recommended) | As CH-1 | S | Optional cross-check | Classes only; `data.zip` stale since 2024-08-27 |
@@ -1275,6 +1275,8 @@ GET https://www.vigicrues.gouv.fr/services/observations.json/index.php?CdStation
 ```
 - H is in **m** and Q in m³/s (`GrdSerie=Q`). Timestamps are epoch **ms UTC**; `FormatDate=iso` gives `"DtObsHydro":"2026-09-23T20:00:00+00:00"`.
 - It holds about 2 months (Chooz H from 2026-07-18T23:00Z, 13,934 points; Uckange Q from 2026-07-27). There is **no time-range parameter**.
+- (#235, observed: **the window differs per series.** Chooz H recorded 2026-09-29 covers 72.6 days (2026-07-18T23:00Z to 2026-09-29T13:30Z, 15,588 points, 324,476 B); Strasbourg A061005051 H recorded 2026-10-28T09:35Z covers 31.5 days (2026-09-26T22:10Z to 2026-10-28T09:00Z, 3,210 points, 67,399 B, steps of 10 min and 60 min). The plan's "about 72 days, 752–865 KB" does not hold for every series.)
+- (#235: **scheduled daily.** `fr-3-obs` runs at 07:05Z for the 66 FR-1 tier-1 (code, grd) pairs of `registry/seed/fr-3-series.csv`, 2 s apart (R-059), as a gap-fill of FR-1 (and as FR-3's own twin rows). Index of 2026-10-28 08:00Z: H lists 2,343 stations (139,458 B), Q 1,987 (129,847 B); of the 71 FR-1 tier-1 series 66 are listed, and E131000202 H and Q, E223000101 H and Q and E364121001 H are not (KG-491). `fr-5-stations` stays at the 15 weekly stations. It holds the Hub'Eau gap, for example every 10-minute step 14:30–16:30Z of 2026-10-26 at Strasbourg H, where Hub'Eau has 15:00 and 16:10.)
 - The station codes are the same Sandre codes as Hub'Eau.
 - (P5a: the first name in `registry/seed/fr-3.csv` (Chooz) holds inner quotes, escaped as `""` since review CR-9 (they were unescaped before). Only the `code` column is used; the station names come from the Hub'Eau referentiel.)
 - `GET https://www.vigicrues.gouv.fr/services/observations.json` without parameters returns only the latest timestamp per station (2,352 stations, 140 KB, 9 s), useful as a freshness index.
@@ -1473,6 +1475,8 @@ SELECT ?id ?name ?water ?time ?q ?w ?t ?dl ?wkt WHERE {
 **CH-3 plot JSON**
 - `https://www.hydrodaten.admin.ch/plots/p_q_7days/{id}_p_q_7days_{de,en,fr,it}.json`, `…/plots/p_q_40days/{id}_p_q_40days_{lang}.json`, `…/plots/temperature_7days/…` and `…/plots/pq_group/{id}_pq_group_5_{lang}.json`.
 - Plotly traces "Wasserstand" (m ü. M.) and "Abfluss" (m³/s) at 5 min; 40 days is 11,480 points and about 900 KB per station.
+- (#235, observed 2026-10-28: **a level-only station has one trace**, `Wasserstand` (`m ü.M.`): 2032, 2043 and 2615 (the three tier-1 CH-1 stations without a Q series). 2043: 229,950 B, 5,673 points; 2615: 455,449 B, 11,355 points; 2029, 2063 and 2135 have both traces (898–909 KB). The plot starts 2026-09-19T00:00+02:00, about 39.4 days before the fetch, so a hole older than about 39–40 days is out of reach. The adapter accepts a non-empty prefix of the two traces (names, units and order still checked); an `Abfluss`-only plot or any other trace is `trace_order`, and a one-trace plot at a station whose CH-1 series include a discharge is counted and alerted as `missing_trace`.)
+- (#235: **scheduled daily.** `ch-3-40d` runs at 06:50Z for the 17 tier-1 CH-1 stations of `registry/seed/ch-3.csv`, 2 s apart, as a gap-fill of CH-1. An exact 0 at the level trace is dropped as `sentinel` (the CH-1 rule; KG-131); a Q of 0 is kept.)
 - Local timestamps with offset (`2026-09-17T00:05:00.000+02:00`).
 - Threshold bands sit in `layout.shapes` (yellow #FFFF00, orange #FF9900, red #F7001D, dark red #800000).
 - `pq_group` for 2091 returns Rheinfelden, Aare-Brugg, Reuss-Mellingen, Limmat-Baden and Thur-Andelfingen.
@@ -2462,7 +2466,7 @@ ON CONFLICT (series_id, bucket) DO UPDATE SET vmin=EXCLUDED.vmin, vmax=EXCLUDED.
 | CH-2 | `hydro_sensor_pq.geojson` | 10 min | Thresholds and fault notices |
 | CH-4 | 55 `q_forecast` files | Hourly | New run = new run start + `Last-Modified` |
 | CH-5 | `hydro_warn_levels_{lang}.geojson` | 30–60 min | |
-| CH-3 | `p_q_40days` for key stations | Once at first start | 40-day backfill |
+| CH-3 | `p_q_40days` for the 17 tier-1 CH-1 stations | Daily at 06:50Z (#235; first start: the 40-day seed), 2 s apart | Gap-fill of CH-1 |
 
 **Poll loop rules**
 - **Overlap window:** each poll re-fetches the last 2–6 h (3 h for RWS and Hub'Eau), and the upsert is idempotent.

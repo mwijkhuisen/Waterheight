@@ -11,7 +11,7 @@ import { runBackfill } from '../../src/backfill/run.ts';
 import { loadBackfill } from '../../src/backfill/spec.ts';
 import { budgets, inFlightPerSecond, LATENCY_MS, requestsPerMinute, seedStarts } from '../../src/capture/budget.ts';
 import { runSeeds } from '../../src/capture/seeds.ts';
-import { baseRequest, type Registry, variantKey } from '../../src/capture/specs.ts';
+import { baseRequest, REGISTRY_DIR, type Registry, readSeed, variantKey } from '../../src/capture/specs.ts';
 import type { Row } from '../../src/http/types.ts';
 import { Clock, fakeClient, MemoryJobStore, tempArchive } from '../backfill/harness.ts';
 import { fixture, registry, runDeps, spec } from './helpers.ts';
@@ -257,6 +257,51 @@ describe('request budgets', () => {
     expect(s.cadence_s).toBe(6 * 3600);
     expect(s.variants?.space_ms).toBeGreaterThanOrEqual(2000);
     expect(perHour('fr-3-twin') * 24).toBe(8);
+  });
+
+  const hourOf = (cron: string | null) => Number(/^\d+ (\d+) \* \* \*$/.exec(cron ?? '')?.[1]);
+
+  it('CH-3 daily (#235): the 17 tier-1 CH-1 stations once a day after 05:00Z, 2 s apart', () => {
+    const s = spec('ch-3-40d');
+    const ids = readSeed(REGISTRY_DIR, 'ch-3').map((r) => r.id);
+    expect(s.rows).toHaveLength(17);
+    expect(s.rows.map((r) => variantKey(r, s.variants?.key))).toEqual(ids);
+    expect(s.cadence_s).toBe(86_400);
+    expect(s.variants?.space_ms).toBeGreaterThanOrEqual(2000);
+    expect(hourOf(s.cron)).toBeGreaterThanOrEqual(5);
+    expect(perHour('ch-3-40d') * 24).toBe(17);
+  });
+
+  it('FR-3 daily (#235): the 66 tier-1 series once a day after 05:00Z, 2 s apart', () => {
+    const s = spec('fr-3-obs');
+    const keys = readSeed(REGISTRY_DIR, 'fr-3-series').map((r) => `${r.code}/${r.grd}`);
+    expect(s.rows).toHaveLength(66);
+    expect(s.rows.map((r) => variantKey(r, s.variants?.key))).toEqual(keys);
+    expect(s.cadence_s).toBe(86_400);
+    expect(s.variants?.space_ms).toBeGreaterThanOrEqual(2000);
+    expect(hourOf(s.cron)).toBeGreaterThanOrEqual(5);
+    expect(perHour('fr-3-obs') * 24).toBe(66);
+  });
+
+  it('FR-5 (owner decision, #235): fr-5-stations stays at the 15 weekly stations of fr-3.csv', () => {
+    const weekly = readSeed(REGISTRY_DIR, 'fr-3')
+      .filter((r) => r.history === 'weekly')
+      .map((r) => r.code);
+    const s = spec('fr-5-stations');
+    expect(weekly).toHaveLength(15);
+    expect(s.rows.map((r) => variantKey(r, s.variants?.key))).toEqual(weekly);
+  });
+
+  it('hydrodaten and Vigicrues: at most 2 requests in flight in any second of the week', () => {
+    const flight = inFlightPerSecond(registry);
+    for (const host of ['www.hydrodaten.admin.ch', 'www.vigicrues.gouv.fr']) {
+      const inFlight = flight.get(host) as Uint8Array;
+      expect(inFlight, host).toBeDefined();
+      expect(
+        inFlight.reduce((a, b) => Math.max(a, b), 0),
+        host,
+      ).toBeLessThanOrEqual(2);
+    }
   });
 
   it('Vigicrues: every spec that expands spaces its requests ≥ 2 s, and its longest run fits its deadline (#39)', () => {

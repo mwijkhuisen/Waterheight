@@ -1,0 +1,12 @@
+{
+  "spec": "ch-3-40d",
+  "variant": "2032",
+  "source": "CH-3",
+  "synthetic": false,
+  "recorded_at": "2026-10-28T09:35:19Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://www.hydrodaten.admin.ch/plots/p_q_40days/2032_p_q_40days_de.json",
+  "bytes": 229758,
+  "trimmed": false
+}

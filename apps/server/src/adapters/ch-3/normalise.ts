@@ -22,15 +22,20 @@ import type { Trace } from './parse.ts';
 // inferred per row:
 //  - the station: the manifest line's variant (the seed row's `id`); the body
 //    does not name it;
-//  - the `_de` file has exactly two traces, `Wasserstand` (m ü.M.) first and
-//    `Abfluss` (m³/s) second: names, units and order are checked, because the
-//    other languages translate them (catalogue §2.7, CH-4);
+//  - the `_de` file's traces are a prefix of `Wasserstand` (m ü.M.) then
+//    `Abfluss` (m³/s): both, or `Wasserstand` alone (the level-only stations
+//    2032, 2043 and 2615, #235). Names, units and order are checked, because
+//    the other languages translate them (catalogue §2.7, CH-4). A plot without
+//    `Abfluss` at a station whose CH-1 series include a discharge counts one
+//    `missing_trace`, which the pipeline alerts (#235 review CR-1);
 //  - time: ISO 8601 with the provider's local offset;
 //  - unit and factor from the CH-1 series' registry row; a level never fills a
 //    series that CH-1 declares as a relative stage (`datum_mismatch`);
 //  - 5-minute points map to the CH-1 step (10 minutes) by keeping the on-grid
 //    samples only, never an average: the same rule as every series whose
 //    provider publishes more often than we store (packages/core `thin`);
+//  - an exact 0 at a level is BAFU's "no value", dropped as `sentinel` (the
+//    CH-1 rule, KG-131); a discharge of 0 is a reading;
 //  - qc "raw".
 
 export const SOURCE = 'CH-3';
@@ -59,13 +64,17 @@ export function normalisePlot(traces: readonly Trace[], ctx: Context): Normalise
   out.fill = [];
   if (!/^\d{1,6}$/.test(ctx.variant)) throw new SchemaDrift('bad_variant');
   if (
-    traces.length !== TRACES.length ||
-    TRACES.some((want, i) => traces[i]?.name !== want.name || traces[i]?.meta.unit !== want.unit)
+    traces.length === 0 ||
+    traces.length > TRACES.length ||
+    traces.some((t, i) => t.name !== TRACES[i]?.name || t.meta.unit !== TRACES[i]?.unit)
   ) {
     throw new SchemaDrift('trace_order');
   }
-  TRACES.forEach((want, i) => {
-    const trace = traces[i] as Trace;
+  for (const want of TRACES.slice(traces.length)) {
+    if (ctx.fillRegistry?.has(`${ctx.variant}/${want.quantity}`)) count(out, 'missing_trace');
+  }
+  traces.forEach((trace, i) => {
+    const want = TRACES[i] as (typeof TRACES)[number];
     const decl = ctx.fillRegistry?.get(`${ctx.variant}/${want.quantity}`);
     if (decl === undefined) {
       out.unknown += 1;
@@ -94,7 +103,8 @@ export function normalisePlot(traces: readonly Trace[], ctx: Context): Normalise
     const kept = thin(samples, decl.expected_step_ms);
     count(out, 'thinned', samples.length - kept.length);
     for (const s of kept.sort((a, b) => a.ts - b.ts)) {
-      if (isFuture(s.ts, ctx.fetchedAt)) count(out, 'future');
+      if (decl.quantity === 'H' && s.value === 0) count(out, 'sentinel');
+      else if (isFuture(s.ts, ctx.fetchedAt)) count(out, 'future');
       else if (s.ts < ctx.fetchedAt - MAX_AGE_MS) count(out, 'too_old');
       else {
         const value = scale(decl.to_canonical, s.value);

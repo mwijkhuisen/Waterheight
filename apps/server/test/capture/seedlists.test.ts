@@ -130,7 +130,7 @@ describe('FR-1: the 18 NL-bound Belgian partner stations (§0.6)', () => {
     expect(rows.some((r) => /roesbrugge|yser/i.test(r.name ?? ''))).toBe(false);
   });
 
-  it('the FR-3 key stations are recorded Hub’Eau stations', () => {
+  it('the FR-3 stations (all 38) are recorded Hub’Eau stations', () => {
     for (const r of seed('fr-3')) expect(ref.has(r.code ?? ''), r.code).toBe(true);
   });
 });
@@ -171,7 +171,7 @@ describe('PEGELONLINE and BAFU lists', () => {
       json<{ features: { properties: { key: string } }[] }>('CH-2', 'ch-2-pq').features.map((f) => f.properties.key),
     );
     const ch3 = seed('ch-3').map((r) => r.id);
-    expect(ch3).toHaveLength(11);
+    expect(ch3).toHaveLength(17);
     for (const id of ch3) expect(pq.has(id ?? ''), id).toBe(true);
     const fc = json<{ features: { properties: { key: string } }[] }>('CH-4', 'ch-4-stations').features.map(
       (f) => f.properties.key,

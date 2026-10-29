@@ -159,6 +159,8 @@ export const nothingToLoad = (b: Backlog): boolean => b.age_s === null;
  * #184: `processed`, an NL-1 list of processed values (WaardeBewerkingsMethode other than NVT, such as the daily mean
  * GEM24H) of a series or combination we store: never merged into the instantaneous series; a registered series of its
  * own and a replay could load it.
+ * #235 (review CR-1): `missing_trace`, a CH-3 plot without the `Abfluss` trace at a station whose CH-1 series include a
+ * discharge, is NOT here either: the payload holds no such value, so it is counted and alerted like `hwlw_type_conflict`.
  */
 export const RETAINED = [
   'unit_mismatch',
@@ -1115,8 +1117,10 @@ export class Loader {
       const n = result.dropped[code] ?? 0;
       if (n > 0) this.deps.alert(code, { ...ids, n });
     }
-    const conflicts = result.dropped.hwlw_type_conflict ?? 0;
-    if (conflicts > 0 && spec.backfill !== true) this.deps.alert('hwlw_type_conflict', { ...ids, n: conflicts });
+    for (const code of spec.backfill === true ? [] : ['hwlw_type_conflict', 'missing_trace']) {
+      const n = result.dropped[code] ?? 0;
+      if (n > 0) this.deps.alert(code, { ...ids, n });
+    }
     for (const change of ['corrected', 'superseded', 'changed'] as const) {
       const n = zeroChanges[change] ?? 0;
       if (n > 0) this.deps.alert(`gauge_zero_${change}`, { ...ids, n });

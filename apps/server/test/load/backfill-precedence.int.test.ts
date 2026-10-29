@@ -22,6 +22,8 @@ let nl1: Map<string, SeriesRow>;
 /** Two NL-1 series of the registry: one for the matrix, one for the property (cleared between its runs). */
 let MATRIX: SeriesRow;
 let PROP: SeriesRow;
+/** A third one for the fill rows and obs_latest (#235): no other test touches it. */
+let FILLSER: SeriesRow;
 const OLD = new Date('2026-10-01T00:00:00Z');
 const NEW = new Date('2026-10-02T00:00:00Z');
 let n = 0;
@@ -98,6 +100,7 @@ beforeAll(async () => {
   const usable = [...nl1.values()].filter((s) => !s.off && s.sameAudience).sort((a, b) => a.id - b.id);
   MATRIX = usable[0] as SeriesRow;
   PROP = usable[1] as SeriesRow;
+  FILLSER = usable[2] as SeriesRow;
 }, 60_000);
 
 afterAll(async () => {
@@ -334,6 +337,60 @@ describe('the row rules (plan §3.5)', { timeout: 60_000 }, () => {
     expect(await latest()).toEqual(before);
     await load('live', MATRIX, NEW, [{ ts: '2026-01-01T00:00:00.000Z', value: 3, validated: true }]);
     expect(await latest()).toEqual(['2026-01-01T00:00:00.000Z']);
+  });
+
+  it('a fill row never moves obs_latest; a live row of the series replaces it, whatever its fetch time (#235)', async () => {
+    await clear(FILLSER.id);
+    const latest = async () =>
+      (
+        await h.t.admin.query<{ ts: Date; value: number; qc: number }>(
+          'SELECT ts, value, qc FROM obs_latest WHERE series_id = $1',
+          [FILLSER.id],
+        )
+      ).rows.map((r) => ({ ts: r.ts.toISOString(), value: r.value, qc: r.qc }));
+    const hour = async (bucket: string) =>
+      (
+        await h.t.admin.query<{ n: number; vlast: number }>(
+          'SELECT n, vlast FROM obs_1h WHERE series_id = $1 AND bucket = $2',
+          [FILLSER.id, bucket],
+        )
+      ).rows;
+    const T0 = '2026-09-10T10:00:00.000Z';
+    const T1 = '2026-09-10T11:00:00.000Z';
+    const T2 = '2026-09-10T12:00:00.000Z';
+    const T3 = '2026-09-10T13:00:00.000Z';
+    const pt = (ts: string, value: number): Point[] => [{ ts, value, validated: false }];
+    expect(await latest()).toEqual([]);
+
+    // (1) live at T1: obs_latest is T1. A fill at T2 > T1 (a later instant) leaves it at T1.
+    await load('live', FILLSER, OLD, pt(T1, 1));
+    const atT1 = [{ ts: T1, value: 1, qc: QC.RAW }];
+    expect(await latest()).toEqual(atT1);
+    await load('fill', FILLSER, NEW, pt(T2, 2));
+    expect(await latest()).toEqual(atT1);
+    expect(await stored(FILLSER.id, T2)).toMatchObject([{ value: 2, qc: QC.RAW | QC.BACKFILLED }]);
+
+    // (2) a fill at T0 < T1, in a hole: stored with the backfilled bit, counted by its hour, no revision, obs_latest at T1.
+    await load('fill', FILLSER, NEW, pt(T0, 7));
+    expect(await stored(FILLSER.id, T0)).toMatchObject([{ value: 7, qc: QC.RAW | QC.BACKFILLED }]);
+    expect(await hour(T0)).toEqual([{ n: 1, vlast: 7 }]);
+    expect(await latest()).toEqual(atT1);
+    expect(await revisions(FILLSER.id)).toEqual([]);
+
+    // (3) live at T2, a later fetch: replaces the fill row (bit cleared), no revision, obs_latest moves to T2.
+    await load('live', FILLSER, NEW, pt(T2, 3));
+    expect(await stored(FILLSER.id, T2)).toMatchObject([{ value: 3, qc: QC.RAW }]);
+    expect(await revisions(FILLSER.id)).toEqual([]);
+    expect(await latest()).toEqual([{ ts: T2, value: 3, qc: QC.RAW }]);
+
+    // (4) a fill at T3 fetched LATER than the live row that then arrives: the live row of the series still replaces it
+    // and moves obs_latest.
+    await load('fill', FILLSER, new Date('2026-10-05T00:00:00Z'), pt(T3, 4));
+    expect(await latest()).toEqual([{ ts: T2, value: 3, qc: QC.RAW }]);
+    await load('live', FILLSER, OLD, pt(T3, 5));
+    expect(await stored(FILLSER.id, T3)).toMatchObject([{ value: 5, qc: QC.RAW }]);
+    expect(await revisions(FILLSER.id)).toEqual([]);
+    expect(await latest()).toEqual([{ ts: T3, value: 5, qc: QC.RAW }]);
   });
 
   it('counts each input row in one class: off series, repeats in the payload, rules, confirmations', async () => {

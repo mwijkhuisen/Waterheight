@@ -189,7 +189,7 @@ rivers:
     names:
       DE-1: ["MOSEL"]
       FR-1: ["La Moselle", "La Moselle Canalisee"]
-      FR-3: ["La Moselle"]
+      FR-3: ["La Moselle", "La Moselle Canalisee"]
     aliases: ["Mosel", "Moselle"]
     osm_relation_id: 390416
     osm_way_name: null
@@ -470,6 +470,7 @@ rivers:
     name_en: "Ill"
     names:
       FR-1: ["L'Ill"]
+      FR-3: ["L'Ill"]
     aliases: []
     osm_relation_id: 1075766
     osm_way_name: null
@@ -595,6 +596,7 @@ rivers:
     name_en: "Meurthe"
     names:
       FR-1: ["La Meurthe"]
+      FR-3: ["La Meurthe"]
     aliases: []
     osm_relation_id: 1108999
     osm_way_name: null
@@ -654,6 +656,7 @@ rivers:
     name_en: "Scarpe"
     names:
       FR-1: ["La Scarpe Canalisée", "Rivière Scarpe"]
+      FR-3: ["La Scarpe Canalisée", "Rivière Scarpe"]
     aliases: []
     osm_relation_id: 1593182
     osm_way_name: null
@@ -746,6 +749,7 @@ rivers:
     name_en: "Chiers"
     names:
       FR-1: ["La Chiers"]
+      FR-3: ["La Chiers"]
     aliases: ["Korn"]
     osm_relation_id: 1307164
     osm_way_name: null

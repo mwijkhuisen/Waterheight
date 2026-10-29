@@ -229,6 +229,24 @@ describe('gap-fill (FR-3 → FR-1, CH-3 → CH-1)', () => {
       await x.close();
     }
   }, 60_000);
+
+  it('alerts a CH-3 plot without Abfluss where CH-1 has a discharge series, once, and keeps nothing for it', async () => {
+    const x = await harness();
+    try {
+      // #235 review CR-1: the one-trace recording of 2032 under 2289, whose CH-1 series include 2289/Q.
+      await put(x, 'CH-3', 'ch-3-40d', 'ch-3-40d-2032', '2289');
+      await x.loader({ now: new Date('2026-10-29T00:00:00Z') }).tick();
+      expect(x.alerts).toEqual([{ code: 'missing_trace', fields: { source: 'CH-3', spec: 'ch-3-40d', n: 1 } }]);
+      // Not retained: the payload holds no discharge value a replay could load, so the object is not kept for it.
+      const { rows: b } = await x.t.admin.query('SELECT parse_status, n_skipped FROM ingest_batch');
+      expect(b).toEqual([{ parse_status: 'ok', n_skipped: 0 }]);
+      // The level still fills.
+      expect((await rows(x, 'CH-1', '2289/W')).length).toBeGreaterThan(0);
+      expect(await rows(x, 'CH-1', '2289/Q')).toEqual([]);
+    } finally {
+      await x.close();
+    }
+  }, 60_000);
 });
 
 describe('replay and health', () => {
@@ -293,13 +311,20 @@ describe('replay and health', () => {
     expect(rows.map((r) => r.key)).not.toContain('intervals:NL-99');
   });
 
-  it('judges a seed-only source (a seed spec, no cron spec: CH-3) not on its fetch age, any other source on it (review SR-6)', async () => {
-    const { source: cadenceS, seedOnly } = cadences(loadRegistry().specs);
-    expect([...seedOnly]).toEqual(['CH-3']);
-    // FR-3 has a seed spec and a cron spec (fr-3-twin): it is judged on its fetch age.
+  it('no real source is seed-only since #235; a seed-only source (a seed spec, no cron spec) is not judged on its fetch age, any other on it (review SR-6)', async () => {
+    const { source: cadenceS, seedOnly: real } = cadences(loadRegistry().specs);
+    // CH-3 and FR-3 have a daily cron spec now (#235): none is seed-only, CH-3 is judged on a one-day cadence.
+    expect([...real]).toEqual([]);
+    expect(cadenceS.get('CH-3')).toBe(86_400);
+    // FR-3's shortest cadence is its twin spec's.
     expect(cadenceS.get('FR-3')).toBe(21_600);
+    // The mechanism, on the registry with ch-3-40d turned into a seed-only spec.
+    const specs = loadRegistry().specs.map((x) => (x.id === 'ch-3-40d' ? { ...x, cron: null, cadence_s: null } : x));
+    const { source: cadenceOnly, seedOnly } = cadences(specs);
+    expect([...seedOnly]).toEqual(['CH-3']);
+    expect(cadenceOnly.has('CH-3')).toBe(false);
     const inputs: HealthInputs = {
-      cadenceS,
+      cadenceS: cadenceOnly,
       lagP95Ms: new Map(),
       backlog: { files: 0, bytes: 0, age_s: null },
       badLines: 0,
@@ -352,30 +377,7 @@ describe('replay and health', () => {
           },
         },
       };
-      for (const [source, spec] of [
-        ['FR-1', 'fr-1-obs'],
-        ['FR-3', 'fr-3-obs'],
-      ] as const) {
-        await writePayload(x.archive, {
-          source,
-          spec,
-          variant: 'default',
-          at: new Date(NOW.getTime() - 5 * 60_000),
-          body: Buffer.from(`{"${source}":1}`),
-          url: 'https://example.org/',
-        });
-      }
-      expect(await x.loader({ adapters, now: NOW }).tick()).toEqual({ lines: 2, loaded: 2 });
-      const { rows: latest } = await x.t.admin.query<{ provider_key: string; qc: number }>(
-        `SELECT s.provider_key, l.qc FROM obs_latest l JOIN series s ON s.id = l.series_id
-         WHERE s.source_id = 'FR-1' ORDER BY 1`,
-      );
-      expect(latest).toEqual([
-        { provider_key: 'A061005051/H', qc: QC.RAW },
-        { provider_key: 'A850061001/Q', qc: QC.RAW | QC.BACKFILLED },
-        { provider_key: 'B720000001/H', qc: QC.RAW | QC.BACKFILLED },
-      ]);
-      await computeHealth(x.load.db, {
+      const healthInputs: HealthInputs = {
         cadenceS: new Map([
           ['FR-1', 900],
           ['FR-3', 21_600],
@@ -384,13 +386,41 @@ describe('replay and health', () => {
         backlog: { files: 0, bytes: 0, age_s: null },
         badLines: 0,
         now: NOW,
-      });
+      };
+      const tier1Of = async () =>
+        (await x.t.admin.query(`SELECT detail->'tier1' AS tier1 FROM source_health WHERE source_id = 'FR-1'`)).rows[0]
+          ?.tier1;
+      const put = (source: string, spec: string) =>
+        writePayload(x.archive, {
+          source,
+          spec,
+          variant: 'default',
+          at: new Date(NOW.getTime() - 5 * 60_000),
+          body: Buffer.from(`{"${source}":1}`),
+          url: 'https://example.org/',
+        });
+      // FR-1's own payload first: its health before the FR-3 fill load.
+      await put('FR-1', 'fr-1-obs');
+      expect(await x.loader({ adapters, now: NOW }).tick()).toEqual({ lines: 1, loaded: 1 });
+      await computeHealth(x.load.db, healthInputs);
+      const tier1Before = await tier1Of();
+      await put('FR-3', 'fr-3-obs');
+      expect(await x.loader({ adapters, now: NOW }).tick()).toEqual({ lines: 1, loaded: 1 });
+      const { rows: latest } = await x.t.admin.query<{ provider_key: string; qc: number }>(
+        `SELECT s.provider_key, l.qc FROM obs_latest l JOIN series s ON s.id = l.series_id
+         WHERE s.source_id = 'FR-1' ORDER BY 1`,
+      );
+      // A fill row never moves obs_latest (#235): only FR-1's own row is there.
+      expect(latest).toEqual([{ provider_key: 'A061005051/H', qc: QC.RAW }]);
+      await computeHealth(x.load.db, healthInputs);
       const { rows } = await x.t.admin.query<{ tier1: { total: number; fresh: number; provider_stale: number } }>(
         `SELECT detail->'tier1' AS tier1 FROM source_health WHERE source_id = 'FR-1'`,
       );
       // Only FR-1's own row is fresh; the fresh fill row and the stale one stated lately count for nothing.
       expect(rows[0]?.tier1).toMatchObject({ fresh: 1, provider_stale: 0 });
       expect(rows[0]?.tier1.total).toBeGreaterThan(3);
+      // Freshness is unchanged by the fill load: the same inputs before the FR-3 load give the same tier1 detail.
+      expect(tier1Before).toEqual(rows[0]?.tier1);
     } finally {
       await x.close();
     }

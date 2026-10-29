@@ -28,18 +28,18 @@ describe('seeds', () => {
       }),
     );
     const infos: string[] = [];
-    // A fixed clock: the same body of all 11 stations in one second is one content-addressed object.
+    // A fixed clock: the same body of all 17 stations in one second is one content-addressed object.
     const deps = runDeps({
       now: () => new Date('2026-10-02T06:00:00Z'),
       log: { info: (_o: unknown, m?: string) => void infos.push(String(m)), warn: () => {}, error: () => {} },
     });
     await runSeeds(only('ch-3-40d'), deps, paths(deps.root));
-    expect(calls).toBe(11);
+    expect(calls).toBe(17);
     const [rec] = await seedRecords(only('ch-3-40d'), deps);
-    expect(rec).toMatchObject({ spec: 'ch-3-40d', series: 11, files: 1 });
+    expect(rec).toMatchObject({ spec: 'ch-3-40d', series: 17, files: 1 });
     expect(rec?.days_covered).toBeGreaterThan(38);
     await runSeeds(only('ch-3-40d'), deps, paths(deps.root));
-    expect(calls).toBe(11);
+    expect(calls).toBe(17);
     expect(infos).toContain('seed already done');
   });
 
