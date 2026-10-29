@@ -212,8 +212,8 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | @inlang/plugin-message-format | npm | 4.5.4 | installed | – | MIT | loaded from node_modules so Paraglide never fetches plugin code from a CDN |
 | actions/checkout | action | 7.0.1 | installed | 3d3c42e5aac5ba805825da76410c181273ba90b1 | MIT | |
 | actions/setup-node | action | 7.1.0 | installed | 949feb2413d6458794dcd2491c4babbbce0c15c1 | MIT | `package-manager-cache: false` |
-| step-security/harden-runner | action | 2.22.1 | installed | ccd8616d44fd3846e67624a50d5aad6d37bf2d25 | Apache-2.0 | audit mode |
-| github/codeql-action | action | 4.38.3 | installed | 24c54180a607b1449ed407dd24f251e4e9147c8d | MIT | public repository (D7) |
+| step-security/harden-runner | action | 2.22.2 | installed | dc2769abcc0fcfbadfc1df54081c1608579ef6b2 | Apache-2.0 | audit mode |
+| github/codeql-action | action | 4.39.0 | installed | 6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee | MIT | public repository (D7) |
 | postgres | image | 18.6-trixie | installed | postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336 | PostgreSQL | CI service; P2 compose `db`; #167: the 2026-10-07 rebuild (Debian's OpenSSL and pcre2 fixes), scanned by Grype by this pin |
 | pebble | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199 | MPL-2.0 | CI only: the ACME server of the deploy end-to-end test |
 | pebble-challtestsrv | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble-challtestsrv:2.10.1@sha256:12ce21884def456bcf9786542113949e1f19dc7738d2c70e156c2d0c38a1405b | MPL-2.0 | CI only: DNS for Pebble |
