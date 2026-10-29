@@ -10,7 +10,7 @@ import {
   TIME,
   UTC_FROM_DAY,
 } from '../../../src/adapters/fr-2/normalise.ts';
-import { type ElabRecord, JSON_CAPS, parseElab } from '../../../src/adapters/fr-2/parse.ts';
+import { type ElabNullDay, type ElabRecord, JSON_CAPS, parseElab } from '../../../src/adapters/fr-2/parse.ts';
 import { ADAPTER_TIME, DST_PROOF, DST_REFUSED, LOAD_ADAPTERS } from '../../../src/load/adapters.ts';
 import { goldenUrl, rawFixture, registryOf } from '../registry.ts';
 
@@ -247,8 +247,33 @@ const rec = (over: Partial<ElabRecord> = {}): ElabRecord => ({
   grandeur_hydro_elab: 'QmnJ',
   ...over,
 });
-const norm = (rows: ElabRecord[], fetchedAt = Date.parse('2026-10-18T12:00:00Z'), win?: { from: number; to: number }) =>
-  normaliseElab(rows, { registry, fetchedAt, ...(win === undefined ? {} : { backfill: win }) });
+/** The seven fields a null day (#242) has null together. */
+const SEVEN = [
+  'resultat_obs_elab',
+  'code_statut',
+  'libelle_statut',
+  'code_methode',
+  'libelle_methode',
+  'code_qualification',
+  'libelle_qualification',
+] as const;
+/** A null day as the provider sends it: the seven fields null, the other seven as in `rec`. */
+const nullDay = (over: Partial<ElabNullDay> = {}): ElabNullDay => ({
+  ...rec(),
+  resultat_obs_elab: null,
+  code_statut: null,
+  libelle_statut: null,
+  code_methode: null,
+  libelle_methode: null,
+  code_qualification: null,
+  libelle_qualification: null,
+  ...over,
+});
+const norm = (
+  rows: (ElabRecord | ElabNullDay)[],
+  fetchedAt = Date.parse('2026-10-18T12:00:00Z'),
+  win?: { from: number; to: number },
+) => normaliseElab(rows, { registry, fetchedAt, ...(win === undefined ? {} : { backfill: win }) });
 
 describe('flags, values and drops', () => {
   it('code_statut 0, 4, 8 and 12 are raw, 16 is validated; the qualification adds provider-suspect for 12 and nothing for 16 and 20', () => {
@@ -367,6 +392,25 @@ describe('flags, values and drops', () => {
     // The same value with another qualification is a different row too.
     expect(norm([rec(), rec({ code_qualification: 12 })]).dropped).toEqual({ conflict: 2 });
   });
+
+  it('a null day is no_value before the quality, floor, window and future rules; an unregistered one is unknown', () => {
+    const out = norm(
+      [
+        nullDay(),
+        nullDay({ date_obs_elab: '2020-03-01' }), // outside the window
+        nullDay({ date_obs_elab: '1800-01-01' }), // before the floor
+        nullDay({ date_obs_elab: '2030-01-01' }), // in the future
+        nullDay({ code_station: 'Z999999999' }), // a series the registry does not have
+        // A valued record of the null day's own day is the row: nothing conflicts with a null day.
+        rec(),
+      ],
+      undefined,
+      window('2020-01-01', '2020-02-01'),
+    );
+    expect([out.obs.length, out.dropped, out.unknown, out.unknown_values]).toEqual([1, { no_value: 4 }, 1, 1]);
+    expect(out.obs[0]).toMatchObject({ series: 'A850061001/QmnJ', ts: '2020-01-15T00:00:00.000Z', value: 50 });
+    expect([out.provider_values, ledger(out)]).toEqual([6, 6]);
+  });
 });
 
 describe('parse is strict and bounded', () => {
@@ -384,8 +428,12 @@ describe('parse is strict and bounded', () => {
     return 'parsed';
   };
 
-  it('reads an answer of the 14 keys, `next` and `prev` a string or null', () => {
+  it('reads an answer of daily values and null days (the same 14 keys), `next` and `prev` a string or null', () => {
     expect(parseElab(answer([rec()])).data).toEqual([rec()]);
+    expect(parseElab(answer([nullDay(), rec({ date_obs_elab: '2020-01-16' })])).data).toEqual([
+      nullDay(),
+      rec({ date_obs_elab: '2020-01-16' }),
+    ]);
     expect(
       parseElab(answer([], { next: 'https://hubeau.eaufrance.fr/x', prev: 'https://hubeau.eaufrance.fr/y' })).next,
     ).toBe('https://hubeau.eaufrance.fr/x');
@@ -403,6 +451,17 @@ describe('parse is strict and bounded', () => {
       rec({ date_obs_elab: '2020-01-15T00:00:00Z' }),
       rec({ grandeur_hydro_elab: 'QmM' as 'QmnJ' }),
     ])
+      expect(drift(answer([bad])), JSON.stringify(bad)).not.toBe('parsed');
+  });
+
+  it('refuses a partial null day (one of the seven null, or all seven but one) with the type drift of the field', () => {
+    for (const k of SEVEN) {
+      expect(drift(answer([{ ...rec(), [k]: null }])), `${k} null alone`).toBe('invalid_type');
+      expect(drift(answer([{ ...nullDay(), [k]: rec()[k] }])), `all null but ${k}`).toBe('invalid_type');
+    }
+    // A null day is the whole shape only: another null, another key or a missing key is drift too.
+    const { code_site: _, ...missing } = nullDay();
+    for (const bad of [{ ...nullDay(), longitude: null }, { ...nullDay(), extra: 1 }, missing])
       expect(drift(answer([bad])), JSON.stringify(bad)).not.toBe('parsed');
   });
 
@@ -437,18 +496,20 @@ describe('property: any set of records in the window', () => {
       value: fc.double({ min: -1e5, max: 1e7, noNaN: true }),
       statut: fc.constantFrom(0, 4, 8, 12, 16, 7),
       qualification: fc.constantFrom(12, 16, 20, 5),
+      // A null day (#242) of the same station and day.
+      isNull: fc.boolean(),
     })
-    .map(({ station, days, value, statut, qualification }) =>
-      rec({
+    .map(({ station, days, value, statut, qualification, isNull }) => {
+      const at = {
         code_station: station[0],
         code_site: station[1],
         grandeur_hydro_elab: station[2],
         date_obs_elab: new Date(days * 86_400_000).toISOString().slice(0, 10),
-        resultat_obs_elab: value,
-        code_statut: statut,
-        code_qualification: qualification,
-      }),
-    );
+      };
+      return isNull
+        ? nullDay(at)
+        : rec({ ...at, resultat_obs_elab: value, code_statut: statut, code_qualification: qualification });
+    });
   const cutover = Date.parse(`${UTC_FROM_DAY}T00:00:00Z`);
 
   it('every stamp is a day start by the rule, the rows are sorted, and provider_values = rows + dropped + unknown_values', () => {
@@ -458,6 +519,11 @@ describe('property: any set of records in the window', () => {
         const out = normaliseElab(rows, { registry, fetchedAt: Date.parse('2026-10-18T12:00:00Z'), backfill: win });
         expect(out.provider_values).toBe(rows.length);
         expect(ledger(out)).toBe(rows.length);
+        // Every null day of a registered series is no_value, whatever its day.
+        const nulls = rows.filter(
+          (r) => r.resultat_obs_elab === null && registry.get(`${r.code_station}/${r.grandeur_hydro_elab}`),
+        );
+        expect(out.dropped.no_value ?? 0).toBe(nulls.length);
         for (const r of out.obs) {
           const ts = Date.parse(r.ts);
           if (ts >= cutover) expect(ts % 86_400_000).toBe(0);

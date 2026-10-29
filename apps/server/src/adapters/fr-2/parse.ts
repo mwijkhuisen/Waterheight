@@ -5,12 +5,12 @@ import { z } from 'zod';
 // discharge QmnJ (l/s) and the daily maximum of the instantaneous stage HIXnJ (mm). Strict schemas of the one call
 // the backfill makes (the JSON form). A page with a `next` comes as HTTP 206 and `count` is the total over all
 // pages, so `parse` only reports them: the backfill provider calls the answer truncated when `next` is set or
-// `count` exceeds the page. Anything the schema does not know is a SchemaDrift; provider strings are data, length
-// capped, and none is interpreted here.
+// `count` exceeds the page. A record is a daily value or a null day (#242), each with the same 14 keys; anything else
+// is a SchemaDrift; provider strings are data, length capped, and none is interpreted here.
 
 const text = (max: number) => z.string().max(max);
 
-/** One daily value, with exactly the 14 keys of the recorded answers (types as recorded). */
+/** One daily value, with the 14 keys of the recorded answers (types as recorded). */
 const ElabRecordSchema = z.strictObject({
   code_site: text(20),
   code_station: text(20),
@@ -29,6 +29,27 @@ const ElabRecordSchema = z.strictObject({
   grandeur_hydro_elab: z.enum(['QmnJ', 'HIXnJ']),
 });
 export type ElabRecord = z.infer<typeof ElabRecordSchema>;
+
+/**
+ * A day without a value (#242, recorded 2026-10-29): the value and the six statut, méthode and qualification fields
+ * are null together, the other seven as in a daily value. Only this whole shape: a record with some of the seven null
+ * is drift.
+ */
+const ElabNullDaySchema = z.strictObject({
+  ...ElabRecordSchema.shape,
+  resultat_obs_elab: z.null(),
+  code_statut: z.null(),
+  libelle_statut: z.null(),
+  code_methode: z.null(),
+  libelle_methode: z.null(),
+  code_qualification: z.null(),
+  libelle_qualification: z.null(),
+});
+export type ElabNullDay = z.infer<typeof ElabNullDaySchema>;
+
+/** A null value picks the null-day schema, so any other record keeps the daily value's drift code and path. */
+const isNullDay = (x: unknown) =>
+  typeof x === 'object' && x !== null && (x as { resultat_obs_elab?: unknown }).resultat_obs_elab === null;
 
 const url = text(2000).nullable();
 const Envelope = z.strictObject({
@@ -49,7 +70,7 @@ export const JSON_CAPS = { maxItems: 20_000, maxNodes: 450_000, maxDepth: 4 } as
   maxItems: number;
 };
 
-export type ElabPage = { count: number; next: string | null; data: ElabRecord[] };
+export type ElabPage = { count: number; next: string | null; data: (ElabRecord | ElabNullDay)[] };
 
 /** One `obs_elab` answer: its records, the walk's total and whether another page follows. */
 export function parseElab(body: Uint8Array): ElabPage {
@@ -59,6 +80,10 @@ export function parseElab(body: Uint8Array): ElabPage {
   return {
     count: envelope.count,
     next: envelope.next,
-    data: envelope.data.map((element, i) => parseStrict(ElabRecordSchema, element, ['data', i])),
+    data: envelope.data.map((element, i) =>
+      isNullDay(element)
+        ? parseStrict(ElabNullDaySchema, element, ['data', i])
+        : parseStrict(ElabRecordSchema, element, ['data', i]),
+    ),
   };
 }
