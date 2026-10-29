@@ -4,11 +4,13 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { constants, zstdCompressSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
+import { normaliseElab } from '../../../src/adapters/fr-2/normalise.ts';
+import { parseElab } from '../../../src/adapters/fr-2/parse.ts';
 import { validate } from '../../../src/archive/validity.ts';
 import { PROVIDERS } from '../../../src/backfill/provider.ts';
 import { Fr2BackfillSpec, type Fr2Unit, type LoadedBackfillSpec } from '../../../src/backfill/spec.ts';
 import { REGISTRY_DIR } from '../../../src/capture/specs.ts';
-import { rawFixture } from '../registry.ts';
+import { rawFixture, registryOf } from '../registry.ts';
 
 // The FR-2 backfill provider (P14b): units from the registry, the request of a chunk, the truncation check and the
 // validity of an answer, on the recorded fixtures. No network: nothing here sends a request.
@@ -142,6 +144,23 @@ describe('inspect', () => {
     expect(provider.inspect(body('fr-2-elab-uckange-qmnj-1981'))).toEqual({ ok: true, values: 400 });
     expect(provider.inspect(body('fr-2-elab-uckange-qmnj-2026'))).toEqual({ ok: true, values: 139 });
     expect(provider.inspect(body('fr-2-elab-empty'))).toEqual({ ok: true, values: 0 });
+  });
+
+  it('accepts an answer with null days (#242) and counts every record, so the chunk reconciles', () => {
+    // values is the chunk's provider_values; normalise accounts for each record as a row, a drop or an unknown one.
+    for (const [name, values, from, to] of [
+      ['fr-2-elab-iwuy-qmnj-null-days', 91, '1989-12-22', '2009-12-17'],
+      ['fr-2-elab-toul-hixnj-null-days', 30, '1950-01-01', '1969-12-27'],
+    ] as const) {
+      expect(provider.inspect(body(name)), name).toEqual({ ok: true, values });
+      const out = normaliseElab(parseElab(body(name)).data, {
+        registry: registryOf('FR-1'),
+        fetchedAt: Date.parse('2026-10-29T12:47:10Z'),
+        backfill: { from: Date.parse(`${from}T00:00:00Z`), to: Date.parse(`${to}T00:00:00Z`) },
+      });
+      const dropped = Object.values(out.dropped).reduce((a, b) => a + b, 0) + out.unknown_values;
+      expect([name, out.provider_values, out.obs.length + dropped]).toEqual([name, values, values]);
+    }
   });
 
   it('calls a page truncated: a `next`, or a `count` above the records it holds', () => {

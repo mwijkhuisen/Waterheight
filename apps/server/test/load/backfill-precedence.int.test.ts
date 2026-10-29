@@ -942,6 +942,31 @@ describe('P14b: no live change unless validated, each in obs_revision (DE-8, FR-
     expect(await h.count(`obs_1d WHERE series_id = ${await h.seriesId(UCKANGE_QMNJ)}`)).toBe(0);
   });
 
+  it('FR-2 null days (#242): the real Iwuy cut stores its valued days, drops its null days and the chunk reconciles', async () => {
+    const iwuy = 'E131000202/QmnJ';
+    const job = await p14bJob('FR-2', FR2.spec, iwuy, '1989-12-22', '2009-12-17');
+    const { ledger } = await p14bLoad(
+      {
+        ...FR2,
+        url: 'https://hubeau.eaufrance.fr/api/v2/hydrometrie/obs_elab?code_entite=E131000202&grandeur_hydro_elab=QmnJ',
+        job,
+      },
+      fixtureBody('fr-2', 'fr-2-elab-iwuy-qmnj-null-days'),
+      ['1989-12-22T00:00:00.000Z', '2009-12-17T00:00:00.000Z'],
+    );
+    // 91 records: 19 valued days stored, 72 null days dropped as no_value (p14bLoad checks reconciled and no alert).
+    expect(ledger).toEqual({
+      provider_values: 91,
+      kept: 19,
+      inserted: 19,
+      revised: 0,
+      skipped: 0,
+      dropped: 72,
+      reconciled: true,
+    });
+    expect(await rowsIn(iwuy, '1999-12-01', '2010-01-01')).toBe(19);
+  });
+
   it('no row of any of the three at or after DATA_FLOOR, even when a forged line’s chunk says so', async () => {
     // DE-8: a decade member of Stah that runs past the floor (the recorded member format, values generated).
     const rows = ['station_name;station_no;dateTime;value[cm]'];

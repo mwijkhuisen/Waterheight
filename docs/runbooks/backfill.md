@@ -283,6 +283,19 @@ Expected dry-run totals: 32 series (units), 3,740 chunks, 32 requests, 24,166,94
 
 **A 206 halves the chunk.** A page with a `next` (or a `count` above the page) is `truncated`: the runner halves the chunk in **whole days** and asks again, down to one day (every halving counts against the budget). A job that exhausts its budget in halvings is `paused` / `budget` (KG-395): read `status` (`attempts` against `chunks_done`), then re-plan from the cursor's day (§5). The day rule of the dates is A§7.4 (Europe/Paris midnight before 2007-03-23, UTC from it: KG-383). A statut other than 0, 4, 8, 12 or 16, or a qualification other than 12, 16, 20, is a retained `unknown_quality`. A revised daily value is not re-synced (`date_debut_prod`, KG-389): re-plan the last months.
 
+**A null day is a drop, not drift (#242).** Hub'Eau sends a day without a value as a record whose value and statut, méthode and qualification fields are all `null` (catalogue §2.5). The parser accepts exactly that shape and normalise drops it as `no_value`: a plain drop, counted in `dropped`, never stored and not kept for a replay. A chunk of null days only is therefore `done` with `kept` 0, and its ledger still reconciles. A record with only **some** of those fields `null` is still `failed` / `schema_drift` with `drift` `invalid_type` (§5): that is a format change, not a null day. A null day Hub'Eau fills in later is not fetched again: re-plan those days (KG-389).
+
+**Resume the jobs that failed on 2026-10-28 (#242), once, after the deploy of the fix.** On FR-2's first night 18 jobs failed `schema_drift` / `invalid_type` on null days. None of their answers was archived, so nothing needs a replay. Resume them; the nightly timer runs them in its next 22:01–05:00 window:
+
+```bash
+for j in 76 81 82 93 105 119 122 123 124 125 126 130 134 136 137 138 142 144; do
+  rwsc run --rm --no-deps -T backfill backfill resume --job "$j"
+done
+rwsc run --rm --no-deps -T backfill backfill status | tail -1   # expect no "failed"
+```
+
+The next morning all 18 job lines in `sudo journalctl -u rws-backfill-nightly --since '<date> 21:55 UTC'` say `done`, and `backfill status` shows no failed FR-2 job.
+
 ### 8.3 CH-9 (`ch-9-backfill-bs`, host `data.bs.ch`)
 
 Two datasets, `100089` (Rhine at Basel, station 2289: W and Q) and `100236` (Birs at Münchenstein, 2106: W only), P30D chunks from 2020-06-01, 1 request a second (25,200 a night at most, under 10 % of the portal's 500,000 a day). The request is `…/<dataset>/exports/json` with a `where` on the chunk (never `/records`, which stops at offset + limit 10,000), and the manifest line's **variant is the dataset id** (`lineVariant`). Plan and run with `--spec ch-9-backfill-bs`; expected dry-run: 2 units, 152 requests, 0.09 GB database, 10 MB archive (the dry-run counts the 5-minute records, though only the 10-minute grid instants load). Raw only (KG-387); 2106 Q is not loaded (`q_not_twin`, KG-393).

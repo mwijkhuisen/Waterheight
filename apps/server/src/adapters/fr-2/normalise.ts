@@ -13,7 +13,7 @@ import {
   toIso,
 } from '@rws/core';
 import { QUALIFICATION, STATUT } from '../_shared/hubeau/quality.ts';
-import type { ElabRecord } from './parse.ts';
+import type { ElabNullDay, ElabRecord } from './parse.ts';
 
 // FR-2 Hub'Eau obs_elab → canonical rows (catalogue §2.5, §4.4, §4.8): the daily mean discharge QmnJ and the daily
 // maximum of the instantaneous stage HIXnJ, loaded only by the backfill (spec fr-2-backfill-elab) into the FR-1
@@ -31,6 +31,8 @@ import type { ElabRecord } from './parse.ts';
 //    and a day that is one is drift;
 //  - unit and factor from the twin's registry row: QmnJ l/s (×0.001 → m³/s), HIXnJ mm (×0.1 → cm, a stage on the
 //    gauge zero of the station's H series, D16);
+//  - a null day (#242: no value, statut, méthode or qualification) is dropped as `no_value` right after the registry
+//    lookup, so a null day of an unregistered series is still `unknown`, and none reaches the rules below;
 //  - code_statut and qualification as FR-1 (`_shared/hubeau/quality.ts`): any other code withholds the value
 //    (`unknown_quality`, kept for a replay);
 //  - the window: a day outside the line's chunk (`ctx.backfill`, UTC days) or before 1950-01-01 is dropped as
@@ -83,7 +85,7 @@ const count = (out: Normalised, code: string, n = 1) => {
  * One `obs_elab` answer. Two records of one series and day with equal values are one (`duplicate`); with different
  * values both are withheld (`conflict`), never chosen between.
  */
-export function normaliseElab(rows: readonly ElabRecord[], ctx: Context): ElabNormalised {
+export function normaliseElab(rows: readonly (ElabRecord | ElabNullDay)[], ctx: Context): ElabNormalised {
   const out = emptyNormalised();
   let unknownValues = 0;
   const unknownKeys = new Set<string>();
@@ -94,6 +96,10 @@ export function normaliseElab(rows: readonly ElabRecord[], ctx: Context): ElabNo
     if (decl === undefined) {
       unknownKeys.add(`${r.code_station}/${r.grandeur_hydro_elab}`);
       unknownValues += 1;
+      continue;
+    }
+    if (r.resultat_obs_elab === null) {
+      count(out, 'no_value');
       continue;
     }
     const statut = STATUT.get(r.code_statut);
