@@ -296,13 +296,7 @@ const SEVEN = [
 /** A null day as the provider sends it: the seven fields null, the other seven as in `rec`. */
 const nullDay = (over: Partial<ElabNullDay> = {}): ElabNullDay => ({
   ...rec(),
-  resultat_obs_elab: null,
-  code_statut: null,
-  libelle_statut: null,
-  code_methode: null,
-  libelle_methode: null,
-  code_qualification: null,
-  libelle_qualification: null,
+  ...(Object.fromEntries(SEVEN.map((k) => [k, null])) as Record<(typeof SEVEN)[number], null>),
   ...over,
 });
 const norm = (
@@ -446,6 +440,15 @@ describe('flags, values and drops', () => {
     expect([out.obs.length, out.dropped, out.unknown, out.unknown_values]).toEqual([1, { no_value: 4 }, 1, 1]);
     expect(out.obs[0]).toMatchObject({ series: 'A850061001/QmnJ', ts: '2020-01-15T00:00:00.000Z', value: 50 });
     expect([out.provider_values, ledger(out)]).toEqual([6, 6]);
+  });
+
+  it('the day of a null day must exist all the same: an impossible date is drift, as on a daily value (review CR-1)', () => {
+    for (const bad of ['2000-02-30', '2010-13-01']) {
+      expect(() => norm([nullDay({ date_obs_elab: bad })]), bad).toThrow(SchemaDrift);
+      expect(() => norm([rec({ date_obs_elab: bad })]), bad).toThrow(SchemaDrift);
+    }
+    // The day whose Paris midnight came twice is a day like any other (round 2 F1).
+    expect(norm([nullDay({ date_obs_elab: '1976-09-26' })]).dropped).toEqual({ no_value: 1 });
   });
 });
 
