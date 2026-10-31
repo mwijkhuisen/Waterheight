@@ -294,7 +294,17 @@ done
 rwsc run --rm --no-deps -T backfill backfill status | tail -1   # expect no "failed"
 ```
 
-The next morning all 18 job lines in `sudo journalctl -u rws-backfill-nightly --since '<date> 21:55 UTC'` say `done`, and `backfill status` shows no failed FR-2 job.
+The next morning all 18 job lines in `sudo journalctl -u rws-backfill-nightly --since '<date> 21:55 UTC'` say `done`, and `backfill status` shows no failed FR-2 job. Done on 2026-10-29: that night 16 of the 18 ended `done`, and jobs 105 and 124 ended `paused` / `budget` (below).
+
+**A resumed job that pauses on `budget`: re-plan it from its cursor.** `resume` clears the error and the attempts but not `requests`. An FR-2 job's budget is `ceil(chunks × 1.2)` (`requestBudget` in `backfill/plan.ts`): a job of 1950 to the data floor has 4 chunks and 5 requests. The drift request of the failed night has already used a job's only spare request, so one more retry or halving after the resume ends it as `paused` / `budget` before its last chunk. On 2026-10-29/30 jobs 105 and 124 stood at cursor 2009-12-17, 3 chunks done, 5 of 5 requests, `attempts` 0. Look first (§5: `requests` against `chunks_done` and `attempts`; a runaway is a bug). When the use is explained, abort the job and plan its series again from the cursor's day, which gives a new job with a fresh budget:
+
+```bash
+rwsc run --rm --no-deps -T backfill backfill status | grep -E '"job":<job>,'   # cursor, requests, request_budget, attempts
+rwsc run --rm --no-deps -T backfill backfill abort --job <job>
+rwsc run --rm --no-deps -T backfill backfill plan --spec fr-2-backfill-elab --series <series> --from <cursor day, YYYY-MM-DD>
+```
+
+The abort removes no rows, and re-fetching the cursor's day is safe (§1). These commands send no request, so they work at any hour. The new job fetches only inside the window (`window_utc` 22:00–05:00 of `hubeau.eaufrance.fr` in `registry/backfill.yaml`; a `run` outside it exits 0 at once with `"stopped":"window_closed"`), so the nightly timer picks it up. For the next failed FR-2 job whose `requests` are close to its `request_budget`, plan it again from its cursor instead of resuming it.
 
 ### 8.3 CH-9 (`ch-9-backfill-bs`, host `data.bs.ch`)
 
