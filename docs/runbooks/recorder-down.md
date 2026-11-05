@@ -62,8 +62,8 @@ An empty resolver set means containers have no DNS. Run `sudo rws-resolvers` (it
 - **404 on NL-4:** the file moved (the CTD switch on 2026-11-05). The alert names the new file; update `registry/capture.yaml` in a PR.
 - **429 from `www.vigicrues.gouv.fr` (FR-3, FR-4, FR-5):** Vigicrues throttles without a documented limit and sends no `Retry-After` (R-059). A few stations in `failed_items` during an event are expected. If `fr-4` goes stale, no station of its runs came in: the `run done` log lines (`sudo docker logs rws-capture-1 | grep '"fr-4"'`) show `transient: true` and how many items failed (`failed_items` in the status file lists 20 at most). Check that the spec still has `space_ms: 2000` in `registry/capture.yaml`, and record the event under R-059.
 - **5xx or timeouts:** the provider's outage. Capture backs off (30 s → 30 min) and the gap-stretch window refills what the provider keeps (A§7.3).
-- **429 from `ddapi20-waterwebservices.rijkswaterstaat.nl` (NL-1):** Rijkswaterstaat sends no `Retry-After`. After 5 failures in a row the host's breaker opens for 1 min, then 2, 4, 8 and 16, then 30 min while its probes keep failing; every NL-1 spec waits meanwhile, and the windows refill the gap afterwards (#250).
-- **NL-1 answered 204 ("no data") for hours, and the values appeared upstream later (2026-11-04/05, #250):** the six NL-1 observation specs anchor their window on the newest value received (`anchor: data`), so their runs after the recovery fetch the gap by themselves, up to P31D back. Nothing to do. A spec without `anchor: data`, or a gap older than its window's `max`, is not refetched: rewind its window anchor (§6).
+- **429 from `ddapi20-waterwebservices.rijkswaterstaat.nl` (NL-1):** Rijkswaterstaat sends no `Retry-After`. After 5 failures in a row the host's breaker opens for 1 min, then 2, 4, 8 and 16, then 30 min while its probes keep failing (never shorter than a `Retry-After`; across a success the steps go on until an hour passes without an opening); every NL-1 spec waits meanwhile, and the windows refill the gap afterwards (#250).
+- **NL-1 answered 204 ("no data") for hours, and the values appeared upstream later (2026-11-04/05, #250):** the six NL-1 observation specs anchor their window on the newest value received (`anchor: data`), so their runs after the recovery fetch the gap by themselves, up to P31D back. Nothing to do. A spec without `anchor: data`, or a gap older than its window's `max`, is not refetched: rewind its window anchor (§6). So is an episode that was already running when #250 was deployed: until a variant has a newest value (its first answer with values after the deploy), its window still anchors on the last success.
 
 ## 5. After a fix
 
@@ -76,19 +76,27 @@ An empty resolver set means containers have no DNS. Run `sudo rws-resolvers` (it
 The one sanctioned edit of the capture state (owner decision, #250, 2026-11-05). Use it when a provider filled in values after we had fetched (§4) and a spec's window no longer reaches them. It makes the next scheduled runs of the named specs ask from the given instant (bounded by each window's `max`); nothing else changes. Done once on 2026-11-05 10:48Z for the six NL-1 observation specs (`T=2026-11-04T13:00:00.000Z`).
 
 ```bash
-T=2026-11-04T13:00:00.000Z          # one hour before the first missing value, UTC
-SPECS="nl-1-obs-key nl-1-obs-other"  # the affected spec ids (their files in /srv/rws/raw/_state/)
+T=2026-11-04T13:00:00.000Z   # one hour before the first missing value, UTC
+SPECS="nl-1-obs-key nl-1-obs-other nl-1-obs-twin nl-1-obs-sea nl-1-obs-wide nl-1-obs-slow"   # every affected spec id
+bash -euo pipefail -s "$T" $SPECS <<'SCRIPT'
+T=$1; shift
 S=/srv/rws/raw/_state; B=~/rws-check/state-backup-$(date -u +%Y%m%dT%H%M%SZ); mkdir -p "$B"
-sudo docker stop rws-capture-1      # rws-tick restarts only unhealthy containers, never a stopped one
-for s in $SPECS; do
-  f=$S/$s.json; sudo cp -p "$f" "$B/"
+sudo docker stop rws-capture-1 >/dev/null   # rws-tick restarts only unhealthy containers, never a stopped one
+# On every exit path, a failed step included: no half-written file stays, and capture starts again.
+trap 'sudo find "$S" -maxdepth 1 -name "*.json.new" -delete; sudo docker start rws-capture-1 >/dev/null; echo "capture started; backup: $B"' EXIT
+for s in "$@"; do
+  f=$S/$s.json
+  sudo test -s "$f"                          # a missing or empty state file stops here
+  sudo cp -p "$f" "$B/"
   sudo jq -c -e --arg t "$T" \
-    '.variants |= with_entries(if (.value.last_success // "") > $t then .value.last_success = $t else . end)
-     | .variants |= with_entries(if (.value.newest // "") > $t then .value.newest = $t else . end)' \
-    "$f" | sudo tee "$f.new" >/dev/null
+    '.variants |= with_entries(.value |= ((if (.last_success // "") > $t then .last_success = $t else . end)
+                                        | (if (.newest // "") > $t then .newest = $t else . end)))' \
+    "$f" | sudo tee "$f.new" >/dev/null      # pipefail: a jq error (no .variants, a torn file) stops here
+  sudo jq -e '.variants | type == "object"' "$f.new" >/dev/null
   sudo chown --reference="$f" "$f.new"; sudo chmod --reference="$f" "$f.new"; sudo mv "$f.new" "$f"
+  echo "$s: rewound to $T"
 done
-sudo docker start rws-capture-1
+SCRIPT
 ```
 
-Check: the next runs of those specs show a new `last_success` in `/status/capture.json`, and the series fill in within one cadence plus the loader's lag. To undo before the next run: stop capture, copy the backup back with `sudo cp -p "$B"/*.json /srv/rws/raw/_state/`, start capture.
+Check: the next runs of those specs show a new `last_success` in `/status/capture.json`, and the series fill in within one cadence plus the loader's lag. To undo before the next run: stop capture, copy the files of the backup folder the script printed back with `sudo cp -p <backup>/*.json /srv/rws/raw/_state/`, start capture.

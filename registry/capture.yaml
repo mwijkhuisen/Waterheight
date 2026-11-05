@@ -200,7 +200,7 @@ specs:
     variants: { seed: nl-1, where: { tier: sea }, key: [code, quantity, hoedanigheid] }
     params: { proces: meting }
     window: { default: PT3H, max: P31D, overlap: PT1H, anchor: data }
-    # measured 2026-10-17: 6.3 KB for PT3H (borssele/H); a P31D catch-up of 10-minute values is about 1.3 MB
+    # measured 2026-10-17: 6.3 KB for PT3H (borssele/H); a P31D catch-up of 10-minute values is about 1.6 MB (365–376 B a value; #251 review CR-3)
     max_bytes: 2097152
     retention: obs
     validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
@@ -216,7 +216,7 @@ specs:
     variants: { seed: nl-1, where: { tier: wide }, key: [code, quantity, hoedanigheid] }
     params: { proces: meting }
     window: { default: PT6H, max: P31D, overlap: PT1H, anchor: data }
-    # measured 2026-10-17: 11.3 KB for PT6H (a12/H, MSL); a P31D catch-up is about 1.3 MB
+    # measured 2026-10-17: 11.3 KB for PT6H (a12/H, MSL); a P31D catch-up is about 1.6 MB (#251 review CR-3)
     max_bytes: 2097152
     retention: obs
     validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
@@ -232,7 +232,7 @@ specs:
     variants: { seed: nl-1, where: { tier: slow }, key: [code, quantity, hoedanigheid] }
     params: { proces: meting }
     window: { default: PT6H, max: P31D, overlap: PT1H, anchor: data }
-    # measured 2026-10-17: 11.6 KB for PT6H (aa.helmond/Q); a P31D catch-up is about 1.3 MB
+    # measured 2026-10-17: 11.6 KB for PT6H (aa.helmond/Q); a P31D catch-up is about 1.4 MB (321–332 B a value; #251 review CR-3)
     max_bytes: 2097152
     retention: obs
     validity: { format: json, required: [Succesvol], count: WaarnemingenLijst, min: 1, allow_status: [204] }
