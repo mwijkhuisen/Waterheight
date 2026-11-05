@@ -130,6 +130,15 @@ describe('coverage, the window anchor of #250 (real payloads)', () => {
     }
     expect(coverage({ WaarnemingenLijst: [{ MetingenLijst: [] }] })).toBeNull();
     expect(coverage({ WaarnemingenLijst: [{ MetingenLijst: [{ Tijdstip: '2026-11-05T10:00:00' }] }] })).toBeNull();
+    // #251 review SR-5: a year outside 1900–2199 is no value time.
+    for (const t of [
+      '0001-01-01T00:00:00Z',
+      '+275760-09-13T00:00:00.000Z',
+      '1899-12-31T23:00:00Z',
+      '2200-01-01T00:00:00Z',
+    ]) {
+      expect(coverage({ WaarnemingenLijst: [{ MetingenLijst: [{ Tijdstip: t }] }] })).toBeNull();
+    }
     expect(coverage({ WaarnemingenLijst: [{ MetingenLijst: [{ Tijdstip: 'never+01:00' }, null, 7] }] })).toBeNull();
     expect(
       coverage({

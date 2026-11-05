@@ -79,7 +79,7 @@ describe('per-host circuit breaker under fake timers', () => {
     expect(p.gate(host, Date.now())).toEqual({ wait: 0 });
   });
 
-  it('#250: each failed probe doubles the open time, 1, 2, 4, 8, 16, then 30 min; a success starts again at 1 min', () => {
+  it('#250: each failed probe doubles the open time, 1, 2, 4, 8, 16, then 30 min; it starts again at 1 min after an hour without an opening', () => {
     expect([1, 2, 3, 4, 5, 6, 7, 20].map(breakerOpenMs)).toEqual([1, 2, 4, 8, 16, 30, 30, 30].map((m) => m * MIN));
     expect(breakerOpenMs(6)).toBe(BREAKER_PROBE_MS);
     vi.useFakeTimers({ now: Date.parse('2026-11-04T15:11:00Z') });
@@ -96,8 +96,45 @@ describe('per-host circuit breaker under fake timers', () => {
     expect(opens).toEqual([1, 2, 4, 8, 16, 30, 30]);
     while (!('probe' in p.gate(host, Date.now()))) vi.advanceTimersByTime(1000);
     p.success(host);
+    // Less than an hour after the last opening, the sequence goes on (#250 review SR-4).
+    for (let i = 0; i < 5; i += 1) p.failure(host, Date.now());
+    expect(p.until(host)).toBe(Date.now() + 30 * MIN);
+    while (!('probe' in p.gate(host, Date.now()))) vi.advanceTimersByTime(1000);
+    p.success(host);
+    vi.advanceTimersByTime(60 * MIN); // an hour without an opening
     for (let i = 0; i < 5; i += 1) p.failure(host, Date.now());
     expect(p.until(host)).toBe(Date.now() + MIN);
+  });
+
+  it('#250 review SR-1: an opening lasts at least the Retry-After, and the jitter never holds the probe back', () => {
+    const p = new Politeness(() => 0.99);
+    for (let i = 0; i < 4; i += 1) p.failure('h', 0);
+    p.failure('h', 0, 20 * MIN); // the fifth failure says Retry-After: 1200
+    expect(p.until('h')).toBe(20 * MIN);
+    expect(p.gate('h', 20 * MIN - 1)).toEqual({ skip: 'breaker_open' });
+    expect(p.gate('h', 20 * MIN)).toEqual({ wait: 0, probe: true });
+    // The client sends nothing while until() is ahead (client.ts): at the probe it is not.
+    expect(p.until('h')).toBe(20 * MIN);
+    // Without a Retry-After, 99 % of the largest jitter does not hold the 1-min probe back.
+    const q = new Politeness(() => 0.99);
+    for (let i = 0; i < 5; i += 1) q.failure('h', 0);
+    expect(q.gate('h', MIN)).toEqual({ wait: 0, probe: true });
+    expect(q.until('h')).toBe(MIN);
+  });
+
+  it('#250 review SR-4: a host that admits the probe and then fails again climbs as a failing one does', () => {
+    const p = new Politeness(() => 0);
+    let t = 0;
+    const steps: number[] = [];
+    for (let cycle = 0; cycle < 6; cycle += 1) {
+      for (let i = 0; i < 5; i += 1) p.failure('h', t);
+      const opened = t;
+      t = p.until('h');
+      expect(p.gate('h', t)).toEqual({ wait: 0, probe: true });
+      p.success('h'); // the probe gets through; the next five requests fail again
+      steps.push((t - opened) / MIN);
+    }
+    expect(steps).toEqual([1, 2, 4, 8, 16, 30]);
   });
 
   it('a request already in flight that fails while the breaker is open re-arms the current step, not the next', () => {

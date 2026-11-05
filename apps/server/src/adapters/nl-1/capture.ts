@@ -24,8 +24,11 @@ const TYPERING = new Set(['', 'NVT', 'GETETTPE']);
 /** RWS answers at most 160,000 values per request (catalogue §2.1); the finest step asked is 10 minutes. */
 const MAX_VALUES = 160_000;
 const STEP_MS = 10 * MINUTE;
-/** An explicit offset (invariant 4): an offset-less time would be read as the host's local time. */
-const OFFSET = /(?:Z|[+-]\d{2}:\d{2})$/;
+/**
+ * A year from 1900 to 2199 and an explicit offset (invariant 4: an offset-less time would be read as the host's local
+ * time; #251 review SR-5: a year 1 or +275760 would distort a seed's days_covered).
+ */
+const TIJDSTIP = /^(?:19|2[01])\d{2}-.*(?:Z|[+-]\d{2}:\d{2})$/;
 
 /**
  * #250: the first and last `Tijdstip` of an `OphalenWaarnemingen` answer, in UTC; null for a 204 (no body), a
@@ -42,7 +45,7 @@ export function coverage(doc: unknown): { from: string; to: string } | null {
     if (!Array.isArray(values)) continue;
     for (const m of values) {
       const s = (m as { Tijdstip?: unknown } | null | undefined)?.Tijdstip;
-      if (typeof s !== 'string' || !OFFSET.test(s)) continue;
+      if (typeof s !== 'string' || !TIJDSTIP.test(s)) continue;
       const t = Date.parse(s);
       if (t < min) min = t;
       if (t > max) max = t;
