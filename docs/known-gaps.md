@@ -4,6 +4,14 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## #250, the NL-1 window anchor and the breaker probe (2026-11-05)
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-496 | data | **The NL-1 forecast runs Rijkswaterstaat did not serve during 2026-11-04 14:25Z – 11-05 10:07Z are not stored:** the forecast specs have no window to stretch, and a past run is not asked for again (Zaltbommel's newest stayed at 11-04 14:25Z). The observations of that period were refetched by the state rewind of recorder-down §6. | Accepted: a forecast run has value only while it is current | accepted |
+| KG-497 | health | **Tiel, Waal H is stale at the provider since 2026-11-03 10:40Z, yet `tier1.provider_stale` of NL-1 reads 0** (`/api/v1/health/sources`, 2026-11-05): the page shows "geen waarde" correctly, but health counts it as our staleness. Not changed by #250. | A follow-up issue if the owner wants health to tell the two apart | open |
+| KG-498 | verification | **[U] The [agent-prod] and [owner] checks wait for the deploy and the next Rijkswaterstaat episode:** the six NL-1 observation specs fresh in `/status/capture.json` and NL-1 coverage not below 0.9641; at the next run of 204s or 429s, the gap closes by itself within one run after the recovery, and a 429 cluster costs minutes, not 30. | Lead after the deploy; owner at the next episode | open |
+
 ## #235, the daily gap-fill of CH-1 and FR-1 (2026-10-28)
 
 | ID | Area | Gap | What closes it / who | Status |
