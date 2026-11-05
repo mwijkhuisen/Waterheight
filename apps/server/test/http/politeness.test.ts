@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   BACKOFF_CAP_MS,
+  BREAKER_FIRST_PROBE_MS,
   BREAKER_PROBE_MS,
   ByteBudget,
+  breakerOpenMs,
   fullJitter,
   Politeness,
   parseRetryAfter,
@@ -47,7 +49,9 @@ describe('Retry-After', () => {
 });
 
 describe('per-host circuit breaker under fake timers', () => {
-  it('opens after 5 consecutive failures, probes once every 30 min, and a success closes it', () => {
+  const MIN = 60_000;
+
+  it('opens after 5 consecutive failures, probes once at a time, and a success closes it', () => {
     vi.useFakeTimers({ now: Date.parse('2026-10-02T00:00:00Z') });
     const p = new Politeness(() => 0);
     const host = 'hubeau.eaufrance.fr';
@@ -60,19 +64,60 @@ describe('per-host circuit breaker under fake timers', () => {
     // Another host is unaffected.
     expect(p.gate('other.example', Date.now())).toEqual({ wait: 0 });
 
-    vi.advanceTimersByTime(BREAKER_PROBE_MS - 1);
+    vi.advanceTimersByTime(BREAKER_FIRST_PROBE_MS - 1);
     expect(p.gate(host, Date.now())).toEqual({ skip: 'breaker_open' });
     vi.advanceTimersByTime(1);
     expect(p.gate(host, Date.now())).toEqual({ wait: 0, probe: true }); // the half-open probe
     expect(p.gate(host, Date.now())).toEqual({ skip: 'breaker_open' }); // only one at a time
-    p.failure(host, Date.now()); // the probe fails: open for another 30 min
-    vi.advanceTimersByTime(BREAKER_PROBE_MS - 1);
+    p.failure(host, Date.now()); // the probe fails: open again, now for 2 min
+    vi.advanceTimersByTime(2 * MIN - 1);
     expect(p.gate(host, Date.now())).toEqual({ skip: 'breaker_open' });
     vi.advanceTimersByTime(1);
     expect(p.gate(host, Date.now())).toEqual({ wait: 0, probe: true });
     p.success(host);
     expect(p.isOpen(host)).toBe(false);
     expect(p.gate(host, Date.now())).toEqual({ wait: 0 });
+  });
+
+  it('#250: each failed probe doubles the open time, 1, 2, 4, 8, 16, then 30 min; a success starts again at 1 min', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 20].map(breakerOpenMs)).toEqual([1, 2, 4, 8, 16, 30, 30, 30].map((m) => m * MIN));
+    expect(breakerOpenMs(6)).toBe(BREAKER_PROBE_MS);
+    vi.useFakeTimers({ now: Date.parse('2026-11-04T15:11:00Z') });
+    const p = new Politeness(() => 0);
+    const host = 'ddapi20-waterwebservices.rijkswaterstaat.nl';
+    const opens: number[] = [];
+    for (let i = 0; i < 5; i += 1) p.failure(host, Date.now());
+    for (let probe = 0; probe < 7; probe += 1) {
+      const openedAt = Date.now();
+      while (!('probe' in p.gate(host, Date.now()))) vi.advanceTimersByTime(1000);
+      opens.push((Date.now() - openedAt) / MIN);
+      p.failure(host, Date.now()); // the probe fails again
+    }
+    expect(opens).toEqual([1, 2, 4, 8, 16, 30, 30]);
+    while (!('probe' in p.gate(host, Date.now()))) vi.advanceTimersByTime(1000);
+    p.success(host);
+    for (let i = 0; i < 5; i += 1) p.failure(host, Date.now());
+    expect(p.until(host)).toBe(Date.now() + MIN);
+  });
+
+  it('a request already in flight that fails while the breaker is open re-arms the current step, not the next', () => {
+    const p = new Politeness(() => 0);
+    for (let i = 0; i < 5; i += 1) p.failure('h', 0);
+    expect(p.until('h')).toBe(MIN);
+    p.failure('h', 10_000); // the second connection's answer, after the breaker opened
+    expect(p.until('h')).toBe(10_000 + MIN);
+    // The probe after it fails: the second opening, 2 min.
+    expect(p.gate('h', 10_000 + MIN)).toEqual({ wait: 0, probe: true });
+    p.failure('h', 10_000 + MIN);
+    expect(p.until('h')).toBe(10_000 + 3 * MIN);
+  });
+
+  it('a probe that ends without an answer still counts as a failed probe', () => {
+    const p = new Politeness(() => 0);
+    for (let i = 0; i < 5; i += 1) p.failure('h', 0);
+    expect(p.gate('h', MIN)).toEqual({ wait: 0, probe: true });
+    p.release('h', MIN);
+    expect(p.until('h')).toBe(3 * MIN);
   });
 
   it('a success resets the failure count', () => {

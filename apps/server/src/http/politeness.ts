@@ -1,13 +1,20 @@
 // Politeness per host (A§7.3): after a 5xx, 429, 403, 451, a status outside
 // 100–599, a timeout or a network error, a full-jitter backoff from 30 s to
 // 30 min that honours Retry-After, and a circuit breaker that opens after 5
-// consecutive failures and lets one probe through every 30 min. State lives
-// in the process.
+// consecutive failures and lets one probe through after 1, 2, 4, 8 and 16 min,
+// then every 30 min (#250: a short burst of 429s cost 30 min of every spec of
+// the host). State lives in the process.
 
 export const BACKOFF_BASE_MS = 30_000;
 export const BACKOFF_CAP_MS = 30 * 60_000;
 export const BREAKER_THRESHOLD = 5;
+export const BREAKER_FIRST_PROBE_MS = 60_000;
 export const BREAKER_PROBE_MS = 30 * 60_000;
+
+/** How long the n-th consecutive opening of a breaker lasts: 1 min, doubling, at most 30 min. */
+export function breakerOpenMs(opening: number): number {
+  return Math.min(BREAKER_PROBE_MS, BREAKER_FIRST_PROBE_MS * 2 ** Math.max(0, opening - 1));
+}
 
 /** Full jitter: uniform in [0, min(cap, base · 2^(attempt−1))]. */
 export function fullJitter(attempt: number, random: () => number = Math.random): number {
@@ -29,7 +36,8 @@ export function parseRetryAfter(value: string | undefined, now: number): number 
   return Math.min(BACKOFF_CAP_MS, Math.max(0, ms));
 }
 
-type HostState = { failures: number; notBefore: number; openUntil: number | null; probing: boolean };
+/** `openings`: consecutive openings since the last success (a failed probe opens it again). */
+type HostState = { failures: number; notBefore: number; openUntil: number | null; probing: boolean; openings: number };
 
 /** `probe`: this request is the one half-open probe; it must end in success, failure or release. */
 export type Gate = { wait: number; probe?: true } | { skip: 'breaker_open' };
@@ -44,7 +52,7 @@ export class Politeness {
   private state(host: string): HostState {
     let s = this.hosts.get(host);
     if (!s) {
-      s = { failures: 0, notBefore: 0, openUntil: null, probing: false };
+      s = { failures: 0, notBefore: 0, openUntil: null, probing: false, openings: 0 };
       this.hosts.set(host, s);
     }
     return s;
@@ -62,7 +70,7 @@ export class Politeness {
   }
 
   success(host: string): void {
-    this.hosts.set(host, { failures: 0, notBefore: 0, openUntil: null, probing: false });
+    this.hosts.set(host, { failures: 0, notBefore: 0, openUntil: null, probing: false, openings: 0 });
   }
 
   /** A 5xx, 429, 403 or 451 (a WAF), a status outside 100–599, a timeout or a network error. */
@@ -70,7 +78,12 @@ export class Politeness {
     const s = this.state(host);
     s.failures += 1;
     s.notBefore = now + (retryAfterMs ?? fullJitter(s.failures, this.random));
-    if (s.probing || s.failures >= BREAKER_THRESHOLD) s.openUntil = now + BREAKER_PROBE_MS;
+    if (s.probing || s.failures >= BREAKER_THRESHOLD) {
+      // A closed breaker opening or a failed probe is the next opening; a request that was already in flight
+      // and fails while it is open re-arms the current one.
+      if (s.probing || s.openUntil === null) s.openings += 1;
+      s.openUntil = now + breakerOpenMs(s.openings);
+    }
     s.probing = false;
   }
 
