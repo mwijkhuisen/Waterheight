@@ -1,3 +1,4 @@
+import { FUTURE_SLACK_MS } from '@rws/core';
 import type { Logger } from 'pino';
 import { keptHeaders, type ManifestLine, redactUrl } from '../archive/manifest.ts';
 import { at, type Validity, type ValiditySpec, validate } from '../archive/validity.ts';
@@ -192,7 +193,9 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
     let req = baseRequest(spec, row);
     if (opts.skip?.has(req.variant)) continue;
     const prev = st.variants[req.variant];
-    let window = opts.window ?? windowFor(spec, started, prev?.last_success ?? st.last_success);
+    // #250: an `anchor: data` window reaches back to the newest value received, whatever answered since.
+    const newest = spec.window?.anchor === 'data' ? prev?.newest : undefined;
+    let window = opts.window ?? windowFor(spec, started, newest ?? prev?.last_success ?? st.last_success);
     // The rest of a capped walk: results come newest first, so it ends where the last run stopped. A rest
     // the window has moved past (its history expired upstream) is dropped.
     const rest = prev?.walk;
@@ -413,6 +416,14 @@ export async function runSpec(spec: LoadedSpec, deps: RunDeps, opts: RunOptions 
         const times = v.times === undefined ? null : { from: utc(v.times.min), to: utc(v.times.max) };
         const got = adapter?.coverage?.(v.doc) ?? times;
         summary.coverage = mergeCoverage(summary.coverage, got);
+        // #250: the newest value only moves forward, on the schedule, and never past the fetch by more than the
+        // future slack (invariant 4). A 204 has no coverage, so it never moves it.
+        if (!opts.seed && spec.window?.anchor === 'data' && got !== null) {
+          const to = Date.parse(got.to);
+          if (to <= end.getTime() + FUTURE_SLACK_MS && (vs.newest === undefined || to > Date.parse(vs.newest))) {
+            vs.newest = new Date(to).toISOString();
+          }
+        }
         if (got !== null)
           oldest.set(walk, Math.min(oldest.get(walk) ?? Number.POSITIVE_INFINITY, Date.parse(got.from)));
       }

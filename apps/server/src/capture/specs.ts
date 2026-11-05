@@ -74,8 +74,10 @@ export const Spec = z.strictObject({
     .optional(),
   params: z.record(z.string(), z.string()).default({}),
   /**
-   * Gap-stretch window: from = max(now − max, min(now − default, last success − overlap)), at least `min`
-   * back; a longer gap than `step` is fetched `step` at a time (a closed window per run).
+   * Gap-stretch window: from = max(now − max, min(now − default, anchor − overlap)), at least `min`
+   * back; a longer gap than `step` is fetched `step` at a time (a closed window per run). The anchor is the
+   * last success, or with `anchor: data` (#250) the newest value received, so values a provider fills in
+   * after answering "no data" are still asked for.
    */
   window: z
     .strictObject({
@@ -84,6 +86,7 @@ export const Spec = z.strictObject({
       overlap: Duration.default('PT0M'),
       min: Duration.optional(),
       step: Duration.optional(),
+      anchor: z.enum(['fetch', 'data']).optional(),
     })
     .optional(),
   conditional: z.enum(['none', 'etag', 'last-modified', 'both']).default('none'),
@@ -337,16 +340,17 @@ export type Window = { from: Date; to: Date };
 
 /**
  * The gap-stretched window: normally `default` back from now; after an outage
- * back to the last success minus the overlap; never further than `max`, and
- * never less than `min` back. With a `step`, a longer gap ends `step` after
- * its start: the next runs take the rest, oldest first.
+ * back to the anchor (the last success, or the newest value received)
+ * minus the overlap; never further than `max`, and never less than `min`
+ * back. With a `step`, a longer gap ends `step` after its start: the next
+ * runs take the rest, oldest first.
  */
-export function windowFor(spec: Spec, now: Date, lastSuccess: string | undefined): Window | null {
+export function windowFor(spec: Spec, now: Date, anchor: string | undefined): Window | null {
   const w = spec.window;
   if (w === undefined) return null;
   const t = now.getTime();
   let from = t - durationMs(w.default);
-  if (lastSuccess !== undefined) from = Math.min(from, Date.parse(lastSuccess) - durationMs(w.overlap));
+  if (anchor !== undefined) from = Math.min(from, Date.parse(anchor) - durationMs(w.overlap));
   if (w.min !== undefined) from = Math.min(from, t - durationMs(w.min));
   from = Math.max(from, t - durationMs(w.max));
   const to = w.step === undefined ? t : Math.min(t, from + durationMs(w.step));
