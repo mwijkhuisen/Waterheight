@@ -122,6 +122,33 @@ describe('per-host circuit breaker under fake timers', () => {
     expect(q.until('h')).toBe(MIN);
   });
 
+  it('#251 review R2-1: an open breaker only lasts longer: a failure in flight never shortens a Retry-After', () => {
+    const p = new Politeness(() => 0);
+    for (let i = 0; i < 4; i += 1) p.failure('h', 0);
+    p.failure('h', 0, 20 * MIN); // the fifth failure says Retry-After: 1200
+    p.failure('h', MIN); // the second connection's 503, without a Retry-After
+    expect(p.until('h')).toBe(20 * MIN);
+    expect(p.gate('h', 20 * MIN - 1)).toEqual({ skip: 'breaker_open' });
+    expect(p.gate('h', 20 * MIN)).toEqual({ wait: 0, probe: true });
+  });
+
+  it('#251 review R2-3: the sequence starts again 60 min after the last opening, not a second earlier', () => {
+    const p = new Politeness(() => 0);
+    const open = (t: number) => {
+      for (let i = 0; i < 5; i += 1) p.failure('h', t);
+    };
+    open(0); // the first opening: 1 min
+    expect(p.gate('h', MIN)).toEqual({ wait: 0, probe: true });
+    p.success('h');
+    const second = 60 * MIN - 1000; // 59:59 after the last opening: the sequence goes on
+    open(second);
+    expect(p.until('h')).toBe(second + 2 * MIN);
+    expect(p.gate('h', second + 2 * MIN)).toEqual({ wait: 0, probe: true });
+    p.success('h');
+    open(second + 60 * MIN); // exactly 60 min after the last opening: back to 1 min
+    expect(p.until('h')).toBe(second + 61 * MIN);
+  });
+
   it('#250 review SR-4: a host that admits the probe and then fails again climbs as a failing one does', () => {
     const p = new Politeness(() => 0);
     let t = 0;

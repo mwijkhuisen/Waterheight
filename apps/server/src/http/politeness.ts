@@ -111,8 +111,9 @@ export class Politeness {
       }
       // While open, the breaker sets the pace (#250 review SR-1): the probe goes out when the opening ends, and
       // never before a Retry-After. The jitter backoff is for a closed breaker; were it longer than a short opening,
-      // the probe would be refused and its release would overwrite a Retry-After.
-      s.openUntil = now + Math.max(breakerOpenMs(s.openings), retryAfterMs ?? 0);
+      // the probe would be refused and its release would overwrite a Retry-After. An open breaker only ever lasts
+      // longer (#251 review R2-1): a request in flight that fails without a Retry-After cannot shorten one.
+      s.openUntil = Math.max(s.openUntil ?? 0, now + Math.max(breakerOpenMs(s.openings), retryAfterMs ?? 0));
       s.notBefore = s.openUntil;
     }
     s.probing = false;

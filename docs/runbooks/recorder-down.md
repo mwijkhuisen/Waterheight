@@ -99,4 +99,4 @@ done
 SCRIPT
 ```
 
-Check: the next runs of those specs show a new `last_success` in `/status/capture.json`, and the series fill in within one cadence plus the loader's lag. To undo before the next run: stop capture, copy the files of the backup folder the script printed back with `sudo cp -p <backup>/*.json /srv/rws/raw/_state/`, start capture.
+Check: the next runs of those specs show a new `last_success` in `/status/capture.json`, and the series fill in within one cadence plus the loader's lag. To undo before the next run: stop capture, copy the files of the backup folder the script printed back with `sudo cp -p <backup>/*.json /srv/rws/raw/_state/`, start capture. If the script stops on a file (it prints jq's or test's error), the specs before it are rewound and the rest are not: fix that file or leave it out of `SPECS`, and run the script again; a second rewind to the same instant changes nothing.
