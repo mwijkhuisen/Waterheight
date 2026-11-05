@@ -24,8 +24,37 @@ const TYPERING = new Set(['', 'NVT', 'GETETTPE']);
 /** RWS answers at most 160,000 values per request (catalogue §2.1); the finest step asked is 10 minutes. */
 const MAX_VALUES = 160_000;
 const STEP_MS = 10 * MINUTE;
+/** An explicit offset (invariant 4): an offset-less time would be read as the host's local time. */
+const OFFSET = /(?:Z|[+-]\d{2}:\d{2})$/;
+
+/**
+ * #250: the first and last `Tijdstip` of an `OphalenWaarnemingen` answer, in UTC; null for a 204 (no body), a
+ * list without values or any shape it does not expect. The body is provider data: it never throws, and a loop
+ * keeps an unbounded body from overflowing a spread. The runner anchors the NL-1 observation windows on `to`.
+ */
+export function coverage(doc: unknown): { from: string; to: string } | null {
+  const lists = (doc as { WaarnemingenLijst?: unknown } | null | undefined)?.WaarnemingenLijst;
+  if (!Array.isArray(lists)) return null;
+  let min = Number.POSITIVE_INFINITY;
+  let max = Number.NEGATIVE_INFINITY;
+  for (const w of lists) {
+    const values = (w as { MetingenLijst?: unknown } | null | undefined)?.MetingenLijst;
+    if (!Array.isArray(values)) continue;
+    for (const m of values) {
+      const s = (m as { Tijdstip?: unknown } | null | undefined)?.Tijdstip;
+      if (typeof s !== 'string' || !OFFSET.test(s)) continue;
+      const t = Date.parse(s);
+      if (t < min) min = t;
+      if (t > max) max = t;
+    }
+  }
+  return max === Number.NEGATIVE_INFINITY
+    ? null
+    : { from: new Date(min).toISOString(), to: new Date(max).toISOString() };
+}
 
 export const adapter: Adapter = {
+  coverage,
   build({ req, row, now, window, params }) {
     const proces = params.proces ?? 'meting';
     if (!PROCES.has(proces)) throw new Error('nl-1: bad proces');
