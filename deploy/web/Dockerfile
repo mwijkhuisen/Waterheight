@@ -28,15 +28,20 @@ RUN apt-get update \
 ENV PATH=/usr/local/go/bin:$PATH GOTOOLCHAIN=local CGO_ENABLED=0 GOFLAGS= \
   GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GOPRIVATE= GONOPROXY= GONOSUMDB= GOINSECURE=
 ARG GO_FIXES="golang.org/x/net@v0.62.0 golang.org/x/crypto@v0.58.0 golang.org/x/text@v0.43.0 google.golang.org/grpc@v1.83.2 go.opentelemetry.io/otel/sdk@v1.46.0 github.com/klauspost/compress@v1.20.2 github.com/go-jose/go-jose/v4@v4.1.6 github.com/andybalholm/brotli@v1.2.7"
-# The upstream release flags (.goreleaser.yml: -trimpath, -s -w and the tags nobadger, nomysql and nopgx). Built inside
-# its own module, Caddy would report its version as (devel): CustomVersion names the release instead.
+# Built as the upstream release is (.goreleaser.yml): cmd/caddy/main.go in a main module `caddy` that requires the
+# release module, and the release flags (-trimpath, -s -w and the tags nobadger, nomysql and nopgx). So the build info
+# names github.com/caddyserver/caddy/v2 v2.11.7 with its go.sum hash (the last line checks it): `caddy version` prints
+# it, and Syft and Grype match Caddy's own advisories by it. Built inside its own module, Caddy is (devel) to both.
 ARG CADDY_VERSION=2.11.7
 RUN m=github.com/caddyserver/caddy/v2@v${CADDY_VERSION} \
   && go mod download -json "$m" | grep -F '"Sum": "h1:yj0Y4fYZGPkSvibBJ1sTWE33xC0fxztVyXEW5iIdUT4="' \
-  && cp -r "$(go env GOMODCACHE)/$m" /gosrc/caddy && chmod -R u+w /gosrc/caddy && cd /gosrc/caddy \
+  && mkdir /gosrc/caddy && cd /gosrc/caddy \
+  && cp "$(go env GOMODCACHE)/$m/cmd/caddy/main.go" . \
+  && go mod init caddy && go mod edit -require="$m" && go mod tidy \
   && go get ${GO_FIXES} \
-  && go build -trimpath -tags nobadger,nomysql,nopgx \
-    -ldflags "-s -w -X github.com/caddyserver/caddy/v2.CustomVersion=v${CADDY_VERSION}" -o /gobin/caddy ./cmd/caddy
+  && go build -trimpath -tags nobadger,nomysql,nopgx -ldflags '-s -w' -o /gobin/caddy . \
+  && go version -m /gobin/caddy \
+    | grep -E "^\s+dep\s+github.com/caddyserver/caddy/v2\s+v${CADDY_VERSION}\s+h1:yj0Y4fYZGPkSvibBJ1sTWE33xC0fxztVyXEW5iIdUT4=$"
 
 FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS build
 RUN apt-get update \
