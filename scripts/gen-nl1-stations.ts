@@ -712,7 +712,8 @@ export type HistoryRow = {
 
 /**
  * The history seed rows of a census (JSON lines): every method group that is no registered series (bewerking NVT and
- * role null) and every processed group (bewerking other than NVT), sorted. Pure.
+ * role null) and every processed group (bewerking other than NVT), sorted. Pure. It reads the stage-1 census only
+ * (the sha256 pin): a census taken with these twins registered gives their groups `role: twin`, which it refuses.
  */
 export function historyRows(census: string): HistoryRow[] {
   const out: HistoryRow[] = [];

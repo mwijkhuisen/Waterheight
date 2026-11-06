@@ -142,23 +142,28 @@ function primariesByCombination(registry: Registry): Map<string, string[]> {
  * holds the daily means up to 2023-12-31T23:00Z and, as a second list, the 10-minute readings from 2023-12-30T23:00Z on
  * (census of 2026-11-05: a median step of 3.1 m³/s and 41 % reversals over 105,406 values, which no 24-hour mean
  * shows; recorded fixtures nl-1-backfill-megen-q-20231228 and -20240301). Only this key and this bewerking: a value
- * whose nearest earlier instant in its list (the first value: the next one) lies less than one day away is a reading.
+ * whose nearest other instant in its list, earlier or later, lies less than one day away is a reading (so a reading
+ * after a hole of a day or more is still one; a lone value, or values a day apart, are the means they are labelled).
+ * One instant holding a mean and a reading in one list is one instant: both are readings, and the primary withholds
+ * it as `conflict` (KG-496).
  */
 export const MISLABELLED = { key: 'megen.maas/Q/NVT/other:F103', bewerking: 'GEM24H' } as const;
 
 type Meting = Waarnemingen['metingen'][number];
 
-/** The readings and the daily means of a MISLABELLED list, by the step to the neighbouring instant (D-1). */
+/** The readings and the daily means of a MISLABELLED list, by the step to the nearest other instant (D-1). */
 function splitMislabelled(metingen: readonly Meting[]): { readings: Meting[]; means: Meting[] } {
-  const times = [...new Set(metingen.map((m) => instant(m.Tijdstip)))].sort((a, b) => a - b);
+  const at = metingen.map((m) => instant(m.Tijdstip));
+  const times = [...new Set(at)].sort((a, b) => a - b);
   const sub = new Set<number>();
   for (const [i, t] of times.entries()) {
-    const near = i > 0 ? t - (times[i - 1] as number) : times.length > 1 ? (times[1] as number) - t : DAY_MS;
-    if (near < DAY_MS) sub.add(t);
+    const prev = i > 0 ? t - (times[i - 1] as number) : DAY_MS;
+    const next = i + 1 < times.length ? (times[i + 1] as number) - t : DAY_MS;
+    if (Math.min(prev, next) < DAY_MS) sub.add(t);
   }
   const readings: Meting[] = [];
   const means: Meting[] = [];
-  for (const m of metingen) (sub.has(instant(m.Tijdstip)) ? readings : means).push(m);
+  for (const [i, m] of metingen.entries()) (sub.has(at[i] as number) ? readings : means).push(m);
   return { readings, means };
 }
 
@@ -292,9 +297,10 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
         count(out, dropped);
         continue;
       }
-      // D-1: a reading never replaces or contests an instant the series' own lists stated.
+      // D-1: a reading never replaces or contests an instant the series' own lists stated (counted on its own, so
+      // that a wrong premise of D-1 shows; none is expected, KG-496).
       if (series.held?.has(ts) === true) {
-        count(out, 'duplicate');
+        count(out, 'mislabelled_held');
         continue;
       }
       const value = scale(decl.to_canonical, m.Meetwaarde.Waarde_Numeriek);

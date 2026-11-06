@@ -605,7 +605,7 @@ describe('#184 D-1: Megen Q readings labelled GEM24H (MISLABELLED)', () => {
     expect([max.obs, max.dropped]).toEqual([[], { processed: 150 }]);
   });
 
-  it("a reading never replaces or contests a value of the series' own lists: theirs wins, the reading counts duplicate", () => {
+  it("a reading never replaces or contests a value of the series' own lists: theirs wins, the reading counts mislabelled_held", () => {
     // A labelled list that states the first three reading instants with other values, before or after the readings.
     const labelled: Waarnemingen = {
       ...nvt,
@@ -627,11 +627,11 @@ describe('#184 D-1: Megen Q readings labelled GEM24H (MISLABELLED)', () => {
           value: m.Meetwaarde.Waarde_Numeriek,
           qc: QC.VALIDATED,
         });
-      expect(out.dropped).toEqual({ duplicate: 3 });
+      expect(out.dropped).toEqual({ mislabelled_held: 3 });
     }
   });
 
-  it('splits one list per value by the step to its neighbour: daily means before readings', () => {
+  it('splits one list per value by the step to its nearest instant: daily means, then readings, a hole, readings', () => {
     const t0 = Date.parse('2023-12-26T23:00:00Z');
     const template = readings.metingen[0] as Waarnemingen['metingen'][number];
     const value = (ms: number, v: number) => ({
@@ -639,21 +639,43 @@ describe('#184 D-1: Megen Q readings labelled GEM24H (MISLABELLED)', () => {
       Tijdstip: `${new Date(ms + 3_600_000).toISOString().slice(0, 23)}+01:00`,
       Meetwaarde: { Waarde_Alfanumeriek: String(v), Waarde_Numeriek: v },
     });
+    // As at the real boundary, the readings start on the next daily stamp; after them a hole of two days, then more
+    // readings: the first value after the hole is a reading by its successor.
     const mixed: Waarnemingen = {
       ...readings,
       metingen: [
         value(t0, 900),
         value(t0 + DAY, 901),
         value(t0 + 2 * DAY, 902),
-        value(t0 + 2 * DAY + 600_000, 903),
-        value(t0 + 2 * DAY + 1_200_000, 904),
+        value(t0 + 3 * DAY, 903),
+        value(t0 + 3 * DAY + 600_000, 904),
+        value(t0 + 5 * DAY + 600_000, 905),
+        value(t0 + 5 * DAY + 1_200_000, 906),
       ],
     };
     const out = normalise([mixed], at);
     expect(rowsOf(out, MEAN).map((r) => r.value)).toEqual([900, 901, 902]);
-    expect(rowsOf(out, MEGEN).map((r) => r.value)).toEqual([903, 904]);
-    // A lone value has no step: it is the mean it is labelled as.
+    expect(rowsOf(out, MEGEN).map((r) => r.value)).toEqual([903, 904, 905, 906]);
+    // A lone value, or two values a day apart, have no sub-daily step: they are the means they are labelled as.
     expect(rowsOf(normalise([{ ...readings, metingen: [value(t0, 900)] }], at), MEAN)).toHaveLength(1);
+    const daily = normalise([{ ...readings, metingen: [value(t0, 900), value(t0 + DAY, 901)] }], at);
+    expect([rowsOf(daily, MEAN).length, rowsOf(daily, MEGEN).length]).toEqual([2, 0]);
+  });
+
+  it('a mean and a reading on one instant of one list are one instant: both readings, withheld as conflict (KG-496)', () => {
+    // If RWS validated the readings, the two lists could become one (today only Statuswaarde keeps them apart): both
+    // daily means of the chunk share their instants (2023-12-30T23:00Z, 2023-12-31T23:00Z) with readings. Such an
+    // instant is withheld, never guessed; a replay never deletes what an earlier load stored.
+    const shared = means.metingen[1] as Waarnemingen['metingen'][number];
+    const reading = readings.metingen.find((m) => Date.parse(m.Tijdstip) === Date.parse(shared.Tijdstip));
+    expect(reading?.Meetwaarde.Waarde_Numeriek).not.toBe(shared.Meetwaarde.Waarde_Numeriek);
+    const one: Waarnemingen = { ...readings, metingen: [...readings.metingen, ...means.metingen] };
+    const out = normalise([one], at);
+    const sharedTs = new Date(Date.parse(shared.Tijdstip)).toISOString();
+    expect(rowsOf(out, MEGEN).map((r) => r.ts)).not.toContain(sharedTs);
+    expect(rowsOf(out, MEAN).map((r) => r.ts)).not.toContain(sharedTs);
+    // The 150 readings less the 2 shared instants; each shared instant withholds its 2 values.
+    expect([rowsOf(out, MEAN).length, rowsOf(out, MEGEN).length, out.dropped]).toEqual([0, 148, { conflict: 4 }]);
   });
 });
 

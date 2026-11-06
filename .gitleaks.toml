@@ -80,6 +80,14 @@ regexes = ['''^Rureinzugsgebiet/1950$''']
 paths = ['''^apps/server/test/adapters/de-8/backfill\.test\.ts$''']
 
 [[allowlists]]
+description = "#184 stage 2: a dummy provider_key of a second primary row in the station contract test, not a key"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "secret"
+regexes = ['''^lobith/second$''']
+paths = ['''^packages/contracts/test/stations\.test\.ts$''']
+
+[[allowlists]]
 description = "P14b: a DE-8 backfill unit key (<dataset>/<decade>) in the capture budget test, not a key"
 targetRules = ["generic-api-key"]
 condition = "AND"
