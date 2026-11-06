@@ -52,7 +52,7 @@ scripts/verify-prod.sh <domain>
 
 - `invalid_too_large`: a body over the spec's `max_bytes`. Do not raise the limit on the VPS. Look at the failing variant in `/status/capture.json`, then open a registry PR (`registry/capture.yaml`) that raises it with the measured size, or shortens the window.
 - `http_4xx` for one variant: the request is refused for that location or combination (for example an unknown `Groepering` or method). Remove or correct that seed row by PR. Never edit the seed, the spec or a container on the VPS (invariant 1: targets come only from `registry/`).
-- `http_429` or `http_5xx`, or the circuit breaker open: capture slows down by itself (full jitter from 30 s up to 30 min, `Retry-After` honoured, a probe every 30 min). If it lasts for hours, treat it as RWS asking us to slow down and go to §5. See also `docs/runbooks/provider-outage.md`.
+- `http_429` or `http_5xx`, or the circuit breaker open: capture slows down by itself (full jitter from 30 s up to 30 min, `Retry-After` honoured, a probe after 1, 2, 4, 8 and 16 min, then every 30 min). If it lasts for hours, treat it as RWS asking us to slow down and go to §5. See also `docs/runbooks/provider-outage.md`.
 - A new RWS method code on a location (a series answering a method the seed row does not name) shows as `unregistered_method` only once P16b loads; the capture itself is unaffected.
 
 ## 5. If Rijkswaterstaat objects
@@ -227,7 +227,7 @@ curl -s https://<domain>/api/v1/health/sources | jq '.sources[] | select(.id=="N
 - `scripts/verify-prod.sh <domain> --edge cloudflare`: `surge` and `fresh NL-1 coast` pass.
 - The `astro_horizon` alert (§2, §6): the stored astronomical tide must reach 60 days ahead. Without it every surge is `null`, whatever the weather.
 - The `surge` figures in `/api/v1/health/sources` (§7): `surge` close to `astro` close to `tidal`.
-- An RWS 429 or 5xx during the storm: capture slows down by itself (full jitter, `Retry-After`, a probe every 30 min; §4). Raise nothing and edit nothing on the VPS.
+- An RWS 429 or 5xx during the storm: capture slows down by itself (full jitter, `Retry-After`, a probe after 1, 2, 4, 8 and 16 min, then every 30 min; §4). Raise nothing and edit nothing on the VPS.
 
 **The rule: no hot fix during an active storm-surge warning without a rollback plan.** A deploy, a registry change or a replay on a storm day needs the previous release named, tested and ready to restore first (`docs/runbooks/deploy-rollback.md`); if there is no such plan, wait until the warning is lifted. The drill is not a licence to try changes on production. The steps:
 

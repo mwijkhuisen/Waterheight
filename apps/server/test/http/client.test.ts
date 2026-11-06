@@ -5,7 +5,7 @@ import { delay, HttpResponse, http } from 'msw';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { server } from '../../../../test/msw.setup.ts';
 import { checkZip, flatNames, GuardFailure } from '../../src/http/guards.ts';
-import { BREAKER_PROBE_MS, ByteBudget, Politeness } from '../../src/http/politeness.ts';
+import { BREAKER_FIRST_PROBE_MS, ByteBudget, Politeness } from '../../src/http/politeness.ts';
 import type { Req } from '../../src/http/types.ts';
 import { fakeResolver, testClient } from '../helpers.ts';
 
@@ -323,11 +323,11 @@ describe('the half-open probe (C1, S2)', () => {
     );
     for (let i = 0; i < 5; i += 1) await c.fetch('NL-1', get(`${A}/down`));
     expect(c.politeness.isOpen(H)).toBe(true);
-    clock.now += BREAKER_PROBE_MS;
+    clock.now += BREAKER_FIRST_PROBE_MS;
     return { c, clock };
   }
 
-  it('a probe that ends on a DNS error re-arms the breaker; the next probe 30 min later is admitted', async () => {
+  it('a probe that ends on a DNS error re-arms the breaker for its second step (2 min), then admits the next probe', async () => {
     let dnsDown = false;
     const { c, clock } = await opened(async () => {
       if (dnsDown) throw new Error('EAI_AGAIN');
@@ -338,9 +338,71 @@ describe('the half-open probe (C1, S2)', () => {
     dnsDown = false;
     clock.now += 60_000;
     expect(await c.fetch('NL-1', get(`${A}/ok`))).toEqual({ ok: false, error: 'breaker_open' });
-    clock.now += BREAKER_PROBE_MS;
+    clock.now += 2 * BREAKER_FIRST_PROBE_MS - 60_000;
     expect(await c.fetch('NL-1', get(`${A}/ok`))).toMatchObject({ ok: true, res: { status: 200 } });
     expect(c.politeness.isOpen(H)).toBe(false);
+  });
+
+  it('#250 review SR-1: a 429 with Retry-After keeps every request back until it ends; then the probe goes out', async () => {
+    const clock = { now: 1_000_000 };
+    const c = testClient(HOSTS, { now: () => clock.now, politeness: new Politeness(() => 0) });
+    let hits = 0;
+    server.use(
+      http.get(`${A}/down`, () => {
+        hits += 1;
+        return new HttpResponse('down', { status: 503 });
+      }),
+      http.get(`${A}/busy`, () => {
+        hits += 1;
+        return new HttpResponse('busy', { status: 429, headers: { 'retry-after': '1200' } });
+      }),
+      http.get(`${A}/ok`, () => {
+        hits += 1;
+        return HttpResponse.text('ok');
+      }),
+    );
+    for (let i = 0; i < 4; i += 1) await c.fetch('NL-1', get(`${A}/down`));
+    await c.fetch('NL-1', get(`${A}/busy`)); // the fifth failure opens the breaker, Retry-After 20 min
+    expect(hits).toBe(5);
+    for (const minutes of [1, 3, 7, 19]) {
+      clock.now = 1_000_000 + minutes * 60_000;
+      expect(await c.fetch('NL-1', get(`${A}/ok`))).toEqual({ ok: false, error: 'breaker_open' });
+    }
+    expect(hits).toBe(5); // nothing reached the host before the Retry-After ended
+    clock.now = 1_000_000 + 20 * 60_000;
+    expect(await c.fetch('NL-1', get(`${A}/ok`))).toMatchObject({ ok: true, res: { status: 200 } });
+    expect(hits).toBe(6);
+  });
+
+  it('#251 review R2-2: a request that slept through a short opening sends nothing while the breaker is open', async () => {
+    const clock = { now: 1_000_000 };
+    const sleepers: (() => void)[] = [];
+    const c = testClient(HOSTS, {
+      now: () => clock.now,
+      politeness: new Politeness(() => 0.99),
+      sleep: (ms) =>
+        new Promise<void>((r) =>
+          sleepers.push(() => {
+            clock.now += ms;
+            r();
+          }),
+        ),
+    });
+    let hits = 0;
+    server.use(
+      http.get(`${A}/ok`, () => {
+        hits += 1;
+        return HttpResponse.text('ok');
+      }),
+    );
+    for (let i = 0; i < 4; i += 1) c.politeness.failure(H, clock.now); // a backoff of almost 4 min (99 % jitter)
+    const asleep = c.fetch('NL-1', get(`${A}/ok`));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(sleepers).toHaveLength(1);
+    c.politeness.failure(H, clock.now); // the fifth failure opens the breaker for 1 min
+    sleepers[0]?.(); // the sleeper wakes after almost 4 min, past the opening, while the breaker is still open
+    expect(await asleep).toEqual({ ok: false, error: 'backoff' });
+    expect(hits).toBe(0);
   });
 
   it('a same-host redirect hop belongs to the probe, and its success closes the breaker', async () => {

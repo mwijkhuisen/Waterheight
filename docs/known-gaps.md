@@ -4,6 +4,15 @@ This document lists, in one place, what each PR says is not done, not verified o
 
 Status is one of: **open**, **closed in #N**, or **accepted**, meaning a residual we keep on purpose, with the reason.
 
+## #250, the NL-1 window anchor and the breaker probe (2026-11-05)
+
+| ID | Area | Gap | What closes it / who | Status |
+|---|---|---|---|---|
+| KG-496 | data | **The NL-1 forecast runs Rijkswaterstaat did not serve during 2026-11-04 14:25Z – 11-05 10:07Z are not stored:** the forecast specs have no window to stretch, and a past run is not asked for again (Zaltbommel's newest stayed at 11-04 14:25Z). The observations of that period were refetched by the state rewind of recorder-down §6. | Accepted: a forecast run has value only while it is current | accepted |
+| KG-497 | health | **Tiel, Waal H is stale at the provider since 2026-11-03 10:40Z, yet `tier1.provider_stale` of NL-1 reads 0** (`/api/v1/health/sources`, 2026-11-05): the page shows "geen waarde" correctly, but health counts it as our staleness. Not changed by #250. | A follow-up issue if the owner wants health to tell the two apart | open |
+| KG-498 | verification | **[U] The [agent-prod] and [owner] checks wait for the deploy and the next Rijkswaterstaat episode:** the six NL-1 observation specs fresh in `/status/capture.json` and NL-1 coverage not below 0.9641; at the next run of 204s or 429s, the gap closes by itself within one run after the recovery, and a 429 cluster costs minutes, not 30. An episode already running at the deploy is not refetched by itself: until a variant has a newest value, its window anchors on the last success (recorder-down §4, §6; review SR-6). | Lead after the deploy; owner at the next episode | open |
+| KG-499 | data | **Quality-99 placeholders count as answered, and a full P31D refill is close to the cap:** `coverage()` takes the newest `Tijdstip` whatever its quality code, so if Rijkswaterstaat later replaced 99 placeholders with values more than the overlap (1 h) behind the newest instant, those values would not be asked again (no worse than before #250). Taking the newest non-99 value instead would make a gauge that serves 99s for weeks ask up to 31 days every run. A P31D answer of a 10-minute H series is 1.63–1.68 MB (4,464 values × 365–376 B), about 20 % under the 2 MiB (2,097,152 B) `max_bytes` of the six specs; a richer answer would be `too_large` on every run until the cap is raised. (#251 review CR-1, CR-3.) | Owner: whether Rijkswaterstaat replaces 99s later, and whether to raise the six specs' `max_bytes` to 4 MiB | open |
+
 ## #235, the daily gap-fill of CH-1 and FR-1 (2026-10-28)
 
 | ID | Area | Gap | What closes it / who | Status |

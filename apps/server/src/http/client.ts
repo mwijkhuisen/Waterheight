@@ -285,9 +285,14 @@ export class Client {
         // Memory is reserved for the transfer only: never across a wait, a DNS lookup or another host's backoff.
         const release = await this.budget.acquire(maxDecoded);
         try {
-          // Another request put the host into backoff while this one waited: nothing is sent, and it is no
-          // new failure of the host (N6).
-          if (this.politeness.until(host) > Math.max(cleared, this.now())) return { ok: false, error: 'backoff' };
+          // Another request put the host into backoff while this one waited, or opened its breaker (only the probe
+          // goes while it is open; a short opening can end before a sleeper wakes, #251 review R2-2): nothing is
+          // sent, and it is no new failure of the host (N6).
+          if (
+            this.politeness.until(host) > Math.max(cleared, this.now()) ||
+            (!gate.probe && this.politeness.isOpen(host))
+          )
+            return { ok: false, error: 'backoff' };
           // The total deadline of this hop (headers and body) starts here, after the waits.
           const sent = performance.now();
           const signal = deadline(Math.max(0, Math.floor(Math.min(timeoutMs, wire))));

@@ -1,13 +1,24 @@
 // Politeness per host (A§7.3): after a 5xx, 429, 403, 451, a status outside
 // 100–599, a timeout or a network error, a full-jitter backoff from 30 s to
 // 30 min that honours Retry-After, and a circuit breaker that opens after 5
-// consecutive failures and lets one probe through every 30 min. State lives
-// in the process.
+// consecutive failures and lets one probe through after 1, 2, 4, 8 and 16 min,
+// then every 30 min (#250: a short burst of 429s cost 30 min of every spec of
+// the host). While it is open the breaker sets the pace, never shorter than a
+// Retry-After; the sequence starts again at 1 min only after an hour without an
+// opening. State lives in the process.
 
 export const BACKOFF_BASE_MS = 30_000;
 export const BACKOFF_CAP_MS = 30 * 60_000;
 export const BREAKER_THRESHOLD = 5;
+export const BREAKER_FIRST_PROBE_MS = 60_000;
 export const BREAKER_PROBE_MS = 30 * 60_000;
+/** The sequence starts again at 1 min only after this long without an opening (#250 review SR-4). */
+export const BREAKER_RESET_MS = 60 * 60_000;
+
+/** How long the n-th consecutive opening of a breaker lasts: 1 min, doubling, at most 30 min. */
+export function breakerOpenMs(opening: number): number {
+  return Math.min(BREAKER_PROBE_MS, BREAKER_FIRST_PROBE_MS * 2 ** Math.max(0, opening - 1));
+}
 
 /** Full jitter: uniform in [0, min(cap, base · 2^(attempt−1))]. */
 export function fullJitter(attempt: number, random: () => number = Math.random): number {
@@ -29,7 +40,18 @@ export function parseRetryAfter(value: string | undefined, now: number): number 
   return Math.min(BACKOFF_CAP_MS, Math.max(0, ms));
 }
 
-type HostState = { failures: number; notBefore: number; openUntil: number | null; probing: boolean };
+/**
+ * `openings`: the openings of the current sequence (a failed probe opens it again); `lastOpened`: when the last one
+ * began. Both outlive a success, so a host that admits a probe and fails again climbs as a failing one does.
+ */
+type HostState = {
+  failures: number;
+  notBefore: number;
+  openUntil: number | null;
+  probing: boolean;
+  openings: number;
+  lastOpened: number;
+};
 
 /** `probe`: this request is the one half-open probe; it must end in success, failure or release. */
 export type Gate = { wait: number; probe?: true } | { skip: 'breaker_open' };
@@ -44,7 +66,14 @@ export class Politeness {
   private state(host: string): HostState {
     let s = this.hosts.get(host);
     if (!s) {
-      s = { failures: 0, notBefore: 0, openUntil: null, probing: false };
+      s = {
+        failures: 0,
+        notBefore: 0,
+        openUntil: null,
+        probing: false,
+        openings: 0,
+        lastOpened: Number.NEGATIVE_INFINITY,
+      };
       this.hosts.set(host, s);
     }
     return s;
@@ -62,7 +91,8 @@ export class Politeness {
   }
 
   success(host: string): void {
-    this.hosts.set(host, { failures: 0, notBefore: 0, openUntil: null, probing: false });
+    const s = this.state(host);
+    Object.assign(s, { failures: 0, notBefore: 0, openUntil: null, probing: false });
   }
 
   /** A 5xx, 429, 403 or 451 (a WAF), a status outside 100–599, a timeout or a network error. */
@@ -70,7 +100,22 @@ export class Politeness {
     const s = this.state(host);
     s.failures += 1;
     s.notBefore = now + (retryAfterMs ?? fullJitter(s.failures, this.random));
-    if (s.probing || s.failures >= BREAKER_THRESHOLD) s.openUntil = now + BREAKER_PROBE_MS;
+    if (s.probing || s.failures >= BREAKER_THRESHOLD) {
+      // A closed breaker opening or a failed probe is the next opening; a request that was already in flight
+      // and fails while it is open re-arms the current one. A sequence starts again only after an hour without
+      // an opening (#250 review SR-4).
+      if (s.probing || s.openUntil === null) {
+        if (!s.probing && now - s.lastOpened >= BREAKER_RESET_MS) s.openings = 0;
+        s.openings += 1;
+        s.lastOpened = now;
+      }
+      // While open, the breaker sets the pace (#250 review SR-1): the probe goes out when the opening ends, and
+      // never before a Retry-After. The jitter backoff is for a closed breaker; were it longer than a short opening,
+      // the probe would be refused and its release would overwrite a Retry-After. An open breaker only ever lasts
+      // longer (#251 review R2-1): a request in flight that fails without a Retry-After cannot shorten one.
+      s.openUntil = Math.max(s.openUntil ?? 0, now + Math.max(breakerOpenMs(s.openings), retryAfterMs ?? 0));
+      s.notBefore = s.openUntil;
+    }
     s.probing = false;
   }
 
