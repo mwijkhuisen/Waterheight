@@ -129,9 +129,10 @@ export function compare(profile: Profile, baseline: Profile): { ok: boolean; lin
     ['total', profile.total_bytes, baseline.total_bytes],
     ...CLASSES.map((c): [string, number, number] => [c, profile.bytes[c], baseline.bytes[c]]),
   ];
-  // Only the total fails: the classes move with the wall clock (a day of playback spans one or two days of frames
-  // files, zoom and pan ask 37 to 43 tile ranges) by up to a third between CI runs, while the total stays within 5 %.
-  // A class over its limit is a WARN for the reviewer.
+  // Only the total fails: the data class follows the UTC hour (playback, 1 to 2 hours of playback (two hourly ticks, or one when now falls in the last 10 minutes of an hour), ending at the last whole hour, reads the
+  // unsettled days from the one frames/recent.json, whose span grows from 48 h just after 00:00Z to 72 h just before
+  // it). Since #253 the tiles are the same in every run (three CI runs in one hour: one set of 32 ranges, totals within
+  // 0.05 %). A class over its limit is a WARN for the reviewer.
   let ok = true;
   const lines = rows.map(([name, now, was]) => {
     const limit = Math.max(was * GROWTH_LIMIT, name === 'total' ? 0 : CLASS_FLOOR);
@@ -167,7 +168,7 @@ export function renderSection(b: Baseline): string {
     '',
     `Generated from \`docs/capacity-egress.json\` by \`node scripts/lib/capacity-egress.ts\`; edit the JSON and re-run it, not this block (\`scripts/verify-prod.sh --capacity\` keeps it).${b.provisional ? ' **The profile is provisional** (a local estimate; the first CI run of `egress.spec.ts` replaces it).' : ''}`,
     '',
-    `Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 5 timebar steps, 1 day of playback, a search for a lake gauge and a zoom onto the lake), measured by \`apps/web/e2e/egress.spec.ts\` as bytes on the wire (headers and body, compressed, as transferred), at ${b.measured_at}. ${b.note}`,
+    `Profile: one cold-cache map session (open the map, zoom, pan, 2 station panels, 5 timebar steps, 1 to 2 hours of playback (two hourly ticks, or one when now falls in the last 10 minutes of an hour), ending at the last whole hour, a search for a lake gauge and a zoom onto the lake), measured by \`apps/web/e2e/egress.spec.ts\` as bytes on the wire (headers and body, compressed, as transferred), at ${b.measured_at}. ${b.note}`,
     '',
     '| Class | Requests | Bytes (MB) |',
     '|---|---:|---:|',
