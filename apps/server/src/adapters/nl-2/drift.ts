@@ -15,7 +15,9 @@ export type Drift = {
    * Registered NAP and NVT series the snapshot does not list. The capture's CQL
    * filter keeps the series measured in the last 12 hours, so this means "no
    * value for 12 hours, or gone". A registered TAW twin is outside the
-   * snapshot's datums (normalise.ts), so it is never reported.
+   * snapshot's datums (normalise.ts), so it is never reported; nor is any other
+   * twin (#184: the history under another method and RWS's daily means, which
+   * no live snapshot lists).
    */
   vanished: string[];
   /** Registered series whose station the snapshot places elsewhere (`"<lon>,<lat>"`). */
@@ -23,7 +25,7 @@ export type Drift = {
 };
 
 /** A registered NL-1 series (the loader passes its SeriesRow map). */
-type Registered = { key: string; lon: number | null; lat: number | null };
+type Registered = { key: string; lon: number | null; lat: number | null; role: 'primary' | 'twin' | 'mirror' };
 
 const LIMIT = 200;
 /** Degrees in lon or lat (about 7 and 11 m): a moved gauge, not the rounding of two RWS services. */
@@ -56,7 +58,11 @@ export function driftReport(registry: ReadonlyMap<string, Registered>, collectio
     unregistered: capped(
       series.filter((s) => !registry.has(s.key) && stations.has(stationOf(s.key))).map((s) => s.key),
     ),
-    vanished: capped([...registry.keys()].filter((k) => DATUMS.has(k.split('/')[2] ?? '') && !live.has(k))),
+    vanished: capped(
+      [...registry]
+        .filter(([k, decl]) => decl.role !== 'twin' && DATUMS.has(k.split('/')[2] ?? '') && !live.has(k))
+        .map(([k]) => k),
+    ),
     // `series` is sorted by key and holds each key once.
     changed: changed.slice(0, LIMIT),
   };

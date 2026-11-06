@@ -1,0 +1,1749 @@
+{
+ "obs": [
+  {
+   "series": "megen.maas/Q/NVT/other:F006/GEM24H",
+   "ts": "2024-03-01T11:00:00.000Z",
+   "value": 972.79,
+   "qc": 2
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F006/GEM24H",
+   "ts": "2024-03-02T11:00:00.000Z",
+   "value": 892.65,
+   "qc": 2
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T00:00:00.000Z",
+   "value": 1051,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T00:10:00.000Z",
+   "value": 1050,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T00:20:00.000Z",
+   "value": 1047,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T00:30:00.000Z",
+   "value": 1049,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T00:40:00.000Z",
+   "value": 1048,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T00:50:00.000Z",
+   "value": 1047,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T01:00:00.000Z",
+   "value": 1046,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T01:10:00.000Z",
+   "value": 1045,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T01:20:00.000Z",
+   "value": 1043,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T01:30:00.000Z",
+   "value": 1046,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T01:40:00.000Z",
+   "value": 1045,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T01:50:00.000Z",
+   "value": 1045,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T02:00:00.000Z",
+   "value": 1042,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T02:10:00.000Z",
+   "value": 1041,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T02:20:00.000Z",
+   "value": 1040,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T02:30:00.000Z",
+   "value": 1035,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T02:40:00.000Z",
+   "value": 1033,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T02:50:00.000Z",
+   "value": 1023,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T03:00:00.000Z",
+   "value": 1015,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T03:10:00.000Z",
+   "value": 1010,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T03:20:00.000Z",
+   "value": 1011,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T03:30:00.000Z",
+   "value": 1008,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T03:40:00.000Z",
+   "value": 1004,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T03:50:00.000Z",
+   "value": 1005,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T04:00:00.000Z",
+   "value": 1011,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T04:10:00.000Z",
+   "value": 1014,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T04:20:00.000Z",
+   "value": 1019,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T04:30:00.000Z",
+   "value": 1020,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T04:40:00.000Z",
+   "value": 1018,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T04:50:00.000Z",
+   "value": 1022,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T05:00:00.000Z",
+   "value": 1021,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T05:10:00.000Z",
+   "value": 1019,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T05:20:00.000Z",
+   "value": 1022,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T05:30:00.000Z",
+   "value": 1021,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T05:40:00.000Z",
+   "value": 1018,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T05:50:00.000Z",
+   "value": 1014,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T06:00:00.000Z",
+   "value": 1017,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T06:10:00.000Z",
+   "value": 1019,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T06:20:00.000Z",
+   "value": 1017,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T06:30:00.000Z",
+   "value": 1018,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T06:40:00.000Z",
+   "value": 1017,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T06:50:00.000Z",
+   "value": 1017,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T07:00:00.000Z",
+   "value": 1015,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T07:10:00.000Z",
+   "value": 1011,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T07:20:00.000Z",
+   "value": 1013,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T07:30:00.000Z",
+   "value": 1015,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T07:40:00.000Z",
+   "value": 1014,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T07:50:00.000Z",
+   "value": 1013,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T08:00:00.000Z",
+   "value": 1007,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T08:10:00.000Z",
+   "value": 1007,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T08:20:00.000Z",
+   "value": 1006,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T08:30:00.000Z",
+   "value": 1006,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T08:40:00.000Z",
+   "value": 1008,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T08:50:00.000Z",
+   "value": 1004,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T09:00:00.000Z",
+   "value": 1017,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T09:10:00.000Z",
+   "value": 1004,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T09:20:00.000Z",
+   "value": 1003,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T09:30:00.000Z",
+   "value": 1005,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T09:40:00.000Z",
+   "value": 1004,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T09:50:00.000Z",
+   "value": 1003,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T10:00:00.000Z",
+   "value": 1002,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T10:10:00.000Z",
+   "value": 1001,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T10:20:00.000Z",
+   "value": 1001,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T10:30:00.000Z",
+   "value": 1001,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T10:40:00.000Z",
+   "value": 1002,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T10:50:00.000Z",
+   "value": 1004,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T11:00:00.000Z",
+   "value": 1000,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T11:10:00.000Z",
+   "value": 1000,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T11:20:00.000Z",
+   "value": 1000,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T11:30:00.000Z",
+   "value": 998,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T11:40:00.000Z",
+   "value": 999,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T11:50:00.000Z",
+   "value": 995,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T12:00:00.000Z",
+   "value": 997,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T12:10:00.000Z",
+   "value": 995,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T12:20:00.000Z",
+   "value": 995,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T12:30:00.000Z",
+   "value": 995,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T12:40:00.000Z",
+   "value": 997,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T12:50:00.000Z",
+   "value": 994,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T13:00:00.000Z",
+   "value": 994,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T13:10:00.000Z",
+   "value": 995,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T13:20:00.000Z",
+   "value": 995,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T13:30:00.000Z",
+   "value": 992,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T13:40:00.000Z",
+   "value": 994,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T13:50:00.000Z",
+   "value": 993,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T14:00:00.000Z",
+   "value": 990,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T14:10:00.000Z",
+   "value": 986,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T14:20:00.000Z",
+   "value": 974,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T14:30:00.000Z",
+   "value": 968,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T14:40:00.000Z",
+   "value": 965,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T14:50:00.000Z",
+   "value": 963,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T15:00:00.000Z",
+   "value": 962,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T15:10:00.000Z",
+   "value": 961,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T15:20:00.000Z",
+   "value": 954,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T15:30:00.000Z",
+   "value": 953,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T15:40:00.000Z",
+   "value": 945,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T15:50:00.000Z",
+   "value": 926,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T16:00:00.000Z",
+   "value": 922,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T16:10:00.000Z",
+   "value": 917,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T16:20:00.000Z",
+   "value": 918,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T16:30:00.000Z",
+   "value": 912,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T16:40:00.000Z",
+   "value": 900,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T16:50:00.000Z",
+   "value": 897,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T17:00:00.000Z",
+   "value": 891,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T17:10:00.000Z",
+   "value": 886,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T17:20:00.000Z",
+   "value": 880,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T17:30:00.000Z",
+   "value": 866,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T17:40:00.000Z",
+   "value": 839,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T17:50:00.000Z",
+   "value": 829,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T18:00:00.000Z",
+   "value": 819,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T18:10:00.000Z",
+   "value": 830,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T18:20:00.000Z",
+   "value": 831,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T18:30:00.000Z",
+   "value": 837,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T18:40:00.000Z",
+   "value": 849,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T18:50:00.000Z",
+   "value": 859,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T19:00:00.000Z",
+   "value": 875,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T19:10:00.000Z",
+   "value": 885,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T19:20:00.000Z",
+   "value": 892,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T19:30:00.000Z",
+   "value": 896,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T19:40:00.000Z",
+   "value": 900,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T19:50:00.000Z",
+   "value": 897,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T20:00:00.000Z",
+   "value": 889,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T20:10:00.000Z",
+   "value": 882,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T20:20:00.000Z",
+   "value": 868,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T20:30:00.000Z",
+   "value": 865,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T20:40:00.000Z",
+   "value": 867,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T20:50:00.000Z",
+   "value": 868,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T21:00:00.000Z",
+   "value": 874,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T21:10:00.000Z",
+   "value": 878,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T21:20:00.000Z",
+   "value": 881,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T21:30:00.000Z",
+   "value": 883,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T21:40:00.000Z",
+   "value": 888,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T21:50:00.000Z",
+   "value": 891,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T22:00:00.000Z",
+   "value": 894,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T22:10:00.000Z",
+   "value": 898,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T22:20:00.000Z",
+   "value": 902,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T22:30:00.000Z",
+   "value": 902,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T22:40:00.000Z",
+   "value": 904,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T22:50:00.000Z",
+   "value": 904,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T23:00:00.000Z",
+   "value": 906,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T23:10:00.000Z",
+   "value": 908,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T23:20:00.000Z",
+   "value": 910,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T23:30:00.000Z",
+   "value": 914,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T23:40:00.000Z",
+   "value": 916,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-01T23:50:00.000Z",
+   "value": 912,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T00:00:00.000Z",
+   "value": 914,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T00:10:00.000Z",
+   "value": 915,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T00:20:00.000Z",
+   "value": 913,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T00:30:00.000Z",
+   "value": 915,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T00:40:00.000Z",
+   "value": 911,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T00:50:00.000Z",
+   "value": 913,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T01:00:00.000Z",
+   "value": 914,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T01:10:00.000Z",
+   "value": 915,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T01:20:00.000Z",
+   "value": 919,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T01:30:00.000Z",
+   "value": 919,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T01:40:00.000Z",
+   "value": 920,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T01:50:00.000Z",
+   "value": 915,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T02:00:00.000Z",
+   "value": 920,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T02:10:00.000Z",
+   "value": 919,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T02:20:00.000Z",
+   "value": 917,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T02:30:00.000Z",
+   "value": 917,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T02:40:00.000Z",
+   "value": 918,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T02:50:00.000Z",
+   "value": 916,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T03:00:00.000Z",
+   "value": 918,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T03:10:00.000Z",
+   "value": 919,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T03:20:00.000Z",
+   "value": 921,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T03:30:00.000Z",
+   "value": 921,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T03:40:00.000Z",
+   "value": 919,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T03:50:00.000Z",
+   "value": 920,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T04:00:00.000Z",
+   "value": 916,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T04:10:00.000Z",
+   "value": 917,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T04:20:00.000Z",
+   "value": 917,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T04:30:00.000Z",
+   "value": 916,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T04:40:00.000Z",
+   "value": 917,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T04:50:00.000Z",
+   "value": 917,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T05:00:00.000Z",
+   "value": 920,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T05:10:00.000Z",
+   "value": 918,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T05:20:00.000Z",
+   "value": 918,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T05:30:00.000Z",
+   "value": 917,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T05:40:00.000Z",
+   "value": 919,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T05:50:00.000Z",
+   "value": 916,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T06:00:00.000Z",
+   "value": 915,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T06:10:00.000Z",
+   "value": 912,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T06:20:00.000Z",
+   "value": 914,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T06:30:00.000Z",
+   "value": 914,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T06:40:00.000Z",
+   "value": 915,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T06:50:00.000Z",
+   "value": 915,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T07:00:00.000Z",
+   "value": 914,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T07:10:00.000Z",
+   "value": 914,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T07:20:00.000Z",
+   "value": 915,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T07:30:00.000Z",
+   "value": 915,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T07:40:00.000Z",
+   "value": 915,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T07:50:00.000Z",
+   "value": 913,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T08:00:00.000Z",
+   "value": 916,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T08:10:00.000Z",
+   "value": 913,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T08:20:00.000Z",
+   "value": 915,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T08:30:00.000Z",
+   "value": 912,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T08:40:00.000Z",
+   "value": 916,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T08:50:00.000Z",
+   "value": 913,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T09:00:00.000Z",
+   "value": 911,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T09:10:00.000Z",
+   "value": 909,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T09:20:00.000Z",
+   "value": 907,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T09:30:00.000Z",
+   "value": 905,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T09:40:00.000Z",
+   "value": 911,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T09:50:00.000Z",
+   "value": 911,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T10:00:00.000Z",
+   "value": 912,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T10:10:00.000Z",
+   "value": 915,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T10:20:00.000Z",
+   "value": 913,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T10:30:00.000Z",
+   "value": 914,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T10:40:00.000Z",
+   "value": 916,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T10:50:00.000Z",
+   "value": 912,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T11:00:00.000Z",
+   "value": 912,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T11:10:00.000Z",
+   "value": 916,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T11:20:00.000Z",
+   "value": 914,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T11:30:00.000Z",
+   "value": 909,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T11:40:00.000Z",
+   "value": 912,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T11:50:00.000Z",
+   "value": 909,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T12:00:00.000Z",
+   "value": 909,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T12:10:00.000Z",
+   "value": 908,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T12:20:00.000Z",
+   "value": 907,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T12:30:00.000Z",
+   "value": 903,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T12:40:00.000Z",
+   "value": 899,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T12:50:00.000Z",
+   "value": 898,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T13:00:00.000Z",
+   "value": 897,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T13:10:00.000Z",
+   "value": 896,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T13:20:00.000Z",
+   "value": 893,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T13:30:00.000Z",
+   "value": 892,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T13:40:00.000Z",
+   "value": 892,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T13:50:00.000Z",
+   "value": 886,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T14:00:00.000Z",
+   "value": 882,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T14:10:00.000Z",
+   "value": 893,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T14:20:00.000Z",
+   "value": 883,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T14:30:00.000Z",
+   "value": 883,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T14:40:00.000Z",
+   "value": 884,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T14:50:00.000Z",
+   "value": 886,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T15:00:00.000Z",
+   "value": 883,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T15:10:00.000Z",
+   "value": 882,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T15:20:00.000Z",
+   "value": 882,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T15:30:00.000Z",
+   "value": 882,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T15:40:00.000Z",
+   "value": 878,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T15:50:00.000Z",
+   "value": 878,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T16:00:00.000Z",
+   "value": 880,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T16:10:00.000Z",
+   "value": 877,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T16:20:00.000Z",
+   "value": 878,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T16:30:00.000Z",
+   "value": 875,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T16:40:00.000Z",
+   "value": 871,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T16:50:00.000Z",
+   "value": 870,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T17:00:00.000Z",
+   "value": 870,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T17:10:00.000Z",
+   "value": 872,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T17:20:00.000Z",
+   "value": 867,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T17:30:00.000Z",
+   "value": 865,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T17:40:00.000Z",
+   "value": 865,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T17:50:00.000Z",
+   "value": 863,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T18:00:00.000Z",
+   "value": 862,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T18:10:00.000Z",
+   "value": 857,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T18:20:00.000Z",
+   "value": 856,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T18:30:00.000Z",
+   "value": 854,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T18:40:00.000Z",
+   "value": 857,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T18:50:00.000Z",
+   "value": 853,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T19:00:00.000Z",
+   "value": 850,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T19:10:00.000Z",
+   "value": 849,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T19:20:00.000Z",
+   "value": 849,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T19:30:00.000Z",
+   "value": 846,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T19:40:00.000Z",
+   "value": 846,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T19:50:00.000Z",
+   "value": 846,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T20:00:00.000Z",
+   "value": 847,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T20:10:00.000Z",
+   "value": 846,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T20:20:00.000Z",
+   "value": 843,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T20:30:00.000Z",
+   "value": 842,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T20:40:00.000Z",
+   "value": 841,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T20:50:00.000Z",
+   "value": 843,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T21:00:00.000Z",
+   "value": 842,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T21:10:00.000Z",
+   "value": 843,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T21:20:00.000Z",
+   "value": 843,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T21:30:00.000Z",
+   "value": 843,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T21:40:00.000Z",
+   "value": 844,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T21:50:00.000Z",
+   "value": 842,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T22:00:00.000Z",
+   "value": 838,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T22:10:00.000Z",
+   "value": 839,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T22:20:00.000Z",
+   "value": 838,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T22:30:00.000Z",
+   "value": 836,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T22:40:00.000Z",
+   "value": 839,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T22:50:00.000Z",
+   "value": 836,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T23:00:00.000Z",
+   "value": 836,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T23:10:00.000Z",
+   "value": 841,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T23:20:00.000Z",
+   "value": 843,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T23:30:00.000Z",
+   "value": 843,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T23:40:00.000Z",
+   "value": 843,
+   "qc": 1
+  },
+  {
+   "series": "megen.maas/Q/NVT/other:F103",
+   "ts": "2024-03-02T23:50:00.000Z",
+   "value": 841,
+   "qc": 1
+  }
+ ],
+ "gaugeZeros": [],
+ "dropped": {},
+ "unknown": 0,
+ "provider_values": 290,
+ "unknown_values": 0
+}

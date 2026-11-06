@@ -30,6 +30,8 @@
 //    `node scripts/trim-fixtures.ts --p14b <de-8|fr-2|ch-9>` runs that source's rules (scripts/lib/trim-<id>.ts).
 //  - P14f, `node scripts/trim-fixtures.ts --p14f`: the climatology test's ten years of FR-2 QmnJ at Uckange, cut from
 //    the same `.smoke/` recording into packages/core/test/fixtures/climatology/ (CLIMATOLOGY_CUTS).
+//  - #184 stage 2, `node scripts/trim-fixtures.ts --p184`: the five NL-1 backfill recordings of the history twins and
+//    of Megen Q's mislabel, from `.smoke/` (scripts/lib/trim-nl-1.ts: a UTC window per fixture, every list kept).
 //
 // Each gets a .meta.json (`from: 'trimmed'`, the sha256 of the recording it was
 // cut from, the rule): the rule is the only way a body is cut, never by hand.
@@ -55,6 +57,7 @@ import {
 import { trim as trimCh9 } from './lib/trim-ch-9.ts';
 import { trim as trimDe8 } from './lib/trim-de-8.ts';
 import { CLIMATOLOGY_CUTS, trim as trimFr2 } from './lib/trim-fr-2.ts';
+import { trim as trimNl1 } from './lib/trim-nl-1.ts';
 
 const adapters = join(import.meta.dirname, '..', 'apps/server/src/adapters');
 
@@ -114,6 +117,10 @@ const P14B: Readonly<Record<string, (smoke: string, fixtures: string) => void>> 
 };
 
 function main(): void {
+  if (process.argv.includes('--p184')) {
+    trimNl1(join(import.meta.dirname, '..', '.smoke'), join(adapters, 'nl-1', 'fixtures'));
+    return;
+  }
   if (process.argv.includes('--p14f')) {
     const out = join(import.meta.dirname, '..', 'packages/core/test/fixtures/climatology');
     mkdirSync(out, { recursive: true });

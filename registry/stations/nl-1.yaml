@@ -6,9 +6,13 @@
 #   apps/server/src/adapters/nl-1/fixtures/nl-1-catalogue-full.raw  recorded_at 2026-10-16T13:00:58Z  codes, names, coordinates
 #   apps/server/src/adapters/nl-2/fixtures/nl-2-wfs-20261016.raw  recorded_at 2026-10-16T13:00:58Z  the live method of each series
 #   registry/thresholds/nl-4.csv                               edition 2026-04-15  Waterinfo display classes
+#   registry/seed/nl-1-history.csv                             the history twins (#184 stage 2, from the census)
 # provider_key = <code>/<Grootheid>/<Hoedanigheid>/<WaardeBepalingsMethode>, as the NL-1 normaliser builds it.
 # tier 1 (first_release) = the curated key stations of the Rhine branches, IJssel, Meuse, Geul and Vecht; every row
-# of such a station is tier 1. role twin = eijsden.grens asked in TAW (registry/twins.yaml): tier 1, not first_release.
+# of such a station but its history twins is tier 1. role twin = eijsden.grens asked in TAW (registry/twins.yaml):
+# tier 1, not first_release. #184 stage 2: role twin also = the history twins of registry/seed/nl-1-history.csv,
+# the NL-1 history under a method the station no longer uses (four-part key) and RWS's daily means (key +
+# /GEM24H, aggregate mean, P1D): tier 2, not first_release, no thresholds, no forecast; stored, shown nowhere.
 # country BE = the 9 seed rows noted `be` (catalogue §0.6: the 7 RWS points on Belgian soil, antwerpen, lixhebiefaval,
 # maaseik, herenlaak, lanaken, smeermaas.zuidwillemsvaart and kanne): ordinary tier-2 primary rows, public (A§7.2 exception
 # until a Belgian source is public, P13). kanne has no river until the water body is verified (catalogue §10 R9).
@@ -482,6 +486,36 @@ stations:
     expected_forecast_source: NL-1
     licence_gate: open
     first_release: true
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.amerongen.boven
+    source: NL-1
+    provider_code: amerongen.boven
+    provider_key: amerongen.boven/WATHTE/NAP/other:F001
+    name: Amerongen, boven
+    water_name: null
+    country: NL
+    lon: 5.4125
+    lat: 51.9753
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
     audience: public
     datum: NAP
     gauge_zero: []
@@ -1839,6 +1873,36 @@ stations:
     audience: public
     datum: NAP
     gauge_zero: []
+  - id: nl.rws.deventer
+    source: NL-1
+    provider_code: deventer
+    provider_key: deventer/WATHTE/NAP/other:F029
+    name: Deventer
+    water_name: null
+    country: NL
+    lon: 6.153247
+    lat: 52.251194
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
   - id: nl.rws.dinteloord.volkerak
     source: NL-1
     provider_code: dinteloord.volkerak
@@ -1927,6 +1991,36 @@ stations:
     expected_forecast_source: NL-1
     licence_gate: open
     first_release: true
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.doesburg.ijssel
+    source: NL-1
+    provider_code: doesburg.ijssel
+    provider_key: doesburg.ijssel/WATHTE/NAP/other:F001
+    name: Doesburg, IJssel
+    water_name: null
+    country: NL
+    lon: 6.130488
+    lat: 52.019532
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
     audience: public
     datum: NAP
     gauge_zero: []
@@ -2077,6 +2171,36 @@ stations:
     expected_forecast_source: NL-1
     licence_gate: open
     first_release: true
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.driel.boven
+    source: NL-1
+    provider_code: driel.boven
+    provider_key: driel.boven/WATHTE/NAP/other:F001
+    name: Driel, boven
+    water_name: null
+    country: NL
+    lon: 5.810635
+    lat: 51.96584
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
     audience: public
     datum: NAP
     gauge_zero: []
@@ -2418,6 +2542,98 @@ stations:
   - id: nl.rws.eijsden.grens
     source: NL-1
     provider_code: eijsden.grens
+    provider_key: eijsden.grens/WATHTE/NAP/other:F001
+    name: Eijsden, grens
+    water_name: null
+    country: NL
+    lon: 5.682
+    lat: 50.758
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.eijsden.grens
+    source: NL-1
+    provider_code: eijsden.grens
+    provider_key: eijsden.grens/WATHTE/NAP/other:F001/GEM24H
+    name: Eijsden, grens
+    water_name: null
+    country: NL
+    lon: 5.682
+    lat: 50.758
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.eijsden.grens
+    source: NL-1
+    provider_code: eijsden.grens
+    provider_key: eijsden.grens/WATHTE/NAP/other:F007/GEM24H
+    name: Eijsden, grens
+    water_name: null
+    country: NL
+    lon: 5.682
+    lat: 50.758
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.eijsden.grens
+    source: NL-1
+    provider_code: eijsden.grens
     provider_key: eijsden.grens/WATHTE/TAW/other:F007
     name: Eijsden, grens
     water_name: null
@@ -2475,6 +2691,98 @@ stations:
     audience: public
     datum: null
     gauge_zero: []
+  - id: nl.rws.eijsden.grens
+    source: NL-1
+    provider_code: eijsden.grens
+    provider_key: eijsden.grens/Q/NVT/other:F006/GEM24H
+    name: Eijsden, grens
+    water_name: null
+    country: NL
+    lon: 5.682
+    lat: 50.758
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.eijsden.grens
+    source: NL-1
+    provider_code: eijsden.grens
+    provider_key: eijsden.grens/Q/NVT/other:F051
+    name: Eijsden, grens
+    water_name: null
+    country: NL
+    lon: 5.682
+    lat: 50.758
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+  - id: nl.rws.eijsden.grens
+    source: NL-1
+    provider_code: eijsden.grens
+    provider_key: eijsden.grens/Q/NVT/other:F216/GEM24H
+    name: Eijsden, grens
+    water_name: null
+    country: NL
+    lon: 5.682
+    lat: 50.758
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
   - id: nl.rws.eindhoven.blaarthem.kanaal
     source: NL-1
     provider_code: eindhoven.blaarthem.kanaal
@@ -3196,6 +3504,67 @@ stations:
     audience: public
     datum: NAP
     gauge_zero: []
+  - id: nl.rws.grave.boven
+    source: NL-1
+    provider_code: grave.boven
+    provider_key: grave.boven/WATHTE/NAP/other:F007/GEM24H
+    name: Grave, boven
+    water_name: null
+    country: NL
+    lon: 5.743
+    lat: 51.761
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.grave.boven
+    source: NL-1
+    provider_code: grave.boven
+    provider_key: grave.boven/WATHTE/NAP/other:F029
+    name: Grave, boven
+    water_name: null
+    country: NL
+    lon: 5.743
+    lat: 51.761
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
   - id: nl.rws.grijpskerk.gaarkeuken.oost
     source: NL-1
     provider_code: grijpskerk.gaarkeuken.oost
@@ -3349,6 +3718,36 @@ stations:
   - id: nl.rws.hagestein.boven
     source: NL-1
     provider_code: hagestein.boven
+    provider_key: hagestein.boven/WATHTE/NAP/other:F001
+    name: Hagestein, boven
+    water_name: null
+    country: NL
+    lon: 5.1352
+    lat: 51.9895
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.hagestein.boven
+    source: NL-1
+    provider_code: hagestein.boven
     provider_key: hagestein.boven/Q/NVT/other:F103
     name: Hagestein, boven
     water_name: null
@@ -3376,6 +3775,68 @@ stations:
     audience: public
     datum: null
     gauge_zero: []
+  - id: nl.rws.hagestein.boven
+    source: NL-1
+    provider_code: hagestein.boven
+    provider_key: hagestein.boven/Q/NVT/other:F006/GEM24H
+    name: Hagestein, boven
+    water_name: null
+    country: NL
+    lon: 5.1352
+    lat: 51.9895
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.hagestein.boven
+    source: NL-1
+    provider_code: hagestein.boven
+    provider_key: hagestein.boven/Q/NVT/other:F103/GEM24H
+    name: Hagestein, boven
+    water_name: null
+    country: NL
+    lon: 5.1352
+    lat: 51.9895
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
   - id: nl.rws.haghorst.sluis4.beneden
     source: NL-1
     provider_code: haghorst.sluis4.beneden
@@ -4937,6 +5398,36 @@ stations:
     audience: public
     datum: NAP
     gauge_zero: []
+  - id: nl.rws.kampen.ijssel
+    source: NL-1
+    provider_code: kampen.ijssel
+    provider_key: kampen.ijssel/WATHTE/NAP/other:F001
+    name: Kampen, IJssel
+    water_name: null
+    country: NL
+    lon: 5.9264
+    lat: 52.552
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
   - id: nl.rws.kampen.keteldiep
     source: NL-1
     provider_code: kampen.keteldiep
@@ -5907,6 +6398,98 @@ stations:
     audience: public
     datum: NAP
     gauge_zero: []
+  - id: nl.rws.lith.boven
+    source: NL-1
+    provider_code: lith.boven
+    provider_key: lith.boven/WATHTE/NAP/other:F001
+    name: Lith, boven
+    water_name: null
+    country: NL
+    lon: 5.455
+    lat: 51.81
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.lith.boven
+    source: NL-1
+    provider_code: lith.boven
+    provider_key: lith.boven/WATHTE/NAP/other:F001/GEM24H
+    name: Lith, boven
+    water_name: null
+    country: NL
+    lon: 5.455
+    lat: 51.81
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.lith.boven
+    source: NL-1
+    provider_code: lith.boven
+    provider_key: lith.boven/WATHTE/NAP/other:F007/GEM24H
+    name: Lith, boven
+    water_name: null
+    country: NL
+    lon: 5.455
+    lat: 51.81
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
   - id: nl.rws.lith.sluis
     source: NL-1
     provider_code: lith.sluis
@@ -6030,6 +6613,36 @@ stations:
   - id: nl.rws.lobith.bovenrijn.tolkamer
     source: NL-1
     provider_code: lobith.bovenrijn.tolkamer
+    provider_key: lobith.bovenrijn.tolkamer/WATHTE/NAP/other:F001
+    name: Lobith, Bovenrijn, Tolkamer
+    water_name: null
+    country: NL
+    lon: 6.1024
+    lat: 51.8495
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.lobith.bovenrijn.tolkamer
+    source: NL-1
+    provider_code: lobith.bovenrijn.tolkamer
     provider_key: lobith.bovenrijn.tolkamer/Q/NVT/other:F230
     name: Lobith, Bovenrijn, Tolkamer
     water_name: null
@@ -6057,6 +6670,98 @@ stations:
     audience: public
     datum: null
     gauge_zero: []
+  - id: nl.rws.lobith.bovenrijn.tolkamer
+    source: NL-1
+    provider_code: lobith.bovenrijn.tolkamer
+    provider_key: lobith.bovenrijn.tolkamer/Q/NVT/other:F216
+    name: Lobith, Bovenrijn, Tolkamer
+    water_name: null
+    country: NL
+    lon: 6.1024
+    lat: 51.8495
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+  - id: nl.rws.lobith.bovenrijn.tolkamer
+    source: NL-1
+    provider_code: lobith.bovenrijn.tolkamer
+    provider_key: lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H
+    name: Lobith, Bovenrijn, Tolkamer
+    water_name: null
+    country: NL
+    lon: 6.1024
+    lat: 51.8495
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.lobith.bovenrijn.tolkamer
+    source: NL-1
+    provider_code: lobith.bovenrijn.tolkamer
+    provider_key: lobith.bovenrijn.tolkamer/Q/NVT/other:F230/GEM24H
+    name: Lobith, Bovenrijn, Tolkamer
+    water_name: null
+    country: NL
+    lon: 6.1024
+    lat: 51.8495
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
   - id: nl.rws.maarssen.kanaal
     source: NL-1
     provider_code: maarssen.kanaal
@@ -6270,6 +6975,98 @@ stations:
   - id: nl.rws.maastricht.borgharen.maas.beneden
     source: NL-1
     provider_code: maastricht.borgharen.maas.beneden
+    provider_key: maastricht.borgharen.maas.beneden/WATHTE/NAP/other:F001
+    name: Borgharen Dorp
+    water_name: null
+    country: NL
+    lon: 5.691
+    lat: 50.8724
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.maastricht.borgharen.maas.beneden
+    source: NL-1
+    provider_code: maastricht.borgharen.maas.beneden
+    provider_key: maastricht.borgharen.maas.beneden/WATHTE/NAP/other:F001/GEM24H
+    name: Borgharen Dorp
+    water_name: null
+    country: NL
+    lon: 5.691
+    lat: 50.8724
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.maastricht.borgharen.maas.beneden
+    source: NL-1
+    provider_code: maastricht.borgharen.maas.beneden
+    provider_key: maastricht.borgharen.maas.beneden/WATHTE/NAP/other:F007/GEM24H
+    name: Borgharen Dorp
+    water_name: null
+    country: NL
+    lon: 5.691
+    lat: 50.8724
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.maastricht.borgharen.maas.beneden
+    source: NL-1
+    provider_code: maastricht.borgharen.maas.beneden
     provider_key: maastricht.borgharen.maas.beneden/Q/NVT/other:F006
     name: Borgharen Dorp
     water_name: null
@@ -6297,6 +7094,37 @@ stations:
     audience: public
     datum: null
     gauge_zero: []
+  - id: nl.rws.maastricht.borgharen.maas.beneden
+    source: NL-1
+    provider_code: maastricht.borgharen.maas.beneden
+    provider_key: maastricht.borgharen.maas.beneden/Q/NVT/other:F006/GEM24H
+    name: Borgharen Dorp
+    water_name: null
+    country: NL
+    lon: 5.691
+    lat: 50.8724
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
   - id: nl.rws.maastricht.bosscherveld
     source: NL-1
     provider_code: maastricht.bosscherveld
@@ -6360,6 +7188,98 @@ stations:
   - id: nl.rws.maastricht.sintpieter
     source: NL-1
     provider_code: maastricht.sintpieter
+    provider_key: maastricht.sintpieter/WATHTE/NAP/other:F001
+    name: Sint Pieter Noord
+    water_name: null
+    country: NL
+    lon: 5.69732
+    lat: 50.830294
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.maastricht.sintpieter
+    source: NL-1
+    provider_code: maastricht.sintpieter
+    provider_key: maastricht.sintpieter/WATHTE/NAP/other:F001/GEM24H
+    name: Sint Pieter Noord
+    water_name: null
+    country: NL
+    lon: 5.69732
+    lat: 50.830294
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.maastricht.sintpieter
+    source: NL-1
+    provider_code: maastricht.sintpieter
+    provider_key: maastricht.sintpieter/WATHTE/NAP/other:F007/GEM24H
+    name: Sint Pieter Noord
+    water_name: null
+    country: NL
+    lon: 5.69732
+    lat: 50.830294
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.maastricht.sintpieter
+    source: NL-1
+    provider_code: maastricht.sintpieter
     provider_key: maastricht.sintpieter/Q/NVT/other:F103
     name: Sint Pieter Noord
     water_name: null
@@ -6384,6 +7304,98 @@ stations:
     expected_forecast_source: NL-1
     licence_gate: open
     first_release: true
+    audience: public
+    datum: null
+    gauge_zero: []
+  - id: nl.rws.maastricht.sintpieter
+    source: NL-1
+    provider_code: maastricht.sintpieter
+    provider_key: maastricht.sintpieter/Q/NVT/other:F006/GEM24H
+    name: Sint Pieter Noord
+    water_name: null
+    country: NL
+    lon: 5.69732
+    lat: 50.830294
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.maastricht.sintpieter
+    source: NL-1
+    provider_code: maastricht.sintpieter
+    provider_key: maastricht.sintpieter/Q/NVT/other:F103/GEM24H
+    name: Sint Pieter Noord
+    water_name: null
+    country: NL
+    lon: 5.69732
+    lat: 50.830294
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.maastricht.sintpieter
+    source: NL-1
+    provider_code: maastricht.sintpieter
+    provider_key: maastricht.sintpieter/Q/NVT/other:F128
+    name: Sint Pieter Noord
+    water_name: null
+    country: NL
+    lon: 5.69732
+    lat: 50.830294
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
     audience: public
     datum: null
     gauge_zero: []
@@ -6812,6 +7824,98 @@ stations:
   - id: nl.rws.megen.maas
     source: NL-1
     provider_code: megen.maas
+    provider_key: megen.maas/WATHTE/NAP/other:F001
+    name: Megen Dorp
+    water_name: null
+    country: NL
+    lon: 5.563091
+    lat: 51.827827
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.megen.maas
+    source: NL-1
+    provider_code: megen.maas
+    provider_key: megen.maas/WATHTE/NAP/other:F001/GEM24H
+    name: Megen Dorp
+    water_name: null
+    country: NL
+    lon: 5.563091
+    lat: 51.827827
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.megen.maas
+    source: NL-1
+    provider_code: megen.maas
+    provider_key: megen.maas/WATHTE/NAP/other:F007/GEM24H
+    name: Megen Dorp
+    water_name: null
+    country: NL
+    lon: 5.563091
+    lat: 51.827827
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.megen.maas
+    source: NL-1
+    provider_code: megen.maas
     provider_key: megen.maas/Q/NVT/other:F103
     name: Megen Dorp
     water_name: null
@@ -6839,6 +7943,68 @@ stations:
     audience: public
     datum: null
     gauge_zero: []
+  - id: nl.rws.megen.maas
+    source: NL-1
+    provider_code: megen.maas
+    provider_key: megen.maas/Q/NVT/other:F006/GEM24H
+    name: Megen Dorp
+    water_name: null
+    country: NL
+    lon: 5.563091
+    lat: 51.827827
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.megen.maas
+    source: NL-1
+    provider_code: megen.maas
+    provider_key: megen.maas/Q/NVT/other:F103/GEM24H
+    name: Megen Dorp
+    water_name: null
+    country: NL
+    lon: 5.563091
+    lat: 51.827827
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
   - id: nl.rws.meijel.kanaal.beneden
     source: NL-1
     provider_code: meijel.kanaal.beneden
@@ -7076,6 +8242,36 @@ stations:
     expected_forecast_source: NL-1
     licence_gate: open
     first_release: true
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.millingenaanderijn.pannerdensekop
+    source: NL-1
+    provider_code: millingenaanderijn.pannerdensekop
+    provider_key: millingenaanderijn.pannerdensekop/WATHTE/NAP/other:F001
+    name: Millingen a/d Rijn Pannerdense Kop
+    water_name: null
+    country: NL
+    lon: 6.0417
+    lat: 51.872
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
     audience: public
     datum: NAP
     gauge_zero: []
@@ -7682,6 +8878,36 @@ stations:
     audience: public
     datum: NAP
     gauge_zero: []
+  - id: nl.rws.nijmegen.waal
+    source: NL-1
+    provider_code: nijmegen.waal
+    provider_key: nijmegen.waal/WATHTE/NAP/other:F001
+    name: Nijmegen, Waal
+    water_name: null
+    country: NL
+    lon: 5.854
+    lat: 51.853
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
   - id: nl.rws.olst
     source: NL-1
     provider_code: olst
@@ -7715,6 +8941,36 @@ stations:
   - id: nl.rws.olst
     source: NL-1
     provider_code: olst
+    provider_key: olst/WATHTE/NAP/other:F001
+    name: Olst
+    water_name: null
+    country: NL
+    lon: 6.10448
+    lat: 52.34201
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.olst
+    source: NL-1
+    provider_code: olst
     provider_key: olst/Q/NVT/other:F006
     name: Olst
     water_name: null
@@ -7742,6 +8998,37 @@ stations:
     audience: public
     datum: null
     gauge_zero: []
+  - id: nl.rws.olst
+    source: NL-1
+    provider_code: olst
+    provider_key: olst/Q/NVT/other:F006/GEM24H
+    name: Olst
+    water_name: null
+    country: NL
+    lon: 6.10448
+    lat: 52.34201
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
   - id: nl.rws.ommen.ommerkanaal
     source: NL-1
     provider_code: ommen.ommerkanaal
@@ -8522,6 +9809,98 @@ stations:
     audience: public
     datum: null
     gauge_zero: []
+  - id: nl.rws.pannerden.pannerdenschkanaal
+    source: NL-1
+    provider_code: pannerden.pannerdenschkanaal
+    provider_key: pannerden.pannerdenschkanaal/Q/NVT/other:F216
+    name: Pannerden, Pannerdensch kanaal
+    water_name: null
+    country: NL
+    lon: 6.03778
+    lat: 51.87475
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+  - id: nl.rws.pannerden.pannerdenschkanaal
+    source: NL-1
+    provider_code: pannerden.pannerdenschkanaal
+    provider_key: pannerden.pannerdenschkanaal/Q/NVT/other:F216/GEM24H
+    name: Pannerden, Pannerdensch kanaal
+    water_name: null
+    country: NL
+    lon: 6.03778
+    lat: 51.87475
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.pannerden.pannerdenschkanaal
+    source: NL-1
+    provider_code: pannerden.pannerdenschkanaal
+    provider_key: pannerden.pannerdenschkanaal/Q/NVT/other:F230/GEM24H
+    name: Pannerden, Pannerdensch kanaal
+    water_name: null
+    country: NL
+    lon: 6.03778
+    lat: 51.87475
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
   - id: nl.rws.pannerden.regelwerk.beneden
     source: NL-1
     provider_code: pannerden.regelwerk.beneden
@@ -9001,6 +10380,67 @@ stations:
     expected_forecast_source: NL-1
     licence_gate: open
     first_release: true
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.roermond.boven
+    source: NL-1
+    provider_code: roermond.boven
+    provider_key: roermond.boven/WATHTE/NAP/other:F007/GEM24H
+    name: Roermond, boven
+    water_name: null
+    country: NL
+    lon: 5.9815
+    lat: 51.2005
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.roermond.boven
+    source: NL-1
+    provider_code: roermond.boven
+    provider_key: roermond.boven/WATHTE/NAP/other:F029
+    name: Roermond, boven
+    water_name: null
+    country: NL
+    lon: 5.9815
+    lat: 51.2005
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
     audience: public
     datum: NAP
     gauge_zero: []
@@ -10597,6 +12037,98 @@ stations:
     audience: public
     datum: NAP
     gauge_zero: []
+  - id: nl.rws.stevensweert
+    source: NL-1
+    provider_code: stevensweert
+    provider_key: stevensweert/WATHTE/NAP/other:F001
+    name: Stevensweert
+    water_name: null
+    country: NL
+    lon: 5.841665
+    lat: 51.131088
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.stevensweert
+    source: NL-1
+    provider_code: stevensweert
+    provider_key: stevensweert/WATHTE/NAP/other:F001/GEM24H
+    name: Stevensweert
+    water_name: null
+    country: NL
+    lon: 5.841665
+    lat: 51.131088
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.stevensweert
+    source: NL-1
+    provider_code: stevensweert
+    provider_key: stevensweert/WATHTE/NAP/other:F007/GEM24H
+    name: Stevensweert
+    water_name: null
+    country: NL
+    lon: 5.841665
+    lat: 51.131088
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
   - id: nl.rws.steyl
     source: NL-1
     provider_code: steyl
@@ -11471,6 +13003,37 @@ stations:
   - id: nl.rws.venlo
     source: NL-1
     provider_code: venlo
+    provider_key: venlo/WATHTE/NAP/other:F007/GEM24H
+    name: Venlo
+    water_name: null
+    country: NL
+    lon: 6.159406
+    lat: 51.367387
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
+    aggregate: mean
+  - id: nl.rws.venlo
+    source: NL-1
+    provider_code: venlo
     provider_key: venlo/Q/NVT/other:F103
     name: Venlo
     water_name: null
@@ -11498,6 +13061,37 @@ stations:
     audience: public
     datum: null
     gauge_zero: []
+  - id: nl.rws.venlo
+    source: NL-1
+    provider_code: venlo
+    provider_key: venlo/Q/NVT/other:F103/GEM24H
+    name: Venlo
+    water_name: null
+    country: NL
+    lon: 6.159406
+    lat: 51.367387
+    quantity: Q
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: m³/s
+    to_canonical: 1
+    value_kind: null
+    native_step: P1D
+    expected_step: P1D
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: null
+    gauge_zero: []
+    aggregate: mean
   - id: nl.rws.vlaardingen
     source: NL-1
     provider_code: vlaardingen
@@ -12308,6 +13902,36 @@ stations:
     audience: public
     datum: NAP
     gauge_zero: []
+  - id: nl.rws.westervoort.ijsselkop
+    source: NL-1
+    provider_code: westervoort.ijsselkop
+    provider_key: westervoort.ijsselkop/WATHTE/NAP/other:F001
+    name: Westervoort IJsselkop
+    water_name: null
+    country: NL
+    lon: 5.953
+    lat: 51.9507
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
   - id: nl.rws.westkapelle
     source: NL-1
     provider_code: westkapelle
@@ -12639,6 +14263,36 @@ stations:
     audience: public
     datum: NAP
     gauge_zero: []
+  - id: nl.rws.zaltbommel
+    source: NL-1
+    provider_code: zaltbommel
+    provider_key: zaltbommel/WATHTE/NAP/other:F001
+    name: Zaltbommel
+    water_name: null
+    country: NL
+    lon: 5.244645
+    lat: 51.815154
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT10M
+    expected_step: PT10M
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
+    audience: public
+    datum: NAP
+    gauge_zero: []
   - id: nl.rws.zuidland.spui
     source: NL-1
     provider_code: zuidland.spui
@@ -12696,6 +14350,36 @@ stations:
     expected_forecast_source: NL-1
     licence_gate: open
     first_release: true
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.zutphen.ijssel
+    source: NL-1
+    provider_code: zutphen.ijssel
+    provider_key: zutphen.ijssel/WATHTE/NAP/other:F001
+    name: Zutphen, IJssel
+    water_name: null
+    country: NL
+    lon: 6.182
+    lat: 52.154
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
     audience: public
     datum: NAP
     gauge_zero: []
@@ -12906,6 +14590,36 @@ stations:
     expected_forecast_source: NL-1
     licence_gate: open
     first_release: true
+    audience: public
+    datum: NAP
+    gauge_zero: []
+  - id: nl.rws.zwolle.ijssel
+    source: NL-1
+    provider_code: zwolle.ijssel
+    provider_key: zwolle.ijssel/WATHTE/NAP/other:F001
+    name: Zwolle, IJssel
+    water_name: null
+    country: NL
+    lon: 6.053
+    lat: 52.5086
+    quantity: H
+    tier: 2
+    role: twin
+    river: null
+    km: null
+    flags:
+      tidal: false
+      impounded: null
+    native_unit: cm
+    to_canonical: 1
+    value_kind: level
+    native_step: PT1H
+    expected_step: PT1H
+    staleness_limit: P1D
+    expected_threshold_source: null
+    expected_forecast_source: null
+    licence_gate: open
+    first_release: false
     audience: public
     datum: NAP
     gauge_zero: []
