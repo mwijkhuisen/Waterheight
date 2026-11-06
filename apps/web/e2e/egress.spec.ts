@@ -1,7 +1,8 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { expect, type Page, test } from '@playwright/test';
+import { type BrowserContext, expect, type Page, test } from '@playwright/test';
 import { buildProfile, compare, type Inputs, parseBaseline } from '../../../scripts/lib/capacity-egress.ts';
 import { instrument } from './clean.ts';
 import { pickStation, searchBox, searchButton, slider } from './helpers.ts';
@@ -17,6 +18,15 @@ import { pickStation, searchBox, searchButton, slider } from './helpers.ts';
 // baseline in total or in a class fails. EGRESS_UPDATE=1 writes the baseline instead (the owner's inputs are kept).
 // Compose mode only (E2E_COMPOSE=1 E2E_SPEC=egress, the loadtest job before k6); the compose tiles are a Lobith
 // fixture, so the number is a regression guard, not the production figure.
+//
+// #253: the same steps load the same tiles in every run. The production build has no test hook, so the DOM, the mouse
+// and the network say when a step is over: after the map's first idle (createMap.ts's `rws:map-idle` mark), each step
+// ends once no request has been in flight for QUIET_MS since its action (`waitForLoadState('networkidle')` resolves at
+// once after the page's first idle, so it waited for nothing, and the profile was taken while the last zoom's tiles were
+// still being asked for). The camera moves are fixed: the map's zoom button (one level about the centre) instead of
+// the wheel, whose zoom depends on how its events fall into frames; a drag of one mouse move (one position, no
+// inertia); and prefers-reduced-motion, so MapLibre jumps instead of easing and no frame between two views asks tiles
+// of its own (Play is disabled under reduced motion, so motion is allowed for the playback).
 
 test.skip(process.env.E2E_COMPOSE !== '1', 'needs the compose stack (E2E_COMPOSE=1)');
 test.use({ baseURL: process.env.E2E_COMPOSE_URL ?? 'https://rivierstanden.example' });
@@ -34,47 +44,85 @@ const DEFAULT_INPUTS: Inputs = {
   normal_sessions_per_day: 3_000,
   burst_factor: 2,
 };
+/**
+ * A step is over once no request has been in flight for this long, counted from the step's action at the earliest (a
+ * click's tiles are asked a frame or two later; chained fetches follow each other far faster).
+ */
+const QUIET_MS = 1_500;
 
 /** The timebar's instant (the slider's value is epoch ms; the URL has no t in live mode). */
 const clock = async (page: Page) => Number(await slider(page).inputValue());
 
-test('one cold-cache map session stays within 1.2 x the committed egress baseline', async ({
-  page,
-  context,
-  baseURL,
-}) => {
+/** Counts the context's requests in flight; the returned wait ends once none has been for QUIET_MS since it began. */
+function quietWait(context: BrowserContext) {
+  let inflight = 0;
+  let last = 0;
+  const change = (by: number) => () => {
+    inflight += by;
+    last = Date.now();
+  };
+  context.on('request', change(1));
+  context.on('requestfinished', change(-1));
+  context.on('requestfailed', change(-1));
+  return () => {
+    last = Date.now();
+    return expect
+      .poll(() => inflight === 0 && Date.now() - last >= QUIET_MS, { timeout: 30_000, intervals: [100] })
+      .toBe(true);
+  };
+}
+
+// TEMPORARY (#253 stage 1, removed by stage 2): EGRESS_RUNS repeats the session, each in a fresh context, so one CI run
+// shows the run-to-run variance; every run writes its profile and its tile list (`path range`, sorted) and prints a
+// line `egress run <n>/<runs>: …` before it is compared.
+const RUNS = Number(process.env.EGRESS_RUNS ?? 1);
+for (let run = 1; run <= RUNS; run++)
+  test(`one cold-cache map session stays within 1.2 x the committed egress baseline${RUNS > 1 ? ` (run ${run})` : ''}`, ({
+    page,
+    context,
+    baseURL,
+  }) => session(page, context, baseURL, run));
+
+async function session(page: Page, context: BrowserContext, baseURL: string | undefined, run: number) {
   test.setTimeout(240_000);
   const log = await instrument(page, context, baseURL);
-  const pending: Promise<{ url: string; size: number } | null>[] = [];
+  const settle = quietWait(context);
+  // (the Range header names a tile inside its archive: the TEMPORARY tile list below)
+  const pending: Promise<{ url: string; range: string; size: number } | null>[] = [];
   context.on('requestfinished', (r) => {
     pending.push(
-      r.sizes().then(
-        (s) => ({
+      Promise.all([r.sizes(), r.headerValue('range')]).then(
+        ([s, range]) => ({
           url: r.url(),
+          range: range ?? '',
           size: s.requestHeadersSize + s.requestBodySize + s.responseHeadersSize + s.responseBodySize,
         }),
         () => null,
       ),
     );
   });
+  const zoomIn = page.getByRole('button', { name: 'Inzoomen', exact: true });
 
-  // Open the map.
+  // Open the map (its camera moves jump: prefers-reduced-motion) and wait for its first idle, the `rws:map-idle` mark
+  // of createMap.ts, before the quiet network counts: a slow first frame must not end the step early.
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
   const canvas = page.locator('canvas.maplibregl-canvas');
   await expect(canvas).toBeVisible();
-  await page.waitForLoadState('networkidle');
+  await page.waitForFunction(() => performance.getEntriesByName('rws:map-idle').length > 0);
+  await settle();
 
-  // Zoom and pan (the production build has no test hook: the mouse does it).
+  // Zoom one level and pan (the production build has no test hook: the buttons and the mouse do it).
+  await zoomIn.click();
+  await settle();
   const box = (await canvas.boundingBox()) ?? { x: 0, y: 0, width: 800, height: 600 };
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
   await page.mouse.move(cx, cy);
-  for (let n = 0; n < 3; n++) await page.mouse.wheel(0, -300);
-  await page.waitForLoadState('networkidle');
   await page.mouse.down();
-  await page.mouse.move(cx - 200, cy + 100, { steps: 12 });
+  await page.mouse.move(cx - 200, cy + 100);
   await page.mouse.up();
-  await page.waitForLoadState('networkidle');
+  await settle();
 
   // Two station panels (the first and the second search result).
   for (const nth of [0, 1]) {
@@ -83,19 +131,21 @@ test('one cold-cache map session stays within 1.2 x the committed egress baselin
     await search.fill('a');
     await page.getByRole('option').nth(nth).click();
     await expect(page.locator('aside')).toBeVisible();
-    await page.waitForLoadState('networkidle');
+    await settle();
   }
 
   // Five slider steps.
   await slider(page).focus();
   for (let n = 0; n < 5; n++) {
     await page.keyboard.press('ArrowLeft');
-    await page.waitForLoadState('networkidle');
+    await settle();
   }
 
-  // One day of playback: Play until the timebar has advanced 24 h (or the end of the data stops it).
+  // One day of playback: Play until the timebar has advanced 24 h (or the end of the data stops it). Play is disabled
+  // under reduced motion, so motion is allowed for it.
   await page.keyboard.press('PageDown');
-  await page.waitForLoadState('networkidle');
+  await settle();
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   const start = await clock(page);
   await page.getByRole('button', { name: 'Afspelen', exact: true }).click();
   await expect
@@ -109,34 +159,50 @@ test('one cold-cache map session stays within 1.2 x the committed egress baselin
     .toBe(true);
   if (await page.getByRole('button', { name: 'Pauzeren', exact: true }).isVisible())
     await page.getByRole('button', { name: 'Pauzeren', exact: true }).click();
-  await page.waitForLoadState('networkidle');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await settle();
   // Playback really ran (a Play that did nothing would understate the profile).
   expect((await clock(page)) - start).toBeGreaterThanOrEqual(3_600_000);
 
-  // P20a: a lake. Reached in-page, as a visitor would: the station search moves the map to the IJsselmeer's Krabbersgat
-  // gauge (water layers are on by default and the compose rivers tiles carry `waterbodies` to zoom 12); three wheel
-  // steps zoom into the lake. The production build has no test hook, so the DOM and the mouse do it; the wheel goes over
-  // the part the station drawer leaves free (from 48rem the drawer covers the right 26rem; StationsMap.tsx centres the
-  // station in the rest).
+  // P20a: a lake. Reached in-page, as a visitor would: the station search opens the IJsselmeer's Krabbersgat gauge and
+  // its popup marks it on the map (the search does not move the map); one drag from the centre moves the gauge to the
+  // centre, about which the zoom button zooms (water layers are on by default and the compose rivers tiles carry
+  // `waterbodies` to zoom 12).
   await pickStation(page, 'Krabbersgat', /Krabbersgat, IJsselmeer/);
   await expect(page.locator('aside')).toBeVisible();
-  await page.waitForLoadState('networkidle');
-  const drawer = (page.viewportSize()?.width ?? 0) >= 768 ? 26 * 16 : 0;
-  await page.mouse.move(box.x + (box.width - drawer) / 2, box.y + box.height / 2);
-  for (let n = 0; n < 3; n++) await page.mouse.wheel(0, -300);
-  await page.waitForLoadState('networkidle');
+  await settle();
+  const tip = await page.locator('.maplibregl-popup-tip').boundingBox();
+  if (tip === null) throw new Error('no popup for the lake gauge');
+  await page.mouse.move(cx, cy);
+  await page.mouse.down();
+  await page.mouse.move(2 * cx - (tip.x + tip.width / 2), 2 * cy - (tip.y + tip.height / 2));
+  await page.mouse.up();
+  await settle();
+  await zoomIn.click();
+  await settle();
 
   // Invariant 7: every request of the session is same-origin (instrument() aborts and logs any other).
   expect(log.requests.filter((u) => !u.startsWith('data:') && new URL(u).origin !== log.origin)).toEqual([]);
 
   const sizes = (await Promise.all(pending)).filter(
-    (s): s is { url: string; size: number } => s !== null && !s.url.startsWith('data:'),
+    (s): s is { url: string; range: string; size: number } => s !== null && !s.url.startsWith('data:'),
   );
   const profile = buildProfile(sizes, NOTE, new Date().toISOString());
   const out = resolve(process.env.EGRESS_OUT ?? 'test-results/egress-profile.json');
   mkdirSync(dirname(out), { recursive: true });
-  writeFileSync(out, `${JSON.stringify(profile, null, 2)}\n`);
-  console.log(`egress profile ${out}: ${JSON.stringify(profile.bytes)} total ${profile.total_bytes} B`);
+  // TEMPORARY (#253 stage 1): with EGRESS_RUNS > 1 each run has its own files, beside the tile list.
+  const file = RUNS > 1 ? out.replace(/\.json$/, `-run${run}.json`) : out;
+  writeFileSync(file, `${JSON.stringify(profile, null, 2)}\n`);
+  const tiles = sizes
+    .filter((s) => new URL(s.url).pathname.startsWith('/tiles/'))
+    .map((s) => `${new URL(s.url).pathname} ${s.range}`)
+    .sort();
+  writeFileSync(file.replace(/\.json$/, '.tiles.txt'), `${tiles.join('\n')}\n`);
+  const hash = createHash('sha256').update(tiles.join('\n')).digest('hex').slice(0, 16);
+  console.log(
+    `egress run ${run}/${RUNS}: bytes ${JSON.stringify(profile.bytes)} requests ${JSON.stringify(profile.requests)} tiles ${tiles.length} ranges sha256 ${hash}`,
+  );
+  console.log(`egress profile ${file}: ${JSON.stringify(profile.bytes)} total ${profile.total_bytes} B`);
   expect(profile.total_bytes).toBeGreaterThan(0);
 
   if (process.env.EGRESS_UPDATE === '1') {
@@ -156,4 +222,4 @@ test('one cold-cache map session stays within 1.2 x the committed egress baselin
   // lead commits this run's profile (EGRESS_UPDATE=1, or `node scripts/lib/capacity-egress.ts --adopt <profile>`).
   if (baseline.provisional) return;
   expect(verdict.ok, verdict.lines.join('\n')).toBe(true);
-});
+}
