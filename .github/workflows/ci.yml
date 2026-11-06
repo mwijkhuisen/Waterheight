@@ -76,7 +76,7 @@ jobs:
       contents: read
     services:
       postgres:
-        image: postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
         env:
           # Throwaway CI-only credential for an ephemeral service container.
           POSTGRES_PASSWORD: postgres
@@ -114,7 +114,7 @@ jobs:
       contents: read
     services:
       postgres:
-        image: postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: rws
@@ -172,7 +172,7 @@ jobs:
       contents: read
     services:
       postgres:
-        image: postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: rws
@@ -211,7 +211,7 @@ jobs:
       contents: read
     services:
       postgres:
-        image: postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: rws
@@ -250,7 +250,7 @@ jobs:
       contents: read
     services:
       postgres:
-        image: postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: rws
@@ -490,7 +490,7 @@ jobs:
       contents: read
     services:
       postgres:
-        image: postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: rws

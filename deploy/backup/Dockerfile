@@ -8,7 +8,8 @@
 # module download against the Go checksum database. GO_FIXES are the fixed
 # versions (each at least 7 days old). Back to the release binary once one clears
 # Grype. The Go stage from ARG GO_VERSION to ARG GO_FIXES is the same text as in
-# deploy/server/Dockerfile (test/check-bom.test.ts).
+# deploy/server/Dockerfile and deploy/web/Dockerfile, which builds Caddy with it
+# (#252; test/check-bom.test.ts).
 FROM node:26.12.0-trixie-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11 AS restic
 ARG GO_VERSION=1.27.2
 ADD --checksum=sha256:ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5 \
@@ -23,7 +24,7 @@ RUN apt-get update \
 # whatever the base image or a later layer sets; no toolchain download, no cgo.
 ENV PATH=/usr/local/go/bin:$PATH GOTOOLCHAIN=local CGO_ENABLED=0 GOFLAGS= \
   GOPROXY=https://proxy.golang.org GOSUMDB=sum.golang.org GOPRIVATE= GONOPROXY= GONOSUMDB= GOINSECURE=
-ARG GO_FIXES="golang.org/x/net@v0.60.0 golang.org/x/crypto@v0.57.0 golang.org/x/text@v0.42.0 google.golang.org/grpc@v1.83.2 go.opentelemetry.io/otel/sdk@v1.44.0 github.com/klauspost/compress@v1.18.7 github.com/go-jose/go-jose/v4@v4.1.6"
+ARG GO_FIXES="golang.org/x/net@v0.62.0 golang.org/x/crypto@v0.58.0 golang.org/x/text@v0.43.0 google.golang.org/grpc@v1.83.2 go.opentelemetry.io/otel/sdk@v1.46.0 github.com/klauspost/compress@v1.20.2 github.com/go-jose/go-jose/v4@v4.1.6 github.com/andybalholm/brotli@v1.2.7"
 ARG RESTIC_VERSION=0.19.1
 # The upstream release flags (helpers/build-release-binaries) without `selfupdate`:
 # the image never replaces its own binary.

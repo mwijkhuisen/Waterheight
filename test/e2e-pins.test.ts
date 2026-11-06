@@ -32,6 +32,15 @@ describe('e2e job pins', () => {
     expect(env('CADDY_IMAGE')).toBe(from);
   });
 
+  // #252 (review CR-2): the web image replaces the base's binary with its own build, so a bump of the base alone
+  // would leave production on the older Caddy.
+  it('builds the Caddy version of the web image base', () => {
+    const docker = read('deploy/web/Dockerfile');
+    const base = /^FROM caddy:(\d+\.\d+\.\d+)-alpine@sha256:[0-9a-f]{64}$/m.exec(docker)?.[1];
+    expect(base).toBeDefined();
+    expect(/^ARG CADDY_VERSION=(\S+)$/m.exec(docker)?.[1]).toBe(base);
+  });
+
   // #217: `alone` are the projects a leg runs after the rest of it, one test at a time.
   const legs: { projects: string; alone?: string }[] = parse(ci).jobs.e2e.strategy.matrix.include;
   const words = (s = '') => s.split(' ').filter((w) => w !== '');
