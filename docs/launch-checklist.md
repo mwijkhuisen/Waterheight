@@ -84,7 +84,7 @@ Signed (owner): ______________________  Date: ____-__-__
 
 - [ ] [owner] [`docs/security/launch-verdict.md`](security/launch-verdict.md) is filled in by the security review and shows no open High or Critical finding. (Round 1: SR-1 and SR-7 below are open launch preconditions, owner actions.)
 - [ ] [owner] **SR-1**: `scripts/gh-settings.sh --check` prints no drift: rulesets, branch protection with `ci` and `security` required, secret scanning with push protection, and the `production` environment with its reviewers. On 2026-10-11 the agent's read-only check reported drift (no ruleset, no branch protection, scanning off, no reviewers); that may be a token without admin rights, so confirm with an admin token and run `scripts/gh-settings.sh` until the check is clean. KG-025, R-002, KG-333.
-- [ ] [owner] **SR-7**: the web image runs Caddy 2.11.7 or newer (issue #131, after the 7-day release-age rule) and the Grype scan was run again on the release you launch; R-095's accepted findings expire 2026-11-10. KG-334.
+- [ ] [owner] **SR-7**: the web image runs Caddy 2.11.7 or newer (issue #131, after the 7-day release-age rule) and the Grype scan was run again on the release you launch; R-095's accepted findings expire on the date `.grype.yaml` states. KG-334.
 - [ ] [owner] **CAA**: the zone's `CAA` record allows `letsencrypt.org` only (read it with `dig CAA <domain>`; no tooling checks it). KG-335.
 - [ ] [owner] `sudo deploy/tests/hardening.sh --prod` passes on the VPS (every container hardened; only `caddy` and `caddy-owner` publish ports).
 - [ ] [owner] `scripts/verify-owner.sh <domain>` (on an owner device, tunnel up) shows no FAIL. Post only the PASS and FAIL counts; the output stays in your private notes.
