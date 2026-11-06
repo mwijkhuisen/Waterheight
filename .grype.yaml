@@ -19,106 +19,31 @@
 # dbmate and go-pmtiles take v4.1.6 through GO_FIXES; Caddy 2.11.7's v4.1.5 and cloudflared's v4.1.4 (every release up
 # to 2026.10.5) are accepted (owner, 2026-10-28, #239): neither parses a JWK an attacker supplies here (no acme_server;
 # `tunnel run` reads JWKs from Cloudflare only).
+# #252 (owner, 2026-11-06): GO-2026-6860 (golang.org/x/net up to v0.61.0, published 2026-10-27, fixed in v0.62.0).
+# restic, dbmate, go-pmtiles and now Caddy 2.11.7, built from its release module like the three (the #131 fallback;
+# Caddy 2.11.9 still requires x/net v0.60.0), take v0.62.0 through GO_FIXES, which also clears Caddy's x/net v0.59.0,
+# stdlib go1.26.8 and go-jose v4.1.5 rules: they are gone. cloudflared's v0.61.0 (2026.10.7 still requires it) is
+# accepted until a cloudflared release requiring v0.62.0 or newer is 7 days old. postgres moves to the 2026-11-05
+# rebuild of 18.6-trixie for CVE-2026-109518 (apt 3.0.4), on the owner's release-age override, so no rule is added.
 # Every rule names the vulnerability, the package, its version and type, so a new finding, or the same one in another
 # version, still fails the gate.
 #
-# expires: 2026-11-10
+# expires: 2026-11-27
 # test/grype-ignore.test.ts fails from that date: bump the binaries (or ask the owner again), then delete the rules
 # that no longer match. Never add a rule without an owner decision (CLAUDE.md, dependency policy).
 ignore:
-  # golang.org/x/net v0.59.0 (go-module) in web: caddy 2.11.7 (caddy:2.11.7-alpine)
-  - vulnerability: GO-2026-6603
+  # golang.org/x/net v0.61.0 (go-module) in cloudflared: every release up to 2026.10.7 (owner, 2026-11-06, #252, R-095),
+  # until a cloudflared release requiring x/net v0.62.0 or newer is 7 days old
+  - vulnerability: GO-2026-6860
     package:
       name: golang.org/x/net
-      version: v0.59.0
-      type: go-module
-  - vulnerability: GO-2026-6610
-    package:
-      name: golang.org/x/net
-      version: v0.59.0
-      type: go-module
-  - vulnerability: GO-2026-6611
-    package:
-      name: golang.org/x/net
-      version: v0.59.0
-      type: go-module
-  - vulnerability: GO-2026-6612
-    package:
-      name: golang.org/x/net
-      version: v0.59.0
-      type: go-module
-  - vulnerability: GO-2026-6617
-    package:
-      name: golang.org/x/net
-      version: v0.59.0
-      type: go-module
-  # stdlib go1.26.8 (go-module) in web: caddy 2.11.7 (caddy:2.11.7-alpine), until Caddy 2.11.8 or a source build (#131)
-  - vulnerability: GO-2026-6603
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6604
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6605
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6607
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6608
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6609
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6610
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6611
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6612
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6613
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6617
-    package:
-      name: stdlib
-      version: go1.26.8
+      version: v0.61.0
       type: go-module
   # github.com/klauspost/compress v1.18.0 (go-module) in cloudflared: every release up to 2026.10.3 (#192)
   - vulnerability: GHSA-259r-337f-4rfw
     package:
       name: github.com/klauspost/compress
       version: v1.18.0
-      type: go-module
-  # github.com/go-jose/go-jose/v4 v4.1.5 (go-module) in web: caddy 2.11.7 (caddy:2.11.7-alpine), until Caddy 2.11.8 or a source build (#131)
-  - vulnerability: GHSA-mgcc-cww5-fp2q
-    package:
-      name: github.com/go-jose/go-jose/v4
-      version: v4.1.5
       type: go-module
   # github.com/go-jose/go-jose/v4 v4.1.4 (go-module) in cloudflared: every release up to 2026.10.5 (#239)
   - vulnerability: GHSA-mgcc-cww5-fp2q
