@@ -27,8 +27,8 @@ import { pickStation, searchBox, searchButton, slider } from './helpers.ts';
 // inertia); and prefers-reduced-motion, so MapLibre jumps instead of easing and no frame between two views asks tiles
 // of its own (Play is disabled under reduced motion, so motion is allowed for the playback). Three CI runs of this
 // session in one hour (loadtest run 42185747582) loaded one identical set of 32 tile ranges and totals within 0.05 %.
-// What still moves is the data class: it follows the UTC hour. Play runs about 1 h 50 min, from now - 1 h 50 min to the
-// live end (the slider ends at now, because the loadtest seed has no forecast on the station), and every unsettled day
+// What still moves is the data class: it follows the UTC hour. Play runs 1 to 2 hours of playback (two hourly ticks, or one when now falls in the last 10 minutes of an hour), ending at the last whole hour
+// (the slider ends at now, because the loadtest seed has no forecast on the station), and every unsettled day
 // is read from the one frames/recent.json, whose span of unsettled hours grows from 48 h just after 00:00Z to 72 h just
 // before it.
 
@@ -136,7 +136,7 @@ test('one cold-cache map session stays within 1.2 x the committed egress baselin
     await settle();
   }
 
-  // Playback: Play from now - 1 h 50 min until it stops by itself at the live end (the last whole hour; the 24 h bound
+  // Playback: Play from the slider at quantise(now) - 1 h 50 min (5 x ArrowLeft, PageDown), which `playFrom` floors to a whole hour, until it stops by itself at the live end (the last whole hour; the 24 h bound
   // is never reached). Play is disabled under reduced motion, so motion is allowed for it.
   await page.keyboard.press('PageDown');
   await settle();
