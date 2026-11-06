@@ -1,153 +1,29 @@
 # Grype ignore list (P12a, owner decision 2026-10-10; docs/risk-register.md R-095).
 #
-# The first P12a scan (release.yml build-pr, run 38080740961) found fixable High and Critical findings inside the
-# third-party binaries we installed as released. #131 cleared them: Caddy 2.11.7 (#158) for the web image, and restic,
-# dbmate and go-pmtiles built from their release modules with go1.27.2 and the fixed modules (backup and server images,
-# GO_FIXES in their Dockerfiles). What is left is Caddy 2.11.7's Go stdlib go1.26.8 and golang.org/x/net v0.59.0 (owner,
-# 2026-10-15; GO-2026-6617, which Grype's database added later, owner 2026-10-16), fixed only in go1.26.9 and x/net
-# v0.60.0, which no Caddy release has yet. Alpine's zlib is pinned to its fixed revision in the web Dockerfile (owner,
-# 2026-10-16). The owner's plan for the rest (2026-10-16): bump to
-# Caddy 2.11.8 once its image is 7 days old; if none is by 2026-11-02, build Caddy from source like the three above.
-# #167 (owner, 2026-10-16) scans the third-party images of the compose files too (scripts/third-party-images.sh).
-# postgres moved to the 2026-10-07 rebuild of 18.6-trixie (OpenSSL and pcre2 fixed); its gosu 1.19 (go1.24.6, the
-# latest gosu) is accepted, since db and the restore drill start as 999:999 and never run it. cloudflared 2026.10.1
-# (#169: go1.27.2, x/net v0.61.0, x/crypto v0.58.0) cleared the x/net, x/crypto and stdlib go1.26.8 findings of
-# 2026.9.3, and their 7 rules are gone; the libssl3t64 of its distroless base stays, accepted, since cloudflared is a
-# static Go binary that never loads it. GHSA-259r-337f-4rfw (klauspost/compress up to v1.18.6, published 2026-10-20):
-# restic, dbmate and go-pmtiles take v1.18.7 through GO_FIXES; cloudflared's v1.18.0 (every release up to 2026.10.3)
-# is accepted (owner, 2026-10-21, #192). GHSA-mgcc-cww5-fp2q (go-jose/v4 up to v4.1.5, published 2026-10-27): restic,
-# dbmate and go-pmtiles take v4.1.6 through GO_FIXES; Caddy 2.11.7's v4.1.5 and cloudflared's v4.1.4 (every release up
-# to 2026.10.5) are accepted (owner, 2026-10-28, #239): neither parses a JWK an attacker supplies here (no acme_server;
-# `tunnel run` reads JWKs from Cloudflare only).
-# Every rule names the vulnerability, the package, its version and type, so a new finding, or the same one in another
-# version, still fails the gate.
+# Each rule is an owner decision: it names the vulnerability and the package's name, version and type, so a new
+# finding, or the same one in another version, still fails the gate. A rule with a location matches that path only.
+# What is accepted today:
+# - cloudflared 2026.10.6 (the tunnel edge): GO-2026-6860 in its golang.org/x/net v0.61.0, which every cloudflared
+#   release up to 2026.10.7 requires, until a release requiring v0.62.0 or newer is 7 days old (owner 2026-11-06,
+#   #252); scoped to the cloudflared binary, so our own images still fail on it.
+# - postgres 18.6-trixie: the stdlib go1.24.6 findings of its gosu 1.19, which never runs, since db and the restore
+#   drill start as 999:999 (owner 2026-10-16, #167).
+# History: #131 built restic, dbmate and go-pmtiles from their release modules with GO_FIXES; #252 did the same for
+# Caddy and moved cloudflared to 2026.10.6, which retired every other rule. R-095 keeps the full record.
 #
-# expires: 2026-11-10
+# expires: 2026-11-27
 # test/grype-ignore.test.ts fails from that date: bump the binaries (or ask the owner again), then delete the rules
 # that no longer match. Never add a rule without an owner decision (CLAUDE.md, dependency policy).
 ignore:
-  # golang.org/x/net v0.59.0 (go-module) in web: caddy 2.11.7 (caddy:2.11.7-alpine)
-  - vulnerability: GO-2026-6603
+  # golang.org/x/net v0.61.0 (go-module) in cloudflared: every release up to 2026.10.7 (owner, 2026-11-06, #252, R-095),
+  # until a cloudflared release requiring x/net v0.62.0 or newer is 7 days old. The location is the binary's path in
+  # the image as Syft records it.
+  - vulnerability: GO-2026-6860
     package:
       name: golang.org/x/net
-      version: v0.59.0
+      version: v0.61.0
       type: go-module
-  - vulnerability: GO-2026-6610
-    package:
-      name: golang.org/x/net
-      version: v0.59.0
-      type: go-module
-  - vulnerability: GO-2026-6611
-    package:
-      name: golang.org/x/net
-      version: v0.59.0
-      type: go-module
-  - vulnerability: GO-2026-6612
-    package:
-      name: golang.org/x/net
-      version: v0.59.0
-      type: go-module
-  - vulnerability: GO-2026-6617
-    package:
-      name: golang.org/x/net
-      version: v0.59.0
-      type: go-module
-  # stdlib go1.26.8 (go-module) in web: caddy 2.11.7 (caddy:2.11.7-alpine), until Caddy 2.11.8 or a source build (#131)
-  - vulnerability: GO-2026-6603
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6604
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6605
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6607
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6608
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6609
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6610
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6611
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6612
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6613
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  - vulnerability: GO-2026-6617
-    package:
-      name: stdlib
-      version: go1.26.8
-      type: go-module
-  # github.com/klauspost/compress v1.18.0 (go-module) in cloudflared: every release up to 2026.10.3 (#192)
-  - vulnerability: GHSA-259r-337f-4rfw
-    package:
-      name: github.com/klauspost/compress
-      version: v1.18.0
-      type: go-module
-  # github.com/go-jose/go-jose/v4 v4.1.5 (go-module) in web: caddy 2.11.7 (caddy:2.11.7-alpine), until Caddy 2.11.8 or a source build (#131)
-  - vulnerability: GHSA-mgcc-cww5-fp2q
-    package:
-      name: github.com/go-jose/go-jose/v4
-      version: v4.1.5
-      type: go-module
-  # github.com/go-jose/go-jose/v4 v4.1.4 (go-module) in cloudflared: every release up to 2026.10.5 (#239)
-  - vulnerability: GHSA-mgcc-cww5-fp2q
-    package:
-      name: github.com/go-jose/go-jose/v4
-      version: v4.1.4
-      type: go-module
-  # libssl3t64 3.5.7-1~deb13u2 (deb) in cloudflared: its distroless base, never loaded (CGO_ENABLED=0; #167).
-  # Our server image has deb13u3; delete these once cloudflared's base moves past deb13u2.
-  - vulnerability: CVE-2026-54873
-    package:
-      name: libssl3t64
-      version: 3.5.7-1~deb13u2
-      type: deb
-  - vulnerability: CVE-2026-72897
-    package:
-      name: libssl3t64
-      version: 3.5.7-1~deb13u2
-      type: deb
-  - vulnerability: CVE-2026-84782
-    package:
-      name: libssl3t64
-      version: 3.5.7-1~deb13u2
-      type: deb
-  - vulnerability: CVE-2026-84784
-    package:
-      name: libssl3t64
-      version: 3.5.7-1~deb13u2
-      type: deb
+      location: /usr/local/bin/cloudflared
   # stdlib go1.24.6 (go-module) in postgres: gosu 1.19 (postgres:18.6-trixie), never run: db starts as 999 (#167)
   - vulnerability: GO-2025-4006
     package:
