@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -26,7 +25,9 @@ import { pickStation, searchBox, searchButton, slider } from './helpers.ts';
 // still being asked for). The camera moves are fixed: the map's zoom button (one level about the centre) instead of
 // the wheel, whose zoom depends on how its events fall into frames; a drag of one mouse move (one position, no
 // inertia); and prefers-reduced-motion, so MapLibre jumps instead of easing and no frame between two views asks tiles
-// of its own (Play is disabled under reduced motion, so motion is allowed for the playback).
+// of its own (Play is disabled under reduced motion, so motion is allowed for the playback). Three CI runs of this
+// session (loadtest run 42185747582) loaded one identical set of 32 tile ranges and totals within 0.05 %. What still
+// moves is the data class: it follows the wall clock, because the day of playback spans one or two days of frames files.
 
 test.skip(process.env.E2E_COMPOSE !== '1', 'needs the compose stack (E2E_COMPOSE=1)');
 test.use({ baseURL: process.env.E2E_COMPOSE_URL ?? 'https://rivierstanden.example' });
@@ -72,29 +73,20 @@ function quietWait(context: BrowserContext) {
   };
 }
 
-// TEMPORARY (#253 stage 1, removed by stage 2): EGRESS_RUNS repeats the session, each in a fresh context, so one CI run
-// shows the run-to-run variance; every run writes its profile and its tile list (`path range`, sorted) and prints a
-// line `egress run <n>/<runs>: …` before it is compared.
-const RUNS = Number(process.env.EGRESS_RUNS ?? 1);
-for (let run = 1; run <= RUNS; run++)
-  test(`one cold-cache map session stays within 1.2 x the committed egress baseline${RUNS > 1 ? ` (run ${run})` : ''}`, ({
-    page,
-    context,
-    baseURL,
-  }) => session(page, context, baseURL, run));
-
-async function session(page: Page, context: BrowserContext, baseURL: string | undefined, run: number) {
+test('one cold-cache map session stays within 1.2 x the committed egress baseline', async ({
+  page,
+  context,
+  baseURL,
+}) => {
   test.setTimeout(240_000);
   const log = await instrument(page, context, baseURL);
   const settle = quietWait(context);
-  // (the Range header names a tile inside its archive: the TEMPORARY tile list below)
-  const pending: Promise<{ url: string; range: string; size: number } | null>[] = [];
+  const pending: Promise<{ url: string; size: number } | null>[] = [];
   context.on('requestfinished', (r) => {
     pending.push(
-      Promise.all([r.sizes(), r.headerValue('range')]).then(
-        ([s, range]) => ({
+      r.sizes().then(
+        (s) => ({
           url: r.url(),
-          range: range ?? '',
           size: s.requestHeadersSize + s.requestBodySize + s.responseHeadersSize + s.responseBodySize,
         }),
         () => null,
@@ -185,24 +177,13 @@ async function session(page: Page, context: BrowserContext, baseURL: string | un
   expect(log.requests.filter((u) => !u.startsWith('data:') && new URL(u).origin !== log.origin)).toEqual([]);
 
   const sizes = (await Promise.all(pending)).filter(
-    (s): s is { url: string; range: string; size: number } => s !== null && !s.url.startsWith('data:'),
+    (s): s is { url: string; size: number } => s !== null && !s.url.startsWith('data:'),
   );
   const profile = buildProfile(sizes, NOTE, new Date().toISOString());
   const out = resolve(process.env.EGRESS_OUT ?? 'test-results/egress-profile.json');
   mkdirSync(dirname(out), { recursive: true });
-  // TEMPORARY (#253 stage 1): with EGRESS_RUNS > 1 each run has its own files, beside the tile list.
-  const file = RUNS > 1 ? out.replace(/\.json$/, `-run${run}.json`) : out;
-  writeFileSync(file, `${JSON.stringify(profile, null, 2)}\n`);
-  const tiles = sizes
-    .filter((s) => new URL(s.url).pathname.startsWith('/tiles/'))
-    .map((s) => `${new URL(s.url).pathname} ${s.range}`)
-    .sort();
-  writeFileSync(file.replace(/\.json$/, '.tiles.txt'), `${tiles.join('\n')}\n`);
-  const hash = createHash('sha256').update(tiles.join('\n')).digest('hex').slice(0, 16);
-  console.log(
-    `egress run ${run}/${RUNS}: bytes ${JSON.stringify(profile.bytes)} requests ${JSON.stringify(profile.requests)} tiles ${tiles.length} ranges sha256 ${hash}`,
-  );
-  console.log(`egress profile ${file}: ${JSON.stringify(profile.bytes)} total ${profile.total_bytes} B`);
+  writeFileSync(out, `${JSON.stringify(profile, null, 2)}\n`);
+  console.log(`egress profile ${out}: ${JSON.stringify(profile.bytes)} total ${profile.total_bytes} B`);
   expect(profile.total_bytes).toBeGreaterThan(0);
 
   if (process.env.EGRESS_UPDATE === '1') {
@@ -222,4 +203,4 @@ async function session(page: Page, context: BrowserContext, baseURL: string | un
   // lead commits this run's profile (EGRESS_UPDATE=1, or `node scripts/lib/capacity-egress.ts --adopt <profile>`).
   if (baseline.provisional) return;
   expect(verdict.ok, verdict.lines.join('\n')).toBe(true);
-}
+});

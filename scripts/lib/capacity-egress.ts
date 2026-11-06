@@ -129,8 +129,8 @@ export function compare(profile: Profile, baseline: Profile): { ok: boolean; lin
     ['total', profile.total_bytes, baseline.total_bytes],
     ...CLASSES.map((c): [string, number, number] => [c, profile.bytes[c], baseline.bytes[c]]),
   ];
-  // Only the total fails: the classes move with the wall clock (a day of playback spans one or two days of frames
-  // files, zoom and pan ask 37 to 43 tile ranges) by up to a third between CI runs, while the total stays within 5 %.
+  // Only the total fails: the data class moves with the wall clock (a day of playback spans one or two days of frames
+  // files). Since #253 the tiles are the same in every run (three CI runs: one set of 32 ranges, totals within 0.05 %).
   // A class over its limit is a WARN for the reviewer.
   let ok = true;
   const lines = rows.map(([name, now, was]) => {
