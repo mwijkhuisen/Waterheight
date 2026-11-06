@@ -7,7 +7,7 @@ import { instrument } from './clean.ts';
 import { pickStation, searchBox, searchButton, slider } from './helpers.ts';
 
 // P12a (issue #27, criterion 6): the egress profile. One cold-cache visit to the map (a fresh context: no HTTP cache,
-// no service worker): open the map, zoom, pan, open 2 station panels, 5 timebar steps and 1 day of playback, then (P20a)
+// no service worker): open the map, zoom, pan, open 2 station panels, 5 timebar steps and playback to the live end, then (P20a)
 // a search for a lake gauge and a zoom into the lake (the water-body tiles). The session has a single page load because
 // every navigation would re-count the hashed assets that a real visitor's HTTP cache serves (request.sizes() cannot tell
 // a cache hit from a transfer); the page shells are covered by k6 (deploy/tests/loadtest/k6.js), not by this profile. Every
@@ -26,8 +26,11 @@ import { pickStation, searchBox, searchButton, slider } from './helpers.ts';
 // the wheel, whose zoom depends on how its events fall into frames; a drag of one mouse move (one position, no
 // inertia); and prefers-reduced-motion, so MapLibre jumps instead of easing and no frame between two views asks tiles
 // of its own (Play is disabled under reduced motion, so motion is allowed for the playback). Three CI runs of this
-// session (loadtest run 42185747582) loaded one identical set of 32 tile ranges and totals within 0.05 %. What still
-// moves is the data class: it follows the wall clock, because the day of playback spans one or two days of frames files.
+// session in one hour (loadtest run 42185747582) loaded one identical set of 32 tile ranges and totals within 0.05 %.
+// What still moves is the data class: it follows the UTC hour. Play runs about 1 h 50 min, from now - 1 h 50 min to the
+// live end (the slider ends at now, because the loadtest seed has no forecast on the station), and every unsettled day
+// is read from the one frames/recent.json, whose span of unsettled hours grows from 48 h just after 00:00Z to 72 h just
+// before it.
 
 test.skip(process.env.E2E_COMPOSE !== '1', 'needs the compose stack (E2E_COMPOSE=1)');
 test.use({ baseURL: process.env.E2E_COMPOSE_URL ?? 'https://rivierstanden.example' });
@@ -133,8 +136,8 @@ test('one cold-cache map session stays within 1.2 x the committed egress baselin
     await settle();
   }
 
-  // One day of playback: Play until the timebar has advanced 24 h (or the end of the data stops it). Play is disabled
-  // under reduced motion, so motion is allowed for it.
+  // Playback: Play from now - 1 h 50 min until it stops by itself at the live end (the last whole hour; the 24 h bound
+  // is never reached). Play is disabled under reduced motion, so motion is allowed for it.
   await page.keyboard.press('PageDown');
   await settle();
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -157,19 +160,55 @@ test('one cold-cache map session stays within 1.2 x the committed egress baselin
   expect((await clock(page)) - start).toBeGreaterThanOrEqual(3_600_000);
 
   // P20a: a lake. Reached in-page, as a visitor would: the station search opens the IJsselmeer's Krabbersgat gauge and
-  // its popup marks it on the map (the search does not move the map); one drag from the centre moves the gauge to the
-  // centre, about which the zoom button zooms (water layers are on by default and the compose rivers tiles carry
-  // `waterbodies` to zoom 12).
+  // its popup marks it on the map (the search does not move the map); one drag moves the popup's tip to the centre,
+  // about which the zoom button zooms (water layers are on by default and the compose rivers tiles carry `waterbodies`
+  // to zoom 12). The drag starts on plain map: on the popup, the drawer or a control it would pan nothing.
   await pickStation(page, 'Krabbersgat', /Krabbersgat, IJsselmeer/);
   await expect(page.locator('aside')).toBeVisible();
   await settle();
   const tip = await page.locator('.maplibregl-popup-tip').boundingBox();
   if (tip === null) throw new Error('no popup for the lake gauge');
-  await page.mouse.move(cx, cy);
+  /**
+   * The gauge's point on the map. MapLibre places the popup with `translate(<x>px,<y>px)` at the point plus its
+   * anchor's offset (12 px, StationsMap.tsx; 8 px a side at a corner), so the offset is taken off again: the anchor
+   * flips (top while the gauge is near the map's top edge, bottom at the centre), the point does not.
+   */
+  const gaugeAt = () =>
+    page.locator('.maplibregl-popup').evaluate((el) => {
+      const t = /translate\((-?[\d.]+)px, ?(-?[\d.]+)px\)$/.exec(el.style.transform);
+      if (t === null) throw new Error('no position on the lake gauge popup');
+      const a = /maplibregl-popup-anchor-(\S+)/.exec(el.className)?.[1] ?? 'center';
+      const o = a.includes('-') ? 8 : 12;
+      return {
+        x: Number(t[1]) - (a.endsWith('left') ? o : a.endsWith('right') ? -o : 0),
+        y: Number(t[2]) - (a.startsWith('top') ? o : a.startsWith('bottom') ? -o : 0),
+      };
+    });
+  const before = await gaugeAt();
+  let from: { x: number; y: number } | undefined;
+  for (const p of [
+    { x: cx, y: cy },
+    { x: cx, y: cy + 150 },
+    { x: cx, y: cy - 150 },
+    { x: cx - 150, y: cy },
+  ])
+    if (await page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.matches('canvas.maplibregl-canvas'), p)) {
+      from = p;
+      break;
+    }
+  if (from === undefined) throw new Error('no plain map near the centre to start the drag');
+  const by = { x: cx - (tip.x + tip.width / 2), y: cy - (tip.y + tip.height / 2) };
+  await page.mouse.move(from.x, from.y);
   await page.mouse.down();
-  await page.mouse.move(2 * cx - (tip.x + tip.width / 2), 2 * cy - (tip.y + tip.height / 2));
+  await page.mouse.move(from.x + by.x, from.y + by.y);
   await page.mouse.up();
   await settle();
+  // The drag really moved the map (one that panned nothing would leave the lake's tiles out of the profile).
+  const after = await gaugeAt();
+  expect(
+    Math.hypot(after.x - before.x - by.x, after.y - before.y - by.y),
+    `the drag moved the lake gauge from (${before.x}, ${before.y}) to (${after.x}, ${after.y}), not by (${by.x}, ${by.y})`,
+  ).toBeLessThanOrEqual(2);
   await zoomIn.click();
   await settle();
 
