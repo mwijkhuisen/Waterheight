@@ -212,8 +212,8 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | @inlang/plugin-message-format | npm | 4.5.4 | installed | – | MIT | loaded from node_modules so Paraglide never fetches plugin code from a CDN |
 | actions/checkout | action | 7.0.1 | installed | 3d3c42e5aac5ba805825da76410c181273ba90b1 | MIT | |
 | actions/setup-node | action | 7.1.0 | installed | 949feb2413d6458794dcd2491c4babbbce0c15c1 | MIT | `package-manager-cache: false` |
-| step-security/harden-runner | action | 2.22.2 | installed | dc2769abcc0fcfbadfc1df54081c1608579ef6b2 | Apache-2.0 | audit mode |
-| github/codeql-action | action | 4.39.0 | installed | 6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee | MIT | public repository (D7) |
+| step-security/harden-runner | action | 2.22.3 | installed | 46b06cea07f9e64621fdf066ba77ac6915163d43 | Apache-2.0 | audit mode |
+| github/codeql-action | action | 4.39.1 | installed | 9b3254085494b55a0f7c4c2b3d2d52cc712ce370 | MIT | public repository (D7) |
 | postgres | image | 18.6-trixie | installed | postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336 | PostgreSQL | CI service; P2 compose `db`; #167: the 2026-10-07 rebuild (Debian's OpenSSL and pcre2 fixes), scanned by Grype by this pin |
 | pebble | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199 | MPL-2.0 | CI only: the ACME server of the deploy end-to-end test |
 | pebble-challtestsrv | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble-challtestsrv:2.10.1@sha256:12ce21884def456bcf9786542113949e1f19dc7738d2c70e156c2d0c38a1405b | MPL-2.0 | CI only: DNS for Pebble |
@@ -261,7 +261,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | @axe-core/playwright | npm | 4.14.0 | installed | – | MPL-2.0 | dev only: axe on the spike pages (P3) and on three views of the real pages (P4b); the full accessibility pass is P10 |
 | lighthouse | npm | 13.5.0 | installed | – | Apache-2.0 | dev only: the Lighthouse spec of the CI `e2e` job (P10a; mobile, simulated 4G, local Chromium, reports to disk, no upload); 90 transitive packages (91 new lockfile entries with itself), no build script |
 | docker/build-push-action | action | 7.4.0 | installed | c3c9e263c25d99ce0380d002d59b67737d91b0dc | Apache-2.0 | P1b |
-| docker/login-action | action | 4.6.0 | installed | dbcb813823bdd20940b903addbd779551569679f | Apache-2.0 | P1b |
+| docker/login-action | action | 4.7.0 | installed | 81c6f93d4bc991e510b342a00b419b3bb4efc5c6 | Apache-2.0 | P1b |
 | docker/setup-buildx-action | action | 4.4.1 | installed | f87e5991a6d7451dcb8d9637bfbc97413f497069 | Apache-2.0 | P1b |
 | docker/metadata-action | action | 6.2.0 | planned | – | Apache-2.0 | not needed in P1b (images are addressed by digest) |
 | sigstore/cosign-installer | action | 4.1.2 | installed | 6f9f17788090df1f26f669e9d70d6ae9567deba6 | Apache-2.0 | release.yml, with `cosign-release: v3.1.3` |
