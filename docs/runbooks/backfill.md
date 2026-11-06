@@ -376,6 +376,26 @@ The final JSON line of the real run (`docs/runbooks/replay.md` §2) matches `tot
 
 **What it does not cover.** History before each job's `data_from` and everything before 1990 is not in the archive (KG-408); the census counts the archive only.
 
+### The stage-2 replay (#184 PR A)
+
+Stage 2 PR A registers the history under other methods and the daily means as 56 twin series (`registry/seed/nl-1-history.csv`, `PHASES.md` §64). The stage-1 text above stays as the record. **The census's `expect` now models a replay from the pre-#184 state: do not use it to judge this replay.** Run it after PR A is merged and deployed, with the runner idle:
+
+```bash
+rwsc() { sudo bash -c 'cd / && . /usr/local/lib/rws/deploy/bin/rws-lib.sh && rws_compose "$@"' rwsc "$@"; }
+for run in 1 2; do date -u; rwsc run --rm --no-deps -T load replay --source NL-1 --spec nl-1-backfill-obs --from 2026-10-12 --to "$(date -u +%F)" > replay-184-s2-$run.jsonl 2>&1; date -u; grep '"dryRun"' replay-184-s2-$run.jsonl; done
+```
+
+- **Run 1:** `quarantined` 0 and `n_changed` 0. `n_new` is about 1.57 M and at most 1,569,879: the 56 groups' `ok_values` (1,675,285 = 1,411,726 + 263,559) less Megen's 105,406 readings already stored. Values that two lists state for one instant, and refetched chunks, count once. The only new rows in a primary series are Megen's two readings of 2023-12-30T23:00Z and 2023-12-31T23:00Z.
+- **Run 2:** `"n_new":0,"n_changed":0`.
+
+Then count the rows of each twin:
+
+```bash
+sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c "SELECT s.provider_key, count(*) AS n, min(o.ts) AS first, max(o.ts) AS last FROM series s JOIN obs o ON o.series_id = s.id WHERE s.source_id = 'NL-1' AND s.role = 'twin' AND s.provider_key NOT LIKE '%/TAW/%' GROUP BY 1 ORDER BY 1"
+```
+
+Compare each twin's `n` with the `ok_values` of its census group (`jq -c 'select(.group) | .group' census-184.jsonl`). For `megen.maas/Q/NVT/other:F103/GEM24H` only the daily part counts, at most 728 of the group's 106,136 ok values (less the 105,406 readings already stored and the 2 new ones): the readings are in the primary. Attach the result to #184 (KG-500).
+
 ## What not to do
 
 - Do not run it outside the window or around the clock. One `run` at a time: a second one is refused as `busy` (the lease), and after a crash the next one must wait the 2 minutes the lease takes to lapse. Never clear `backfill_lease` by hand while a runner may still be alive: two runners would break the 1 request/s rule.
