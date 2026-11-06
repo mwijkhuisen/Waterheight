@@ -394,7 +394,7 @@ Then count the rows of each twin:
 sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -c "SELECT s.provider_key, count(*) AS n, min(o.ts) AS first, max(o.ts) AS last FROM series s JOIN obs o ON o.series_id = s.id WHERE s.source_id = 'NL-1' AND s.role = 'twin' AND s.provider_key NOT LIKE '%/TAW/%' GROUP BY 1 ORDER BY 1"
 ```
 
-Compare each twin's `n` with the `ok_values` of its census group (`jq -c 'select(.group) | .group' census-184.jsonl`). For `megen.maas/Q/NVT/other:F103/GEM24H` only the daily part counts, at most 728 of the group's 106,136 ok values (less the 105,406 readings already stored and the 2 new ones): the readings are in the primary. Attach the result to #184 (KG-500).
+Compare each twin's `n` with the `ok_values` of its census group (`jq -c 'select(.group) | .group' census-184.jsonl`). For `megen.maas/Q/NVT/other:F103/GEM24H` only the daily part counts, at most 728 of the group's 106,136 ok values (less the 105,406 readings already stored and the 2 new ones): the readings are in the primary. Attach the result to #184 (KG-504).
 
 ## What not to do
 

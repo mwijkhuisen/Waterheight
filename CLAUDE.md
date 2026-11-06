@@ -197,7 +197,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | msw | npm | 3.0.3 | installed | – | MIT | `onUnhandledFrame: 'error'`; postinstall denied (`allowBuilds`) |
 | yaml | npm | 2.9.1 | installed | – | ISC | registry and lockfile parsing; apps/server reads the registry at runtime (P1) |
 | @types/node | npm | 26.6.5 | installed | – | MIT | |
-| hono | npm | 4.13.13 | installed | – | MIT | apps/server |
+| hono | npm | 4.13.14 | installed | – | MIT | apps/server |
 | @hono/node-server | npm | 2.1.5 | installed | – | MIT | apps/server |
 | pg | npm | 8.23.1 | installed | – | MIT | apps/server: PostgreSQL driver of migrate, load and api (P2a) |
 | @types/pg | npm | 8.23.1 | installed | – | MIT | |
@@ -206,14 +206,14 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | react-dom | npm | 19.3.1 | installed | – | MIT | apps/web |
 | @types/react | npm | 19.3.0 | installed | – | MIT | |
 | @types/react-dom | npm | 19.3.0 | installed | – | MIT | |
-| vite | npm | 8.3.4 | installed | – | MIT | apps/web |
+| vite | npm | 8.3.5 | installed | – | MIT | apps/web |
 | @vitejs/plugin-react | npm | 6.1.2 | installed | – | MIT | apps/web |
-| @inlang/paraglide-js | npm | 2.29.1 | installed | – | MIT | apps/web |
-| @inlang/plugin-message-format | npm | 4.5.4 | installed | – | MIT | loaded from node_modules so Paraglide never fetches plugin code from a CDN |
+| @inlang/paraglide-js | npm | 2.29.2 | installed | – | MIT | apps/web |
+| @inlang/plugin-message-format | npm | 4.5.5 | installed | – | MIT | loaded from node_modules so Paraglide never fetches plugin code from a CDN |
 | actions/checkout | action | 7.0.1 | installed | 3d3c42e5aac5ba805825da76410c181273ba90b1 | MIT | |
 | actions/setup-node | action | 7.1.0 | installed | 949feb2413d6458794dcd2491c4babbbce0c15c1 | MIT | `package-manager-cache: false` |
-| step-security/harden-runner | action | 2.22.2 | installed | dc2769abcc0fcfbadfc1df54081c1608579ef6b2 | Apache-2.0 | audit mode |
-| github/codeql-action | action | 4.39.0 | installed | 6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee | MIT | public repository (D7) |
+| step-security/harden-runner | action | 2.22.3 | installed | 46b06cea07f9e64621fdf066ba77ac6915163d43 | Apache-2.0 | audit mode |
+| github/codeql-action | action | 4.39.1 | installed | 9b3254085494b55a0f7c4c2b3d2d52cc712ce370 | MIT | public repository (D7) |
 | postgres | image | 18.6-trixie | installed | postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583 | PostgreSQL | CI service; P2 compose `db`; #167: scanned by Grype by this pin; #252: the 2026-11-05 rebuild (index digest `bd5dfa49…`; the same PostgreSQL 18.6-1.pgdg13+2, Debian's `apt` and `libapt-pkg7.0` 3.0.4 for CVE-2026-109518), on the owner's release-age override of 2026-11-06: it counts as aged from 2026-11-12, then this note goes |
 | pebble | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble:2.10.1@sha256:ddf230642b1a584f519f32e347de1b05a6e4c1f6c35c1863b33effeab5f78199 | MPL-2.0 | CI only: the ACME server of the deploy end-to-end test |
 | pebble-challtestsrv | image | 2.10.1 | installed | ghcr.io/letsencrypt/pebble-challtestsrv:2.10.1@sha256:12ce21884def456bcf9786542113949e1f19dc7738d2c70e156c2d0c38a1405b | MPL-2.0 | CI only: DNS for Pebble |
@@ -228,18 +228,18 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | containerd.io | tool | 2.3.5 | installed | 2.3.5-1~debian.13~trixie | Apache-2.0 | P1b host (2.3.6 was under 7 days old at pin time) |
 | Docker Compose | tool | 5.5.1 | installed | 5.5.1-1~debian.13~trixie | Apache-2.0 | P1b host (`docker-compose-plugin`) |
 | cosign | binary | 3.1.3 | installed | 4629c757b7618056f8ddd7e2625ae9fdd94c0372a65049520bc7d9df9efc7f71 | Apache-2.0 | P1b host (`cosign-linux-amd64` sha256); verifies every release on the VPS |
-| node (build image) | image | 26.11.1-trixie-slim | installed | node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 | MIT | P1b build stage |
-| distroless nodejs26 | image | nonroot | installed | gcr.io/distroless/nodejs26-debian13:nonroot@sha256:96455baef11b178fc135b32206e3922c515dbed2400676c94f907f8f84e6abf6 | Apache-2.0 | P1b runtime |
+| node (build image) | image | 26.12.0-trixie-slim | installed | node:26.12.0-trixie-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11 | MIT | P1b build stage |
+| distroless nodejs26 | image | nonroot | installed | gcr.io/distroless/nodejs26-debian13:nonroot@sha256:9b945e92c1b5463a4b75f11e8417515e4bea7355f6adfd79ec220fbbe905dda8 | Apache-2.0 | P1b runtime |
 | caddy | image | 2.11.7-alpine | installed | caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f | Apache-2.0 | P1b web image base (Alpine 3.23); since #252 its own `/usr/bin/caddy` (and that binary's file capability) is replaced by the `caddy (binary)` build; runs with no capability |
 | caddy (binary) | binary | 2.11.7 | installed | h1:yj0Y4fYZGPkSvibBJ1sTWE33xC0fxztVyXEW5iIdUT4= | Apache-2.0 | the web image's `/usr/bin/caddy` (#252, owner 2026-11-06, R-095): built from the release module (go.sum hash, `CADDY_VERSION` in `deploy/web/Dockerfile`) by `go` with its `GO_FIXES`, as the upstream release is (`.goreleaser.yml`: `cmd/caddy/main.go` in a main module `caddy` that requires it, `-trimpath`, `-s -w`, tags `nobadger nomysql nopgx`), so the build info names `caddy/v2 v2.11.7` for `caddy version` and Grype, because every Caddy release up to 2.11.9 requires x/net v0.60.0 (GO-2026-6860); back to the image's own binary once a Caddy release clears Grype |
 | zlib (Alpine) | tool | 1.3.2-r1 | installed | 1.3.2-r1 | Zlib | #131: `ZLIB_VERSION` in `deploy/web/Dockerfile` replaces the caddy image's 1.3.2-r0 (CVE-2026-85091; r1 built 2026-10-06), apk signature-checked; Alpine keeps only the newest revision, so the build fails once r1 is replaced: move the pin, or drop it when the caddy image carries the fix |
 | musl (Alpine) | tool | 1.2.5-r24 | installed | 1.2.5-r24 | MIT | #252: `MUSL_VERSION` in `deploy/web/Dockerfile` replaces the caddy image's musl and musl-utils 1.2.5-r23 (CVE-2026-107891; r24 built 2026-10-21), apk signature-checked; like zlib, the build fails once r24 is replaced: move the pin, or drop it when the caddy image carries the fix |
 | cloudflared | image | 2026.10.6 | installed | cloudflare/cloudflared:2026.10.6@sha256:004d843fa5fdc3103983fd580ee19fab4a8fa98add31f87249c1659e848c98e0 | Apache-2.0 | #109: `deploy/compose.tunnel.yaml`, only while `RWS_EDGE=tunnel` (the multi-arch index digest; built 2026-10-29 with go1.27.3, `golang.org/x/net` v0.61.0, `klauspost/compress` v1.20.3, `go-jose/v4` v4.1.6, base `libssl3t64` deb13u3; #252, owner D-6 2026-11-06: 2026.10.7 of 2026-10-30 was under 7 days old at pin time). Distroless `base-debian13:nonroot` and one static Go binary (Cloudflare, Inc., releases about monthly; 88 Go modules in its `go.mod`, 43 direct); runs as 65532, needs no writable path, shell-free healthcheck `cloudflared tunnel --metrics 127.0.0.1:20241 ready`; Grype scans this pin (#167, R-095) |
 | playwright (image) | image | 1.64.1 | installed | mcr.microsoft.com/playwright:v1.64.1-noble@sha256:47b510dd9230bf0b9bfc9b20102241e577ea7a99334ab4c3ca19f19770e9b8ea | Apache-2.0 | CI only: the `e2e` job runs `@playwright/test` in it (Chromium, Firefox, WebKit and their libraries baked in; P3) |
-| distroless static | image | nonroot | installed | gcr.io/distroless/static-debian13:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99 | Apache-2.0 | P1b backup image runtime |
+| distroless static | image | nonroot | installed | gcr.io/distroless/static-debian13:nonroot@sha256:25ac8f0c3b2334a9eb05452266bd4697864a8c8ef0ef71e5e6480d7f92868329 | Apache-2.0 | P1b backup image runtime |
 | buildkit | image | v0.33.0 | installed | moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3 | Apache-2.0 | release.yml builder (setup-buildx driver) |
 | buildkit-syft-scanner | image | 1.12.0 | installed | docker/buildkit-syft-scanner:1.12.0@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9 | Apache-2.0 | release.yml SBOM generator (Syft) |
-| croner | npm | 10.0.1 | installed | – | MIT | apps/server: capture scheduler (P1) |
+| croner | npm | 11.0.0 | installed | – | MIT | apps/server: capture scheduler (P1) |
 | undici | npm | 8.12.3 | installed | – | MIT | apps/server: SSRF-guarded fetch client (P1) |
 | fast-xml-parser | npm | 5.11.2 | installed | – | MIT | apps/server: CAP/XLSX validity, entities off (P1); the NL-4 parser (`adapters/nl-4/parse.ts`, P2b; P5 parsers) |
 | csv-parse | npm | 7.0.2 | planned | – | MIT | P2/P5 |
@@ -249,12 +249,12 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | kysely | npm | 0.29.7 | installed | – | MIT | apps/server: typed, parameterised SQL (`sql` templates; P2a) |
 | kysely-codegen | npm | 0.20.0 | installed | – | MIT | dev only: `pnpm db:types` writes `apps/server/src/db/generated.ts` (base tables; P2a) |
 | @hono/zod-openapi | npm | 1.6.3 | planned | – | MIT | P9; P4a uses Zod's `z.toJSONSchema` instead (owner, 2026-10-01) |
-| maplibre-gl | npm | 6.15.0 | installed | – | BSD-3-Clause | apps/web: the map, a lazy chunk; its worker from `setWorkerUrl` (P3, ADR-0016) |
+| maplibre-gl | npm | 6.16.0 | installed | – | BSD-3-Clause | apps/web: the map, a lazy chunk; its worker from `setWorkerUrl` (P3, ADR-0016) |
 | pmtiles | npm | 4.5.0 | installed | – | BSD-3-Clause | apps/web: the `pmtiles://` protocol through `addProtocol` (P3) |
 | @protomaps/basemaps | npm | 5.7.2 | installed | – | BSD-3-Clause | dev only: `tools/geo/basemap/build-style.ts` generates the NL and EN styles (flavour `white`; P3) |
 | @maplibre/maplibre-gl-style-spec | npm | 26.4.4 | installed | – | ISC | dev only: validates the generated styles; the exact version maplibre-gl resolves (P3) |
 | @tanstack/react-router | npm | 1.170.39 | planned | – | MIT | P10 at the earliest: P4b has two static pages and keeps `t` and `s` in `lib/url` without a router (owner, 2026-10-01) |
-| @tanstack/react-query | npm | 5.104.5 | installed | – | MIT | apps/web: fetches keyed by the quantised t, cancelled when superseded (P4b); 1 transitive (`@tanstack/query-core`) |
+| @tanstack/react-query | npm | 5.105.0 | installed | – | MIT | apps/web: fetches keyed by the quantised t, cancelled when superseded (P4b); 1 transitive (`@tanstack/query-core`) |
 | echarts | npm | 6.1.0 | installed | – | Apache-2.0 | apps/web: the station chart, a lazy chunk, tooltips `richText` only (P4b); 2 transitive (`zrender`, `tslib`) |
 | temporal-polyfill | npm | 1.0.6 | installed | – | MIT | apps/web `lib/time`: loaded only where `Temporal` is missing (WebKit; P3) |
 | fast-check | npm | 4.10.2 | installed | – | MIT | dev only: property and fuzz tests (P2a) |
@@ -263,7 +263,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | @axe-core/playwright | npm | 4.14.0 | installed | – | MPL-2.0 | dev only: axe on the spike pages (P3) and on three views of the real pages (P4b); the full accessibility pass is P10 |
 | lighthouse | npm | 13.5.0 | installed | – | Apache-2.0 | dev only: the Lighthouse spec of the CI `e2e` job (P10a; mobile, simulated 4G, local Chromium, reports to disk, no upload); 90 transitive packages (91 new lockfile entries with itself), no build script |
 | docker/build-push-action | action | 7.4.0 | installed | c3c9e263c25d99ce0380d002d59b67737d91b0dc | Apache-2.0 | P1b |
-| docker/login-action | action | 4.6.0 | installed | dbcb813823bdd20940b903addbd779551569679f | Apache-2.0 | P1b |
+| docker/login-action | action | 4.7.0 | installed | 81c6f93d4bc991e510b342a00b419b3bb4efc5c6 | Apache-2.0 | P1b |
 | docker/setup-buildx-action | action | 4.4.1 | installed | f87e5991a6d7451dcb8d9637bfbc97413f497069 | Apache-2.0 | P1b |
 | docker/metadata-action | action | 6.2.0 | planned | – | Apache-2.0 | not needed in P1b (images are addressed by digest) |
 | sigstore/cosign-installer | action | 4.1.2 | installed | 6f9f17788090df1f26f669e9d70d6ae9567deba6 | Apache-2.0 | release.yml, with `cosign-release: v3.1.3` |

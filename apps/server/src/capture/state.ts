@@ -16,6 +16,11 @@ export type VariantState = {
   shape?: string;
   last_success?: string;
   /**
+   * `anchor: data` specs only (#250): the newest value time any successful fetch of this variant held (UTC). It
+   * only moves forward and never on a 204, so a provider that answered "no data" and fills in later is asked again.
+   */
+  newest?: string;
+  /**
    * A capped walk (FR-1): the next window ends at `to`, the oldest time it fetched; once the walk completes,
    * last_success moves to `end`, the end of its first window.
    */

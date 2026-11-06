@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { type Normalised, ObsRow, QC, SchemaDrift, scalable, scale } from '@rws/core';
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { coverage } from '../../src/adapters/nl-1/capture.ts';
 import { type Context, MISLABELLED, normalise, STALE_SERIES } from '../../src/adapters/nl-1/normalise.ts';
 import { JSON_CAPS, parseWaarnemingen, type Waarnemingen } from '../../src/adapters/nl-1/parse.ts';
 import { goldenUrl, rawFixture, registryOf } from './registry.ts';
@@ -102,6 +103,67 @@ describe('golden files (real payloads)', () => {
       dropped: { gap: 35 },
       unknown: 0,
     });
+  });
+});
+
+describe('coverage, the window anchor of #250 (real payloads)', () => {
+  const doc = (name: string): unknown => JSON.parse(rawFixture('NL-1', name).body.toString('utf8'));
+  const span = (name: string) => {
+    const ts = run(name).obs.map((o) => o.ts);
+    return { from: ts.reduce((a, b) => (a < b ? a : b)), to: ts.reduce((a, b) => (a > b ? a : b)) };
+  };
+
+  it('the first and last Tijdstip in UTC: Lobith H and Q, and Eijsden-grens H', () => {
+    expect(coverage(doc('nl-1-obs-key'))).toEqual({ from: '2026-09-29T10:50:00.000Z', to: '2026-09-29T13:20:00.000Z' });
+    for (const name of ['nl-1-obs-other-lobith-bovenrijn-tolkamer-q', 'nl-1-obs-key-eijsden-grens-h']) {
+      expect(coverage(doc(name))).toEqual(span(name));
+    }
+  });
+
+  it('a value the normaliser drops still counts: the provider has answered up to it (Driel Q, quality code 99)', () => {
+    const c = coverage(doc('nl-1-obs-other-driel-boven-q'));
+    expect(c).not.toBeNull();
+    expect(run('nl-1-obs-other-driel-boven-q').obs).toHaveLength(0);
+  });
+
+  it('null for a 204 (no body), an empty or odd answer, and an offset-less time', () => {
+    for (const d of [undefined, null, 0, 'x', [], {}, { WaarnemingenLijst: null }, { WaarnemingenLijst: [{}] }]) {
+      expect(coverage(d)).toBeNull();
+    }
+    expect(coverage({ WaarnemingenLijst: [{ MetingenLijst: [] }] })).toBeNull();
+    expect(coverage({ WaarnemingenLijst: [{ MetingenLijst: [{ Tijdstip: '2026-11-05T10:00:00' }] }] })).toBeNull();
+    // #251 review SR-5: a year outside 1900–2199 is no value time.
+    for (const t of [
+      '0001-01-01T00:00:00Z',
+      '+275760-09-13T00:00:00.000Z',
+      '1899-12-31T23:00:00Z',
+      '2200-01-01T00:00:00Z',
+    ]) {
+      expect(coverage({ WaarnemingenLijst: [{ MetingenLijst: [{ Tijdstip: t }] }] })).toBeNull();
+    }
+    expect(coverage({ WaarnemingenLijst: [{ MetingenLijst: [{ Tijdstip: 'never+01:00' }, null, 7] }] })).toBeNull();
+    expect(
+      coverage({
+        WaarnemingenLijst: [
+          { MetingenLijst: [{ Tijdstip: '2026-11-04T15:10:00.000+01:00' }, { Tijdstip: '2026-11-04T13:00:00Z' }] },
+          'odd',
+          { MetingenLijst: [{ Tijdstip: '2026-03-29T03:00:00.000+02:00' }] },
+        ],
+      }),
+    ).toEqual({ from: '2026-03-29T01:00:00.000Z', to: '2026-11-04T14:10:00.000Z' });
+  });
+
+  it('never throws, and returns null or an ordered UTC pair, for any JSON', () => {
+    fc.assert(
+      fc.property(fc.jsonValue(), (j) => {
+        const c = coverage({ WaarnemingenLijst: [j, { MetingenLijst: [j] }] });
+        if (c !== null) {
+          expect(c.from <= c.to).toBe(true);
+          expect(c.to.endsWith('Z')).toBe(true);
+        }
+        coverage(j);
+      }),
+    );
   });
 });
 
@@ -662,7 +724,7 @@ describe('#184 D-1: Megen Q readings labelled GEM24H (MISLABELLED)', () => {
     expect([rowsOf(daily, MEAN).length, rowsOf(daily, MEGEN).length]).toEqual([2, 0]);
   });
 
-  it('a mean and a reading on one instant of one list are one instant: both readings, withheld as conflict (KG-496)', () => {
+  it('a mean and a reading on one instant of one list are one instant: both readings, withheld as conflict (KG-500)', () => {
     // If RWS validated the readings, the two lists could become one (today only Statuswaarde keeps them apart): both
     // daily means of the chunk share their instants (2023-12-30T23:00Z, 2023-12-31T23:00Z) with readings. Such an
     // instant is withheld, never guessed; a replay never deletes what an earlier load stored.
@@ -713,6 +775,25 @@ describe('property and fuzz tests', () => {
   const payload = fc.array(fc.array(meting, { maxLength: 60 }), { minLength: 1, maxLength: 4 });
   const toLists = (groups: { meting: Waarnemingen['metingen'][number] }[][]): Waarnemingen[] =>
     groups.map((g) => ({ ...template, metingen: g.map((x) => x.meting) }));
+
+  it('#250: coverage spans exactly the generated instants, however they are split into lists', () => {
+    fc.assert(
+      fc.property(payload, (groups) => {
+        const all = groups.flat().map((x) => x.ms);
+        const c = coverage({
+          Succesvol: true,
+          WaarnemingenLijst: groups.map((g) => ({ MetingenLijst: g.map((x) => x.meting) })),
+        });
+        if (all.length === 0) expect(c).toBeNull();
+        else {
+          expect(c).toEqual({
+            from: new Date(Math.min(...all)).toISOString(),
+            to: new Date(Math.max(...all)).toISOString(),
+          });
+        }
+      }),
+    );
+  });
 
   it('normalise never stores a gap, an unreadable code, a future or a repeated instant, and is idempotent', () => {
     fc.assert(

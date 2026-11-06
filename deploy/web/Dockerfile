@@ -13,7 +13,7 @@
 # clears Grype. The Go stage from ARG GO_VERSION to ARG GO_FIXES is the same text
 # as in deploy/server/Dockerfile and deploy/backup/Dockerfile
 # (test/check-bom.test.ts).
-FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS go
+FROM node:26.12.0-trixie-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11 AS go
 ARG GO_VERSION=1.27.2
 ADD --checksum=sha256:ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5 \
   https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz \
@@ -45,7 +45,7 @@ RUN m=github.com/caddyserver/caddy/v2@v${CADDY_VERSION} \
   && go version -m /gobin/caddy \
     | grep -E "^\s+dep\s+github.com/caddyserver/caddy/v2\s+v${CADDY_VERSION}\s+h1:yj0Y4fYZGPkSvibBJ1sTWE33xC0fxztVyXEW5iIdUT4=$"
 
-FROM node:26.11.1-trixie-slim@sha256:193fe51b64e77981119c98c2002c9e32a70e2f006fb4d25068ce0558998917f0 AS build
+FROM node:26.12.0-trixie-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11 AS build
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*

@@ -122,6 +122,6 @@ export type Adapter = {
   gateKey?: (doc: unknown, headers: Readonly<Record<string, string>>) => string | null;
   /** A value whose change raises an alert (LU-4 thresholds, NL-4 file names). */
   alertKey?: (doc: unknown) => string | null;
-  /** First and last timestamps of a payload, for the seed report. */
+  /** First and last timestamps of a payload: the seed report, and (#250) the window anchor of `anchor: data` specs. */
   coverage?: (doc: unknown) => { from: string; to: string } | null;
 };

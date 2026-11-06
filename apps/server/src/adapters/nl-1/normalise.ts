@@ -145,7 +145,7 @@ function primariesByCombination(registry: Registry): Map<string, string[]> {
  * whose nearest other instant in its list, earlier or later, lies less than one day away is a reading (so a reading
  * after a hole of a day or more is still one; a lone value, or values a day apart, are the means they are labelled).
  * One instant holding a mean and a reading in one list is one instant: both are readings, and the primary withholds
- * it as `conflict` (KG-496).
+ * it as `conflict` (KG-500).
  */
 export const MISLABELLED = { key: 'megen.maas/Q/NVT/other:F103', bewerking: 'GEM24H' } as const;
 
@@ -298,7 +298,7 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
         continue;
       }
       // D-1: a reading never replaces or contests an instant the series' own lists stated (counted on its own, so
-      // that a wrong premise of D-1 shows; none is expected, KG-496).
+      // that a wrong premise of D-1 shows; none is expected, KG-500).
       if (series.held?.has(ts) === true) {
         count(out, 'mislabelled_held');
         continue;

@@ -203,7 +203,7 @@ describe('NL-1 observations', { timeout: 60_000 }, () => {
     const { rows } = await h.t.admin.query('SELECT parse_status, n_skipped FROM ingest_batch ORDER BY id DESC LIMIT 1');
     // The values withheld: unit 2, method 2 (the 2 maaseik Q values under F103: since P5a maaseik Q is registered
     // with its live method F006, so the list is no longer an unregistered series; #184 stage 2: the 2 Eijsden F001
-    // values load into the registered F001 history twin, KG-499), quality code 1, conflict 3, and
+    // values load into the registered F001 history twin, KG-503), quality code 1, conflict 3, and
     // registered_dropped 4 (the lists under the registered Eijsden NAP key with ProcesType verwachting (2 values),
     // Groepering GETETM2 (1) and compartment BS (1)): 2 + 2 + 1 + 3 + 4 = 12.
     expect(rows).toEqual([{ parse_status: 'ok', n_skipped: 12 }]);

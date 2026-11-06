@@ -230,11 +230,13 @@ describe('gap-stretch windows', () => {
       },
     );
 
-  it('NL-1: now − 3 h normally; after an outage back to the last success − 1 h; never past P31D', async () => {
+  it('a fetch-anchored window: now − 3 h normally; after an outage back to the last success − 1 h; never past P31D', async () => {
     const c = clock('2026-10-02T12:01:00Z');
     const deps = runDeps({ now: c.now });
     server.use(rws());
-    const s = spec('nl-1-obs-key');
+    // nl-1-obs-key itself anchors on data since #250 (below); without `anchor` a window anchors on the fetch.
+    const base = spec('nl-1-obs-key');
+    const s = { ...base, window: { ...base.window, anchor: undefined } } as typeof base;
     const rows = s.rows.slice(0, 1);
     await runSpec(s, deps, { rows });
     expect(JSON.parse(rwsBodies.at(-1) as string).Periode).toEqual({
@@ -247,6 +249,131 @@ describe('gap-stretch windows', () => {
     c.advance(60 * 86_400_000); // two months down
     await runSpec(s, deps, { rows });
     expect(JSON.parse(rwsBodies.at(-1) as string).Periode.Begindatumtijd).toBe('2026-10-31T17:01:00Z');
+  });
+
+  describe('#250: an anchor: data window reaches back to the newest value received', () => {
+    const URL = 'https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen';
+    /** The RWS form of a UTC instant: +01:00, as the real answers. */
+    const rwsTime = (utcMs: number) => new Date(utcMs + 3_600_000).toISOString().replace('Z', '+01:00');
+    /**
+     * A provider whose newest value is `newest(end)` for a window ending at `end` (UTC ms): null answers 204,
+     * the way Rijkswaterstaat did from 2026-11-04 17:11Z to 11-05 08:31Z.
+     */
+    function provider(newest: (end: number) => number | null) {
+      const asked: string[] = [];
+      server.use(
+        http.post(URL, async ({ request }) => {
+          const periode = JSON.parse(await request.text()).Periode;
+          asked.push(periode.Begindatumtijd);
+          const t = newest(Date.parse(periode.Einddatumtijd));
+          if (t === null) return new HttpResponse(null, { status: 204 });
+          const body = { Succesvol: true, WaarnemingenLijst: [{ MetingenLijst: [{ Tijdstip: rwsTime(t) }] }] };
+          return HttpResponse.json(body);
+        }),
+      );
+      return asked;
+    }
+    const newestOf = async (deps: ReturnType<typeof runDeps>, id = 'nl-1-obs-key') =>
+      Object.values((await deps.state.read<SpecState>(id))?.variants ?? {}).map((v) => v.newest);
+
+    it('replays 2026-11-04/05: frozen values, 15 h of 204, then data: the window starts at the newest value − 1 h', async () => {
+      const c = clock('2026-11-04T14:01:00Z');
+      const deps = runDeps({ now: c.now });
+      const frozen = Date.parse('2026-11-04T14:10:00Z');
+      let phase: 'live' | 'frozen' | 'none' = 'live';
+      const asked = provider((end) => (phase === 'live' ? end : phase === 'frozen' ? frozen : null));
+      const s = spec('nl-1-obs-key');
+      const rows = s.rows.slice(0, 1);
+      expect(s.window?.anchor).toBe('data');
+      await runSpec(s, deps, { rows }); // 14:01, live
+      c.advance(10 * 60_000);
+      await runSpec(s, deps, { rows }); // 14:11, live: newest 14:11
+      phase = 'frozen';
+      for (let i = 0; i < 15; i += 1) {
+        c.advance(10 * 60_000); // 14:21 … 16:41: 200s whose newest value stays at 14:10
+        await runSpec(s, deps, { rows });
+      }
+      expect(await newestOf(deps)).toEqual(['2026-11-04T14:11:00.000Z']);
+      phase = 'none';
+      for (let i = 0; i < 6 * 15; i += 1) {
+        c.advance(10 * 60_000); // 16:51 … 07:41 the next day: 204 every time
+        await runSpec(s, deps, { rows });
+      }
+      // A 204 never moves the newest value, so every window during the outage already reaches back to it.
+      expect(await newestOf(deps)).toEqual(['2026-11-04T14:11:00.000Z']);
+      expect(asked.at(-1)).toBe('2026-11-04T13:11:00Z');
+      phase = 'live';
+      c.advance(Date.parse('2026-11-05T10:11:00Z') - c.now().getTime());
+      await runSpec(s, deps, { rows }); // the provider has filled in 14:11 … 10:11
+      expect(asked.at(-1)).toBe('2026-11-04T13:11:00Z');
+      expect(await newestOf(deps)).toEqual(['2026-11-05T10:11:00.000Z']);
+      c.advance(10 * 60_000);
+      await runSpec(s, deps, { rows }); // back to normal: now − 3 h
+      expect(asked.at(-1)).toBe('2026-11-05T07:21:00Z');
+    });
+
+    it('the same sequence on a fetch-anchored window asks only now − 3 h after the outage: the hole of #250', async () => {
+      const c = clock('2026-11-04T14:11:00Z');
+      const deps = runDeps({ now: c.now });
+      let answer = true;
+      const asked = provider((end) => (answer ? end : null));
+      const base = spec('nl-1-obs-key');
+      const s = { ...base, window: { ...base.window, anchor: undefined } } as typeof base;
+      const rows = s.rows.slice(0, 1);
+      await runSpec(s, deps, { rows });
+      answer = false;
+      c.advance(Date.parse('2026-11-05T08:31:00Z') - c.now().getTime());
+      await runSpec(s, deps, { rows }); // a 204: the fetch anchor moves on
+      answer = true;
+      c.advance(Date.parse('2026-11-05T10:11:00Z') - c.now().getTime());
+      await runSpec(s, deps, { rows });
+      expect(asked.at(-1)).toBe('2026-11-05T07:11:00Z');
+      expect(await newestOf(deps)).toEqual([undefined]); // only anchor: data specs keep a newest value
+    });
+
+    it('a value more than 15 min after the fetch never moves the newest value (invariant 4)', async () => {
+      const c = clock('2026-11-05T10:11:00Z');
+      const deps = runDeps({ now: c.now });
+      let ahead = 0;
+      provider((end) => end + ahead);
+      const s = spec('nl-1-obs-key');
+      const rows = s.rows.slice(0, 1);
+      await runSpec(s, deps, { rows });
+      expect(await newestOf(deps)).toEqual(['2026-11-05T10:11:00.000Z']);
+      ahead = 15 * 60_000 + 1;
+      c.advance(10 * 60_000);
+      await runSpec(s, deps, { rows });
+      expect(await newestOf(deps)).toEqual(['2026-11-05T10:11:00.000Z']);
+      ahead = 15 * 60_000;
+      c.advance(10 * 60_000);
+      await runSpec(s, deps, { rows });
+      expect(await newestOf(deps)).toEqual(['2026-11-05T10:46:00.000Z']);
+    });
+
+    it('max still caps a newest value that stopped long ago (a gauge that died)', async () => {
+      const c = clock('2026-11-03T10:41:00Z');
+      const deps = runDeps({ now: c.now });
+      const dead = Date.parse('2026-11-03T10:40:00Z');
+      const asked = provider(() => dead);
+      const s = spec('nl-1-obs-key');
+      const rows = s.rows.slice(0, 1);
+      await runSpec(s, deps, { rows });
+      c.advance(2 * 86_400_000);
+      await runSpec(s, deps, { rows });
+      expect(asked.at(-1)).toBe('2026-11-03T09:40:00Z');
+      c.advance(60 * 86_400_000);
+      await runSpec(s, deps, { rows });
+      expect(asked.at(-1)).toBe(new Date(c.now().getTime() - 31 * 86_400_000).toISOString().replace(/\.\d{3}Z$/, 'Z'));
+    });
+
+    it('a seed never moves the newest value', async () => {
+      const deps = runDeps({ now: () => new Date('2026-11-05T02:00:00Z') });
+      provider((end) => end);
+      const s = spec('nl-1-obs-key');
+      const window = { from: new Date('2026-10-02T00:00:00Z'), to: new Date('2026-11-05T02:00:00Z') };
+      await runSpec(s, deps, { rows: s.rows.slice(0, 1), seed: true, window });
+      expect(await newestOf(deps)).toEqual([undefined]);
+    });
   });
 
   it('NL-1 forecasts: T−10 min … T+48 h in UTC, with ProcesType and Hoedanigheid', async () => {
