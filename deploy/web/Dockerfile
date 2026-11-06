@@ -32,12 +32,14 @@ ARG GO_FIXES="golang.org/x/net@v0.62.0 golang.org/x/crypto@v0.58.0 golang.org/x/
 # release module, and the release flags (-trimpath, -s -w and the tags nobadger, nomysql and nopgx). So the build info
 # names github.com/caddyserver/caddy/v2 v2.11.7 with its go.sum hash (the last line checks it): `caddy version` prints
 # it, and Syft and Grype match Caddy's own advisories by it. Built inside its own module, Caddy is (devel) to both.
+# The main module takes Caddy's own `go 1.26.0` line (go mod init would write the toolchain's 1.27.2), so the edge
+# binary keeps the GODEBUG defaults of the release; neither go mod tidy nor GO_FIXES raises it (review SR-2).
 ARG CADDY_VERSION=2.11.7
 RUN m=github.com/caddyserver/caddy/v2@v${CADDY_VERSION} \
   && go mod download -json "$m" | grep -F '"Sum": "h1:yj0Y4fYZGPkSvibBJ1sTWE33xC0fxztVyXEW5iIdUT4="' \
   && mkdir /gosrc/caddy && cd /gosrc/caddy \
   && cp "$(go env GOMODCACHE)/$m/cmd/caddy/main.go" . \
-  && go mod init caddy && go mod edit -require="$m" && go mod tidy \
+  && go mod init caddy && go mod edit -go=1.26.0 -require="$m" && go mod tidy \
   && go get ${GO_FIXES} \
   && go build -trimpath -tags nobadger,nomysql,nopgx -ldflags '-s -w' -o /gobin/caddy . \
   && go version -m /gobin/caddy \
