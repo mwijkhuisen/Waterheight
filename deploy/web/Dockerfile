@@ -60,8 +60,10 @@ COPY --from=go /gobin/caddy /usr/bin/caddy
 # Owner 2026-10-26: the base's curl 8.22.0-r0 (CVE-2026-92392, High) goes, and with it libcurl and the libraries only
 # it links (brotli-libs, c-ares, libidn2, libpsl, libunistring, nghttp2-libs, zstd-libs). Nothing here runs curl: the
 # healthchecks and the e2e checks use busybox wget. This also retires #221's brotli-libs pin.
+# #252: the base's musl and musl-utils 1.2.5-r23 (CVE-2026-107891, High) take r24 (built 2026-10-21), pinned like zlib.
 ARG ZLIB_VERSION=1.3.2-r1
-RUN apk add --no-cache "zlib=${ZLIB_VERSION}" \
+ARG MUSL_VERSION=1.2.5-r24
+RUN apk add --no-cache "zlib=${ZLIB_VERSION}" "musl=${MUSL_VERSION}" "musl-utils=${MUSL_VERSION}" \
   && apk del curl \
   && mkdir -p /data/access /config \
   && chown -R 65533:65533 /data /config
