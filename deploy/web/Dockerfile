@@ -60,15 +60,16 @@ FROM caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f43
 # under cap_drop: ALL (caddy-docker#396). The build above replaces it (#252) and, freshly built, carries none. Caddy
 # runs as uid 65533 with no capability and binds 80/443 through the container's net.ipv4.ip_unprivileged_port_start.
 COPY --from=go /gobin/caddy /usr/bin/caddy
-# #131 (R-095, owner 2026-10-16): the base still carries Alpine's zlib 1.3.2-r0 (CVE-2026-85091), so the fixed
-# revision is pinned (BOM row). Alpine keeps only a branch's newest revision: once r1 is replaced the build fails, and
-# the pin moves, or goes when the caddy image carries the fix. Caddy is a static Go binary and does not link zlib (apk
-# and busybox do), so this clears the image's finding, not a path into Caddy.
+# #131 (R-095, owner 2026-10-16): the base still carries Alpine's zlib 1.3.2-r0 (CVE-2026-85091), so a fixed version
+# is pinned (BOM row): 1.4-r0 (also fixes CVE-2026-4738) since 2026-11-06, the day Alpine replaced 1.3.2-r1, on the
+# owner's release-age override. Alpine keeps only a branch's newest revision: once the pinned one is replaced the build
+# fails, and the pin moves, or goes when the caddy image carries the fix. Caddy is a static Go binary and does not link
+# zlib (apk and busybox do), so this clears the image's finding, not a path into Caddy.
 # Owner 2026-10-26: the base's curl 8.22.0-r0 (CVE-2026-92392, High) goes, and with it libcurl and the libraries only
 # it links (brotli-libs, c-ares, libidn2, libpsl, libunistring, nghttp2-libs, zstd-libs). Nothing here runs curl: the
 # healthchecks and the e2e checks use busybox wget. This also retires #221's brotli-libs pin.
 # #252: the base's musl and musl-utils 1.2.5-r23 (CVE-2026-107891, High) take r24 (built 2026-10-21), pinned like zlib.
-ARG ZLIB_VERSION=1.3.2-r1
+ARG ZLIB_VERSION=1.4-r0
 ARG MUSL_VERSION=1.2.5-r24
 RUN apk add --no-cache "zlib=${ZLIB_VERSION}" "musl=${MUSL_VERSION}" "musl-utils=${MUSL_VERSION}" \
   && apk del curl \
