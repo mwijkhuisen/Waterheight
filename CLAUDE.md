@@ -197,7 +197,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | msw | npm | 3.0.3 | installed | – | MIT | `onUnhandledFrame: 'error'`; postinstall denied (`allowBuilds`) |
 | yaml | npm | 2.9.1 | installed | – | ISC | registry and lockfile parsing; apps/server reads the registry at runtime (P1) |
 | @types/node | npm | 26.6.5 | installed | – | MIT | |
-| hono | npm | 4.13.13 | installed | – | MIT | apps/server |
+| hono | npm | 4.13.14 | installed | – | MIT | apps/server |
 | @hono/node-server | npm | 2.1.5 | installed | – | MIT | apps/server |
 | pg | npm | 8.23.1 | installed | – | MIT | apps/server: PostgreSQL driver of migrate, load and api (P2a) |
 | @types/pg | npm | 8.23.1 | installed | – | MIT | |
@@ -206,10 +206,10 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | react-dom | npm | 19.3.1 | installed | – | MIT | apps/web |
 | @types/react | npm | 19.3.0 | installed | – | MIT | |
 | @types/react-dom | npm | 19.3.0 | installed | – | MIT | |
-| vite | npm | 8.3.4 | installed | – | MIT | apps/web |
+| vite | npm | 8.3.5 | installed | – | MIT | apps/web |
 | @vitejs/plugin-react | npm | 6.1.2 | installed | – | MIT | apps/web |
-| @inlang/paraglide-js | npm | 2.29.1 | installed | – | MIT | apps/web |
-| @inlang/plugin-message-format | npm | 4.5.4 | installed | – | MIT | loaded from node_modules so Paraglide never fetches plugin code from a CDN |
+| @inlang/paraglide-js | npm | 2.29.2 | installed | – | MIT | apps/web |
+| @inlang/plugin-message-format | npm | 4.5.5 | installed | – | MIT | loaded from node_modules so Paraglide never fetches plugin code from a CDN |
 | actions/checkout | action | 7.0.1 | installed | 3d3c42e5aac5ba805825da76410c181273ba90b1 | MIT | |
 | actions/setup-node | action | 7.1.0 | installed | 949feb2413d6458794dcd2491c4babbbce0c15c1 | MIT | `package-manager-cache: false` |
 | step-security/harden-runner | action | 2.22.2 | installed | dc2769abcc0fcfbadfc1df54081c1608579ef6b2 | Apache-2.0 | audit mode |
@@ -239,7 +239,7 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | distroless static | image | nonroot | installed | gcr.io/distroless/static-debian13:nonroot@sha256:18f4cc26c9ffa7f20a359298be7deadac5c607c8e03a02b8119f1a5fc2f82c99 | Apache-2.0 | P1b backup image runtime |
 | buildkit | image | v0.33.0 | installed | moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3 | Apache-2.0 | release.yml builder (setup-buildx driver) |
 | buildkit-syft-scanner | image | 1.12.0 | installed | docker/buildkit-syft-scanner:1.12.0@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9 | Apache-2.0 | release.yml SBOM generator (Syft) |
-| croner | npm | 10.0.1 | installed | – | MIT | apps/server: capture scheduler (P1) |
+| croner | npm | 11.0.0 | installed | – | MIT | apps/server: capture scheduler (P1) |
 | undici | npm | 8.12.3 | installed | – | MIT | apps/server: SSRF-guarded fetch client (P1) |
 | fast-xml-parser | npm | 5.11.2 | installed | – | MIT | apps/server: CAP/XLSX validity, entities off (P1); the NL-4 parser (`adapters/nl-4/parse.ts`, P2b; P5 parsers) |
 | csv-parse | npm | 7.0.2 | planned | – | MIT | P2/P5 |
@@ -249,12 +249,12 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | kysely | npm | 0.29.7 | installed | – | MIT | apps/server: typed, parameterised SQL (`sql` templates; P2a) |
 | kysely-codegen | npm | 0.20.0 | installed | – | MIT | dev only: `pnpm db:types` writes `apps/server/src/db/generated.ts` (base tables; P2a) |
 | @hono/zod-openapi | npm | 1.6.3 | planned | – | MIT | P9; P4a uses Zod's `z.toJSONSchema` instead (owner, 2026-10-01) |
-| maplibre-gl | npm | 6.15.0 | installed | – | BSD-3-Clause | apps/web: the map, a lazy chunk; its worker from `setWorkerUrl` (P3, ADR-0016) |
+| maplibre-gl | npm | 6.16.0 | installed | – | BSD-3-Clause | apps/web: the map, a lazy chunk; its worker from `setWorkerUrl` (P3, ADR-0016) |
 | pmtiles | npm | 4.5.0 | installed | – | BSD-3-Clause | apps/web: the `pmtiles://` protocol through `addProtocol` (P3) |
 | @protomaps/basemaps | npm | 5.7.2 | installed | – | BSD-3-Clause | dev only: `tools/geo/basemap/build-style.ts` generates the NL and EN styles (flavour `white`; P3) |
 | @maplibre/maplibre-gl-style-spec | npm | 26.4.4 | installed | – | ISC | dev only: validates the generated styles; the exact version maplibre-gl resolves (P3) |
 | @tanstack/react-router | npm | 1.170.39 | planned | – | MIT | P10 at the earliest: P4b has two static pages and keeps `t` and `s` in `lib/url` without a router (owner, 2026-10-01) |
-| @tanstack/react-query | npm | 5.104.5 | installed | – | MIT | apps/web: fetches keyed by the quantised t, cancelled when superseded (P4b); 1 transitive (`@tanstack/query-core`) |
+| @tanstack/react-query | npm | 5.105.0 | installed | – | MIT | apps/web: fetches keyed by the quantised t, cancelled when superseded (P4b); 1 transitive (`@tanstack/query-core`) |
 | echarts | npm | 6.1.0 | installed | – | Apache-2.0 | apps/web: the station chart, a lazy chunk, tooltips `richText` only (P4b); 2 transitive (`zrender`, `tslib`) |
 | temporal-polyfill | npm | 1.0.6 | installed | – | MIT | apps/web `lib/time`: loaded only where `Temporal` is missing (WebKit; P3) |
 | fast-check | npm | 4.10.2 | installed | – | MIT | dev only: property and fuzz tests (P2a) |
