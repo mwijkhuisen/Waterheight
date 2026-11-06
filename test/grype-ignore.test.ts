@@ -29,7 +29,10 @@ describe('.grype.yaml', () => {
     for (const r of doc.ignore) {
       expect(Object.keys(r).sort()).toEqual(['package', 'vulnerability']);
       expect(r.vulnerability).toMatch(/^(CVE-\d{4}-\d+|GHSA(-[0-9a-z]{4}){3}|GO-\d{4}-\d+)$/);
-      expect(Object.keys(r.package).sort()).toEqual(['name', 'type', 'version']);
+      // #252 (SR-1): an optional location scopes a rule to one exact path (one binary of one image).
+      const { location, ...pkg } = r.package;
+      expect(Object.keys(pkg).sort()).toEqual(['name', 'type', 'version']);
+      if (location !== undefined) expect(location).toMatch(/^(\/[\w.-]+)+$/);
       expect(r.package.type).toMatch(/^(go-module|apk|deb)$/);
       for (const v of Object.values(r.package)) expect(v).not.toMatch(/[*?]/);
       const k = `${r.vulnerability} ${r.package.name} ${r.package.version}`;
