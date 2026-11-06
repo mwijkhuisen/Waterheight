@@ -119,6 +119,11 @@ export type SeriesDecl = {
   expected_step_ms: number;
   /** P14b: its station's tier (1: first-release key gauge), where the loader passes it (load/store.ts seriesOf). */
   tier?: number;
+  /**
+   * #184: the registry row's role (the loader, `declarationsOf` and the test registries pass it). An adapter that
+   * attaches a list to "the one series of a station" (NL-1 forecasts and tide) looks at the non-twins only.
+   */
+  role?: 'primary' | 'twin' | 'mirror';
 };
 
 export type Registry = ReadonlyMap<string, SeriesDecl>;

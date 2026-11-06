@@ -577,6 +577,7 @@ export function declarationsOf(stations: readonly Station[], source: string): Ma
           value_kind: r.value_kind,
           native_step_ms: durationMs(r.native_step),
           expected_step_ms: durationMs(r.expected_step),
+          role: r.role,
         },
       ]),
   );
