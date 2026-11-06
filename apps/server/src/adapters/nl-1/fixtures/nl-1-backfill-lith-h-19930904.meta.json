@@ -1,0 +1,16 @@
+{
+  "spec": "nl-1-backfill-obs",
+  "source": "NL-1",
+  "synthetic": false,
+  "recorded_at": "2026-11-06T07:57:43Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "bytes": 42130,
+  "request": {
+    "from": "1993-09-04",
+    "to": "1993-09-09"
+  },
+  "source_sha256": "e6312083bf6c2dd8dc34089c45c995e9be6e2e3427a5422fcc249e0e5473a1d5",
+  "trimmed": false
+}

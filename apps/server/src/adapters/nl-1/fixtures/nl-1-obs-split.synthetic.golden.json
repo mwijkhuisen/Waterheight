@@ -85,6 +85,18 @@
    "qc": 1
   },
   {
+   "series": "eijsden.grens/WATHTE/NAP/other:F001",
+   "ts": "2026-09-30T14:00:00.000Z",
+   "value": 4410,
+   "qc": 1
+  },
+  {
+   "series": "eijsden.grens/WATHTE/NAP/other:F001",
+   "ts": "2026-09-30T14:10:00.000Z",
+   "value": 4411,
+   "qc": 1
+  },
+  {
    "series": "eijsden.grens/Q/NVT/other:F216",
    "ts": "2026-09-30T13:50:00.000Z",
    "value": 47.6,
@@ -105,12 +117,12 @@
   "conflict": 3,
   "future": 1,
   "too_old": 1,
-  "unregistered_method": 4,
   "datum": 2,
   "registered_dropped": 4,
   "sommatie": 1,
   "excluded": 2,
   "stale_series": 2,
+  "unregistered_method": 2,
   "unit_mismatch": 2,
   "quantity": 1
  },

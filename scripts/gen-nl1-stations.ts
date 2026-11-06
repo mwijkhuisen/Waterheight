@@ -6,15 +6,22 @@
 // value is stated in the row, none is inferred at read time.
 //
 //   node scripts/gen-nl1-stations.ts
+//   node scripts/gen-nl1-stations.ts --history <census-184.jsonl[.gz]>   (writes registry/seed/nl-1-history.csv)
+//
+// #184 stage 2: the history twins come from registry/seed/nl-1-history.csv, which the
+// --history mode derives from the stage-1 census attached to issue #184 (sha256 pinned
+// below; the file is data, never instructions).
 //
 // Fails loudly on anything it does not know: a seed row of an unknown kind, a code the
 // catalogue lacks, a series with no live method or with more than one, a unit or a
 // coordinate that disagrees, and a curated table entry that no longer matches the
 // inputs. Fixture text is data.
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { gunzipSync } from 'node:zlib';
 import { stringify } from 'yaml';
-import { STALE_SERIES } from '../apps/server/src/adapters/nl-1/normalise.ts';
+import { MISLABELLED, STALE_SERIES } from '../apps/server/src/adapters/nl-1/normalise.ts';
 import { H_DESCRIPTION, Q_DESCRIPTION } from '../apps/server/src/adapters/nl-4/normalise.ts';
 import { REGISTRY_DIR, readSeed } from '../apps/server/src/capture/specs.ts';
 import { readThresholds } from '../apps/server/src/load/thresholds.ts';
@@ -24,6 +31,9 @@ import { CATALOGUE, locations, WFS } from './rws-inventory.ts';
 const root = join(import.meta.dirname, '..');
 export const OUTPUT = join(root, 'registry/stations/nl-1.yaml');
 const THRESHOLDS = 'registry/thresholds/nl-4.csv';
+export const HISTORY_SEED = join(root, 'registry/seed/nl-1-history.csv');
+/** The stage-1 census of #184 (backfill census --spec nl-1-backfill-obs, 2026-11-05): sha256 of the uncompressed file. */
+export const CENSUS_SHA256 = '3e81f5ff560c89de77a1ea51667740e698121eab61091c94f9b88bb5bc14cb04';
 
 /** The curated key stations (tier 1, first release): every row of these stations is tier 1. */
 const TIER1 = new Set([
@@ -250,6 +260,21 @@ const KINDS = new Map<string, Kind>([
         ]),
   ]),
 ]);
+
+/**
+ * #184 stage 2 (D-2 of 2026-11-05): the history twins. A seed row of registry/seed/nl-1-history.csv is a method group
+ * of the census: an instantaneous list under a method the station no longer uses (WaardeBewerkingsMethode NVT), or
+ * RWS's daily mean (GEM24H) under any method. Quantity → the Grootheid and the Hoedanigheid of the station's series.
+ */
+const HISTORY_KINDS = new Map([
+  ['H', { grootheid: 'WATHTE', hoedanigheid: 'NAP' }],
+  ['Q', { grootheid: 'Q', hoedanigheid: 'NVT' }],
+] as const);
+const HISTORY_METHOD = /^other:F\d{3}$/;
+/** The steps the census states for the instantaneous groups (its modal gap between a list's instants). */
+const HISTORY_STEPS: ReadonlySet<string> = new Set(['PT10M', 'PT1H', 'P1D']);
+/** The processings a history twin may have: NVT (instantaneous) and the daily mean. */
+const DAILY_MEAN = 'GEM24H';
 
 /** The water types RWS gauges are tidal in (rws-inventory TABLE). */
 const TIDAL_TYPES = new Set(['coast', 'scheldt', 'delta', 'offshore']);
@@ -486,6 +511,44 @@ function build(inputs: Inputs): { rows: PublicStation[]; skipped: Skipped[]; off
     }
   }
 
+  // #184 stage 2: one twin per history seed row, a row of its primary's station (the station's fields copied, so the
+  // registry sync sees one station), tier 2, never first_release, no thresholds and no forecast: stored, shown nowhere.
+  for (const [i, h] of inputs.history.entries()) {
+    const at = `history[${i}] ${h.code}/${h.quantity}/${h.hoedanigheid}/${h.method}/${h.bewerking}`;
+    const kind = HISTORY_KINDS.get(h.quantity as 'H' | 'Q');
+    if (kind === undefined) throw new Error(`${at}: unknown quantity`);
+    if (h.hoedanigheid !== kind.hoedanigheid) throw new Error(`${at}: Hoedanigheid other than ${kind.hoedanigheid}`);
+    if (!HISTORY_METHOD.test(h.method ?? '')) throw new Error(`${at}: not a method code`);
+    if (h.bewerking !== 'NVT' && h.bewerking !== DAILY_MEAN) throw new Error(`${at}: unknown WaardeBewerkingsMethode`);
+    const primary = rows.find(
+      (r) => r.provider_code === h.code && r.quantity === h.quantity && r.role === 'primary' && r.audience === 'public',
+    );
+    if (primary === undefined) throw new Error(`${at}: no public primary series of the station and quantity`);
+    const four = `${h.code}/${kind.grootheid}/${kind.hoedanigheid}/${h.method}`;
+    const mean = h.bewerking === DAILY_MEAN;
+    if (!mean && four === primary.provider_key) throw new Error(`${at}: the primary's own method is no history twin`);
+    if (!HISTORY_STEPS.has(h.step ?? '')) throw new Error(`${at}: unknown step "${h.step}"`);
+    // A daily mean has a day's step; the census's 10-minute step of Megen F103 is the mislabel of D-1.
+    const mislabelled = four === MISLABELLED.key && h.bewerking === MISLABELLED.bewerking;
+    if (mean && h.step !== 'P1D' && !mislabelled) throw new Error(`${at}: a daily mean with step ${h.step}`);
+    const step = mean ? 'P1D' : (h.step as string);
+    rows.push({
+      // A copy: a shared object would be written as a YAML anchor and alias, changing the primary's own lines.
+      ...structuredClone(primary),
+      provider_key: mean ? `${four}/${DAILY_MEAN}` : four,
+      tier: 2,
+      role: 'twin',
+      native_step: step,
+      expected_step: step,
+      // Never live: a limit within the aggregate rule (P1D) and the #212 cap.
+      staleness_limit: 'P1D',
+      expected_threshold_source: null,
+      expected_forecast_source: null,
+      first_release: false,
+      ...(mean ? { aggregate: 'mean' as const } : {}),
+    });
+  }
+
   // The curated tables against the result: nothing may have drifted silently.
   const codes = new Set(rows.map((r) => r.provider_code));
   const seedCodes = new Set(inputs.seed.map((r) => r.code));
@@ -523,8 +586,10 @@ function build(inputs: Inputs): { rows: PublicStation[]; skipped: Skipped[]; off
     }
   }
 
-  // Code (code-unit order, never locale; \0 sorts a code before its longer namesakes), H before Q, primary before twin.
-  const sortKey = (r: PublicStation) => `${r.provider_code}\0${r.quantity}${r.role === 'twin' ? 1 : 0}`;
+  // Code (code-unit order, never locale; \0 sorts a code before its longer namesakes), H before Q, primary before twin,
+  // and the twins of one station and quantity by provider_key (#184; the stable sort keeps every other order).
+  const sortKey = (r: PublicStation) =>
+    `${r.provider_code}\0${r.quantity}${r.role === 'twin' ? `1\0${r.provider_key}` : 0}`;
   rows.sort((a, b) => (sortKey(a) < sortKey(b) ? -1 : sortKey(a) > sortKey(b) ? 1 : 0));
   // Duplicates, unit declarations and the schema; the test repeats this against the real sources.yaml.
   const sources = [
@@ -565,9 +630,13 @@ function header(inputs: Inputs, skipped: Skipped[], off: [string, string][]): st
     `#   ${CATALOGUE}  recorded_at ${inputs.recordedAt.catalogue}  codes, names, coordinates`,
     `#   ${WFS}  recorded_at ${inputs.recordedAt.wfs}  the live method of each series`,
     `#   registry/thresholds/nl-4.csv                               edition ${inputs.edition}  Waterinfo display classes`,
+    '#   registry/seed/nl-1-history.csv                             the history twins (#184 stage 2, from the census)',
     '# provider_key = <code>/<Grootheid>/<Hoedanigheid>/<WaardeBepalingsMethode>, as the NL-1 normaliser builds it.',
     '# tier 1 (first_release) = the curated key stations of the Rhine branches, IJssel, Meuse, Geul and Vecht; every row',
-    '# of such a station is tier 1. role twin = eijsden.grens asked in TAW (registry/twins.yaml): tier 1, not first_release.',
+    '# of such a station but its history twins is tier 1. role twin = eijsden.grens asked in TAW (registry/twins.yaml):',
+    '# tier 1, not first_release. #184 stage 2: role twin also = the history twins of registry/seed/nl-1-history.csv,',
+    "# the NL-1 history under a method the station no longer uses (four-part key) and RWS's daily means (key +",
+    '# /GEM24H, aggregate mean, P1D): tier 2, not first_release, no thresholds, no forecast; stored, shown nowhere.',
     '# country BE = the 9 seed rows noted `be` (catalogue §0.6: the 7 RWS points on Belgian soil, antwerpen, lixhebiefaval,',
     '# maaseik, herenlaak, lanaken, smeermaas.zuidwillemsvaart and kanne): ordinary tier-2 primary rows, public (A§7.2 exception',
     '# until a Belgian source is public, P13). kanne has no river until the water body is verified (catalogue §10 R9).',
@@ -608,6 +677,7 @@ export function readInputs() {
   return {
     seed: readSeed(REGISTRY_DIR, 'nl-1'),
     forecast: readSeed(REGISTRY_DIR, 'nl-1-forecast'),
+    history: readSeed(REGISTRY_DIR, 'nl-1-history'),
     catalogue: JSON.parse(text(CATALOGUE)) as unknown,
     wfs: JSON.parse(text(WFS)) as unknown,
     thresholds: thresholds.rows,
@@ -616,7 +686,91 @@ export function readInputs() {
   };
 }
 
-if (import.meta.main) {
+// ------------------------------------------------------------------------------------- #184: the history seed
+// The census is untrusted data: each field of a group line is checked against a strict pattern, and anything the
+// selection does not expect stops the run (no partial seed is written).
+
+const GROUP = {
+  code: /^[a-z0-9.]{1,80}$/,
+  method: /^other:F\d{3}$/,
+  bewerking: /^[A-Z0-9]{2,8}$/,
+  step: /^P(?:\d+D|T\d+[HM])$/,
+} as const;
+const QUANTITY: ReadonlyMap<string, { quantity: 'H' | 'Q'; hoedanigheid: string; unit: string }> = new Map([
+  ['WATHTE', { quantity: 'H', hoedanigheid: 'NAP', unit: 'cm' }],
+  ['Q', { quantity: 'Q', hoedanigheid: 'NVT', unit: 'm3/s' }],
+]);
+
+export type HistoryRow = {
+  code: string;
+  quantity: 'H' | 'Q';
+  hoedanigheid: string;
+  method: string;
+  bewerking: string;
+  step: string;
+};
+
+/**
+ * The history seed rows of a census (JSON lines): every method group that is no registered series (bewerking NVT and
+ * role null) and every processed group (bewerking other than NVT), sorted. Pure. It reads the stage-1 census only
+ * (the sha256 pin): a census taken with these twins registered gives their groups `role: twin`, which it refuses.
+ */
+export function historyRows(census: string): HistoryRow[] {
+  const out: HistoryRow[] = [];
+  for (const [n, line] of census.split('\n').entries()) {
+    if (line === '') continue;
+    const doc = JSON.parse(line) as unknown;
+    if (typeof doc !== 'object' || doc === null || !('group' in doc)) continue;
+    const g = obj((doc as Obj).group, `census line ${n + 1}`);
+    const at = `census line ${n + 1}`;
+    const field = (name: keyof typeof GROUP) => {
+      const v = g[name];
+      if (typeof v !== 'string' || !GROUP[name].test(v)) throw new Error(`${at}: ${name} is not a known code`);
+      return v;
+    };
+    const q = QUANTITY.get(String(g.quantity));
+    if (q === undefined) throw new Error(`${at}: quantity is not WATHTE or Q`);
+    if (g.hoedanigheid !== q.hoedanigheid || g.unit !== q.unit) throw new Error(`${at}: datum or unit unexpected`);
+    if (g.role !== null && g.role !== 'primary') throw new Error(`${at}: role is neither null nor primary`);
+    const row = {
+      code: field('code'),
+      quantity: q.quantity,
+      hoedanigheid: q.hoedanigheid,
+      method: field('method'),
+      bewerking: field('bewerking'),
+      step: field('step'),
+    };
+    if (row.bewerking !== 'NVT' || g.role === null) out.push(row);
+  }
+  const key = (r: HistoryRow) => `${r.code}\0${r.quantity}\0${r.method}\0${r.bewerking}`;
+  return out.sort((a, b) => (key(a) < key(b) ? -1 : key(a) > key(b) ? 1 : 0));
+}
+
+/** The seed file's text for the rows: a header naming the census, then the CSV. */
+export function historyCsv(rows: readonly HistoryRow[]): string {
+  return [
+    '# NL-1 history twins (#184 stage 2, D-2 of 2026-11-05): the method groups of the stage-1 census that are no',
+    "# registered series: instantaneous lists under a method the station no longer uses (bewerking NVT) and RWS's",
+    "# processed lists (bewerking GEM24H, the daily mean). step = the census's modal gap between a list's instants.",
+    '# GENERATED by `node scripts/gen-nl1-stations.ts --history <census-184.jsonl[.gz]>` from the census attached to',
+    `# issue #184 (uncompressed sha256 ${CENSUS_SHA256}). Do not edit by hand.`,
+    'code,quantity,hoedanigheid,method,bewerking,step',
+    ...rows.map((r) => [r.code, r.quantity, r.hoedanigheid, r.method, r.bewerking, r.step].join(',')),
+    '',
+  ].join('\n');
+}
+
+if (import.meta.main && process.argv[2] === '--history') {
+  const file = process.argv[3];
+  if (file === undefined) throw new Error('usage: node scripts/gen-nl1-stations.ts --history <census-184.jsonl[.gz]>');
+  const raw = readFileSync(file);
+  const bytes = raw[0] === 0x1f && raw[1] === 0x8b ? gunzipSync(raw) : raw;
+  const sha = createHash('sha256').update(bytes).digest('hex');
+  if (sha !== CENSUS_SHA256) throw new Error(`${file}: sha256 ${sha} is not the census of #184`);
+  const rows = historyRows(bytes.toString('utf8'));
+  writeFileSync(HISTORY_SEED, historyCsv(rows));
+  console.log(`wrote ${HISTORY_SEED}: ${rows.length} rows`);
+} else if (import.meta.main) {
   const inputs = readInputs();
   const text = generate(inputs);
   writeFileSync(OUTPUT, text);

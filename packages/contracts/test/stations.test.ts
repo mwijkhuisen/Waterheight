@@ -231,11 +231,20 @@ describe('station declarations (tier, role, provider_key, units, steps)', () => 
     return copy;
   };
 
-  it('a station has one row per quantity, plus at most one twin row', () => {
+  it('a station has one primary (or mirror) row per quantity; its twins are told apart by provider_key alone (#184)', () => {
     expect(validateStations(withSecond(1, 'primary'), sources).problems.join('\n')).toMatch(/duplicate$/);
     expect(validateStations(withSecond(1, 'mirror'), sources).problems.join('\n')).toMatch(/duplicate$/);
     expect(validateStations(withSecond(1, 'twin'), sources).problems).toEqual([]);
-    expect(validateStations(withSecond(2, 'twin'), sources).problems.join('\n')).toMatch(/duplicate$/);
+    // Two twins of one station and quantity (the NL-1 history under two other methods) validate.
+    expect(validateStations(withSecond(2, 'twin'), sources).problems).toEqual([]);
+    // Twins of one provider_key do not.
+    const same = withSecond(2, 'twin');
+    (same.stations.at(-1) as { provider_key: string }).provider_key = 'lobith.bovenrijn.tolkamer/WATHTE/TAW/0';
+    expect(validateStations(same, sources).problems.join('\n')).toMatch(/duplicate provider_key/);
+    // A second primary still fails beside any number of twins.
+    const second = withSecond(2, 'twin');
+    second.stations.push({ ...structuredClone(sample.stations[lobith]), provider_key: 'lobith/second' });
+    expect(validateStations(second, sources).problems.join('\n')).toMatch(/duplicate$/);
   });
 
   /** P14b: the sample with provider aggregate rows on the Lobith station (a daily mean, a daily maximum). */
@@ -256,11 +265,18 @@ describe('station declarations (tier, role, provider_key, units, steps)', () => 
     return validateStations(copy, sources).problems.join('\n');
   };
 
-  it('a provider aggregate is a twin of one day: P1D steps, stale within a day, one per aggregate', () => {
+  it('a provider aggregate is a twin of one day: P1D steps, stale within a day, unique by provider_key', () => {
     expect(withAggregates([{ aggregate: 'mean' }, { aggregate: 'max' }])).toBe('');
     // Beside the station's own twin row, and with a shorter staleness limit.
     expect(withAggregates([{ aggregate: 'max', staleness_limit: 'PT12H' }, {}])).toBe('');
-    expect(withAggregates([{ aggregate: 'mean' }, { aggregate: 'mean' }])).toMatch(/duplicate$/);
+    // #184: two daily means of one station (RWS GEM24H under two methods) are two series.
+    expect(withAggregates([{ aggregate: 'mean' }, { aggregate: 'mean' }])).toBe('');
+    expect(
+      withAggregates([
+        { aggregate: 'mean' },
+        { aggregate: 'mean', provider_key: 'lobith.bovenrijn.tolkamer/aggregate/0' },
+      ]),
+    ).toMatch(/duplicate provider_key/);
     expect(withAggregates([{ aggregate: 'mean', role: 'primary' }])).toMatch(/an aggregate row needs role twin/);
     expect(withAggregates([{ aggregate: 'mean', role: 'mirror' }])).toMatch(/an aggregate row needs role twin/);
     for (const step of [{ native_step: 'PT1H' }, { expected_step: 'PT24H' }])

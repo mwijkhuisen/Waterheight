@@ -34499,12 +34499,251 @@
    "ts": "2003-03-09T23:50:00.000Z",
    "value": 491,
    "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-01-29T23:00:00.000Z",
+   "value": 491,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-01-30T23:00:00.000Z",
+   "value": 491,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-01-31T23:00:00.000Z",
+   "value": 491,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-01T23:00:00.000Z",
+   "value": 489,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-02T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-03T23:00:00.000Z",
+   "value": 487,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-04T23:00:00.000Z",
+   "value": 481,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-05T23:00:00.000Z",
+   "value": 479,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-06T23:00:00.000Z",
+   "value": 482,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-07T23:00:00.000Z",
+   "value": 489,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-08T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-09T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-10T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-11T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-12T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-13T23:00:00.000Z",
+   "value": 489,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-14T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-15T23:00:00.000Z",
+   "value": 489,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-16T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-17T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-18T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-19T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-20T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-21T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-22T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-23T23:00:00.000Z",
+   "value": 489,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-24T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-25T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-26T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-27T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-02-28T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-03-01T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-03-02T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-03-03T23:00:00.000Z",
+   "value": 491,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-03-04T23:00:00.000Z",
+   "value": 489,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-03-05T23:00:00.000Z",
+   "value": 489,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-03-06T23:00:00.000Z",
+   "value": 489,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-03-07T23:00:00.000Z",
+   "value": 489,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-03-08T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
+  },
+  {
+   "series": "lith.boven/WATHTE/NAP/other:F007/GEM24H",
+   "ts": "2003-03-09T23:00:00.000Z",
+   "value": 490,
+   "qc": 2
   }
  ],
  "gaugeZeros": [],
  "dropped": {
   "unknown_quality": 10,
-  "processed": 40,
   "outside_backfill": 1
  },
  "unknown": 0,

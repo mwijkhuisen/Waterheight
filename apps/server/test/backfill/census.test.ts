@@ -318,6 +318,7 @@ describe('backfill census', { timeout: 60_000 }, () => {
         last: '2004-03-09T23:50:00.000Z', // the last value inside the window; only the census output can say
         step: 'PT10M',
       }),
+      // #184 stage 2: the F216 history is a registered twin of Lobith Q now (its 4-part key carries the role).
       group({
         code: 'lobith.bovenrijn.tolkamer',
         quantity: 'Q',
@@ -325,6 +326,8 @@ describe('backfill census', { timeout: 60_000 }, () => {
         method: 'other:F216',
         bewerking: 'GEM24H',
         unit: 'm3/s',
+        role: 'twin',
+        audience: 'public',
         lists: 2, // 2010 and 2011 (the open window)
         values: 20,
         ok_values: 20,
@@ -340,6 +343,8 @@ describe('backfill census', { timeout: 60_000 }, () => {
         method: 'other:F216',
         bewerking: 'NVT',
         unit: 'm3/s',
+        role: 'twin',
+        audience: 'public',
         lists: 2,
         values: 2 * 241,
         ok_values: 2 * 241,
@@ -382,6 +387,19 @@ describe('backfill census', { timeout: 60_000 }, () => {
       }),
       // 26 midnights where the daily mean disagrees in 2003, 25 in 2004 (the edited one is now a gap value).
       { series: { key: LITH, restorable: 26 + 25, requalified: 1, orphan: 1 } },
+      // #184 stage 2: the daily means are the rows of their twins (40 a Lith chunk, 10 a Lobith Q chunk). The code
+      // before #184 merged the F216 daily mean into the F216 list, so the 10 hourly values a chunk at its stamps
+      // (23:00Z) were withheld as conflicts; now they are the F216 twin's rows.
+      { series: { key: `${LITH}/GEM24H`, restorable: 2 * 40, requalified: 0, orphan: 0 } },
+      { series: { key: 'lobith.bovenrijn.tolkamer/Q/NVT/other:F216', restorable: 2 * 10, requalified: 0, orphan: 0 } },
+      {
+        series: {
+          key: 'lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H',
+          restorable: 2 * 10,
+          requalified: 0,
+          orphan: 0,
+        },
+      },
       {
         totals: {
           spec: SPEC,
@@ -400,11 +418,17 @@ describe('backfill census', { timeout: 60_000 }, () => {
           withheld_lists: 0,
           values: 2 * 5801 + 2 * 251 + 2 * 265 + 40,
           processed_values: 2 * 40 + 2 * 10 + 265, // the hostile list's bewerking is not NVT either
-          restorable: 26 + 25,
+          restorable: 26 + 25 + 2 * 40 + 2 * 10 + 2 * 10,
           requalified: 1,
           orphan: 1,
           groups: 7,
-          expect: { lines: 12, n_new: 26 + 25 + 1, n_changed: 0, quarantined: 2, skipped: 2 },
+          expect: {
+            lines: 12,
+            n_new: 26 + 25 + 2 * 40 + 2 * 10 + 2 * 10 + 1,
+            n_changed: 0,
+            quarantined: 2,
+            skipped: 2,
+          },
         },
       },
     ]);
@@ -425,7 +449,14 @@ describe('backfill census', { timeout: 60_000 }, () => {
 
   it('restores nothing from a hostile location code', () => {
     expect(JSON.stringify(out)).not.toContain('"series":"?');
-    expect(out.filter((o) => (o as { series?: { key: string } }).series !== undefined)).toHaveLength(1);
+    // Every series line names a registered NL-1 key (the Lith series and the three twins above), none the hostile one.
+    const keys = out.flatMap((o) => {
+      const s = (o as { series?: { key: string } }).series;
+      return s === undefined ? [] : [s.key];
+    });
+    const registered = new Set(registryInput.stations.filter((s) => s.source === 'NL-1').map((s) => s.provider_key));
+    expect(keys).toHaveLength(4);
+    expect(keys.filter((k) => !registered.has(k))).toEqual([]);
   });
 });
 

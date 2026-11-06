@@ -494,8 +494,10 @@ const ALL_ADAPTERS: Readonly<Record<string, LoadAdapter>> = {
   },
   // Observations and, since P8a, the `verwachting` runs (nl-1-fc-*), since P16b the tide; the catalogue is not a
   // series payload. Version 2 (#213): an observation `scale` refuses is dropped on its instant, not quarantined.
+  // Version 3 (#184 stage 2): the history under another method and the daily means (GEM24H) load into their twin
+  // series, and Megen Q's mislabelled readings fill its instantaneous series (D-1).
   'NL-1': {
-    version: 2,
+    version: 3,
     specs: {
       'nl-1-fc-1h': nl1Forecasts,
       'nl-1-fc-3h-0': nl1Forecasts,

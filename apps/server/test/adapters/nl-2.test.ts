@@ -54,7 +54,7 @@ const napOrNvt = (key: string) => ['NAP', 'NVT'].includes(key.split('/')[2] ?? '
 const NL1 = new Map(
   StationsFile.parse(
     parseYaml(readFileSync(new URL('../../../../registry/stations/nl-1.yaml', import.meta.url), 'utf8')),
-  ).stations.map((r) => [r.provider_key, { key: r.provider_key, lon: r.lon, lat: r.lat }]),
+  ).stations.map((r) => [r.provider_key, { key: r.provider_key, lon: r.lon, lat: r.lat, role: r.role }]),
 );
 
 const collectionOf = (name: string) => parseCollection(rawFixture('NL-2', name).body);
@@ -143,9 +143,10 @@ describe('golden files (real payload)', () => {
     const rest = JSON.parse(readFileSync(goldenUrl('NL-1', 'nl-1-obs-key'), 'utf8')) as Normalised;
     expect(rest.obs.at(-1)).toMatchObject({ series: LOBITH_H, ts: '2026-09-29T13:20:00.000Z', value: 607 });
     // Every registered NAP or NVT key of NL-1 is in the NL-1 key format the snapshot yields (but the five that only
-    // the newer snapshot lists).
-    for (const key of NL1.keys()) {
-      if (napOrNvt(key) && !NEWER_SNAPSHOT.includes(key)) expect([key, at.has(key)]).toEqual([key, true]);
+    // the newer snapshot lists, and the #184 history twins, which no live snapshot lists).
+    for (const [key, r] of NL1) {
+      if (r.role !== 'twin' && napOrNvt(key) && !NEWER_SNAPSHOT.includes(key))
+        expect([key, at.has(key)]).toEqual([key, true]);
     }
   });
 });
@@ -453,7 +454,7 @@ describe('drift report (NL-1 registry)', () => {
     ]);
     // A registered row without a position is not compared.
     const unplaced = new Map(NL1);
-    unplaced.set(LOBITH_H, { key: LOBITH_H, lon: null, lat: null });
+    unplaced.set(LOBITH_H, { key: LOBITH_H, lon: null, lat: null, role: 'primary' });
     expect(driftReport(unplaced, replace(LOBITH_H, moved(f, lon + 1, lat))).changed).toEqual([]);
   });
 
@@ -466,8 +467,21 @@ describe('drift report (NL-1 registry)', () => {
     );
     expect(driftReport(NL1, replace(EIJSDEN_TAW, null)).vanished).toEqual(NEWER_SNAPSHOT);
     const empty = driftReport(NL1, collectionOf('nl-2-wfs-empty.synthetic'));
-    expect(empty.vanished).toEqual([...NL1.keys()].filter(napOrNvt).sort().slice(0, 200)); // the report caps at 200
+    expect(empty.vanished).toEqual(
+      [...NL1]
+        .filter(([k, r]) => r.role !== 'twin' && napOrNvt(k))
+        .map(([k]) => k)
+        .sort()
+        .slice(0, 200), // the report caps at 200
+    );
     expect(empty.vanished).not.toContain(EIJSDEN_TAW);
+  });
+
+  it('#184: a history twin (another method, a daily mean) never vanishes; its primary still does', () => {
+    const twins = ['lobith.bovenrijn.tolkamer/Q/NVT/other:F216', 'lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H'];
+    for (const key of twins) expect([key, NL1.get(key)?.role]).toEqual([key, 'twin']);
+    const lobith = new Map([LOBITH_Q, ...twins].map((k) => [k, NL1.get(k) as NonNullable<ReturnType<typeof NL1.get>>]));
+    expect(driftReport(lobith, collectionOf('nl-2-wfs-empty.synthetic')).vanished).toEqual([LOBITH_Q]);
   });
 
   it('only series of registered stations are reported; an inherited name is no station', () => {
@@ -491,8 +505,8 @@ describe('drift report (NL-1 registry)', () => {
       // Gone: registered, not listed. New: a live method of a registered station. Moved: listed twice, 1° away.
       const gone = `lobith.bovenrijn.tolkamer/WATHTE/NAP/gone:${n}`;
       const at = `moved.${n}/WATHTE/NAP/other:F007`;
-      registry.set(gone, { key: gone, lon: 0, lat: 0 });
-      registry.set(at, { key: at, lon: 6.1024, lat: 51.8495 });
+      registry.set(gone, { key: gone, lon: 0, lat: 0, role: 'primary' });
+      registry.set(at, { key: at, lon: 6.1024, lat: 51.8495, role: 'primary' });
       const away = moved(withCode(h, { CODE: `moved.${n}` }), 7.1024, 51.8495);
       features.push(withCode(h, { WAARDEBEPALINGSMETHODECODE: `new:${n}` }), away, away);
     }

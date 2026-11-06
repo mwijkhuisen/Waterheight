@@ -18,6 +18,7 @@ export function registryOf(source: string): Registry {
       value_kind: r.value_kind,
       native_step_ms: durationMs(r.native_step),
       expected_step_ms: durationMs(r.expected_step),
+      role: r.role,
     });
   }
   return out;

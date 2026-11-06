@@ -170,12 +170,22 @@ describe('the census predicts the replay (#184 stage 1)', { timeout: 120_000 }, 
       objects: 3,
       duplicate_lines: 1,
       duplicate_lines_differing: 0,
-      // Lith 2003: the 26 midnights where the daily mean differs; Lith 2004: the same 26 less the orphan.
-      restorable: 26 + 25,
+      // Lith 2003: the 26 midnights where the daily mean differs; Lith 2004: the same 26 less the orphan. #184 stage 2
+      // (the history twins registered): also the 40 daily means of each Lith object in the F007/GEM24H twin, and at
+      // Lobith 2010 the 10 daily means in the F216/GEM24H twin and the 10 hourly F216 values at 23:00Z that the old
+      // merge withheld as conflicts. The census still predicts a replay from the pre-#184 state.
+      restorable: 26 + 25 + 40 + 40 + 10 + 10,
       requalified: 1,
       orphan: 1,
     });
-    expect(totals.expect).toEqual({ lines: 7, n_new: 26 + 25 + 1, n_changed: 0, quarantined: 2, skipped: 1 });
+    expect(totals.expect).toEqual({ lines: 7, n_new: 151 + 1, n_changed: 0, quarantined: 2, skipped: 1 });
+    const LOBITH_F216 = 'lobith.bovenrijn.tolkamer/Q/NVT/other:F216';
+    for (const [key, restorable] of [
+      [`${LITH}/GEM24H`, 40 + 40],
+      [LOBITH_F216, 10],
+      [`${LOBITH_F216}/GEM24H`, 10],
+    ] as const)
+      expect(printed).toContainEqual({ series: { key, restorable, requalified: 0, orphan: 0 } });
     expect(printed).toContainEqual({
       orphan: { series: LITH, ts: new Date(edited.orphan.ts).toISOString(), value: edited.orphan.value },
     });
@@ -204,8 +214,9 @@ describe('the census predicts the replay (#184 stage 1)', { timeout: 120_000 }, 
       quarantined: r.quarantined,
       skipped: r.skipped,
     }).toEqual(totals.expect);
-    // Spelled out: 26 + 25 restored rows and the one requalified row, all backfill rows (so none counts as changed).
-    expect(r).toEqual({ lines: 7, loaded: 4, quarantined: 2, skipped: 1, n_new: 26 + 25 + 1, n_changed: 0 });
+    // Spelled out: 26 + 25 restored rows, the 100 twin rows of #184 stage 2 and the one requalified row, all backfill
+    // rows (so none counts as changed).
+    expect(r).toEqual({ lines: 7, loaded: 4, quarantined: 2, skipped: 1, n_new: 26 + 25 + 100 + 1, n_changed: 0 });
 
     // A replay never deletes: the orphan keeps the daily mean and its backfill bit.
     const orphan = await lithRow(edited.orphan.ts);

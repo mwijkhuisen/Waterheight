@@ -1,0 +1,17 @@
+{
+  "spec": "nl-1-backfill-obs",
+  "source": "NL-1",
+  "synthetic": false,
+  "from": "trimmed",
+  "recorded_at": "2026-11-06T07:57:38Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "bytes": 874066,
+  "request": {
+    "from": "2017-01-01",
+    "to": "2017-01-11"
+  },
+  "source_sha256": "9e3eefe60f7a2093f3cbcf1c537647066525874818595f054455c42c0ddbfa33",
+  "trimmed": "the measurements of every list with Tijdstip in [2017-01-01T00:00:00Z, 2017-01-03T00:00:00Z), JSON.stringify of the kept document (F230 beside the F216 history and its daily mean)"
+}

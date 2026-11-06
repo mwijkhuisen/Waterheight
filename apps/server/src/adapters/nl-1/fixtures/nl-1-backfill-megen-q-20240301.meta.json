@@ -1,0 +1,17 @@
+{
+  "spec": "nl-1-backfill-obs",
+  "source": "NL-1",
+  "synthetic": false,
+  "from": "trimmed",
+  "recorded_at": "2026-11-06T07:57:28Z",
+  "status": 200,
+  "content_type": "application/json",
+  "url": "https://ddapi20-waterwebservices.rijkswaterstaat.nl/ONLINEWAARNEMINGENSERVICES/OphalenWaarnemingen",
+  "bytes": 435232,
+  "request": {
+    "from": "2024-03-01",
+    "to": "2024-03-11"
+  },
+  "source_sha256": "0ca6689125b18232a6367f9af75c34fba7f0678c00aaf1019500a40a6d76a1b8",
+  "trimmed": "the measurements of every list with Tijdstip in [2024-03-01T00:00:00Z, 2024-03-03T00:00:00Z), JSON.stringify of the kept document (D-1: the 10-minute readings labelled GEM24H under F103, the F006 daily means at 11:00Z, no NVT list)"
+}

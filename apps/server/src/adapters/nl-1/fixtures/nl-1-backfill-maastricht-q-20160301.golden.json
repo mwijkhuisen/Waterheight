@@ -1,0 +1,35 @@
+{
+ "obs": [
+  {
+   "series": "maastricht.borgharen.maas.beneden/Q/NVT/other:F006/GEM24H",
+   "ts": "2016-03-01T11:00:00.000Z",
+   "value": 474.81,
+   "qc": 2
+  },
+  {
+   "series": "maastricht.borgharen.maas.beneden/Q/NVT/other:F006/GEM24H",
+   "ts": "2016-03-01T23:00:00.000Z",
+   "value": 451.4,
+   "qc": 2
+  },
+  {
+   "series": "maastricht.borgharen.maas.beneden/Q/NVT/other:F006/GEM24H",
+   "ts": "2016-03-02T11:00:00.000Z",
+   "value": 451.4,
+   "qc": 2
+  },
+  {
+   "series": "maastricht.borgharen.maas.beneden/Q/NVT/other:F006/GEM24H",
+   "ts": "2016-03-02T23:00:00.000Z",
+   "value": 485.46,
+   "qc": 2
+  }
+ ],
+ "gaugeZeros": [],
+ "dropped": {
+  "unknown_quality": 288
+ },
+ "unknown": 0,
+ "provider_values": 292,
+ "unknown_values": 0
+}

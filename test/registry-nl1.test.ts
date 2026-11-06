@@ -11,7 +11,17 @@ import {
   validateTwins,
 } from '../packages/contracts/src/index.ts';
 import { durationMs, EXTREME_WINDOW_MS } from '../packages/core/src/index.ts';
-import { evident, generate, type Inputs, OUTPUT, readInputs, WATERS } from '../scripts/gen-nl1-stations.ts';
+import {
+  CENSUS_SHA256,
+  evident,
+  generate,
+  historyCsv,
+  historyRows,
+  type Inputs,
+  OUTPUT,
+  readInputs,
+  WATERS,
+} from '../scripts/gen-nl1-stations.ts';
 import { locations } from '../scripts/rws-inventory.ts';
 import { repoRoot } from './catalogue.ts';
 
@@ -27,7 +37,17 @@ const twinsDoc = parse(readFileSync(`${repoRoot}registry/twins.yaml`, 'utf8')) a
   twins: { a: { source: string; provider_key: string }; b: { source: string; provider_key: string } }[];
 };
 
-const all = StationsFile.parse(parse(committed)).stations.filter((s): s is PublicStation => s.audience !== 'owner');
+const everything = StationsFile.parse(parse(committed)).stations.filter(
+  (s): s is PublicStation => s.audience !== 'owner',
+);
+// #184 stage 2: the history twins of registry/seed/nl-1-history.csv, by the key the generator gives them (tested in
+// their own block at the end). Every other block reads the rows without them.
+const HISTORY_GROOTHEID: Record<string, string> = { H: 'WATHTE', Q: 'Q' };
+const historyKeyOf = (h: Record<string, string>) =>
+  `${h.code}/${HISTORY_GROOTHEID[h.quantity ?? '']}/${h.hoedanigheid}/${h.method}${h.bewerking === 'NVT' ? '' : `/${h.bewerking}`}`;
+const HISTORY_KEYS = new Set(inputs.history.map(historyKeyOf));
+const history = everything.filter((r) => HISTORY_KEYS.has(r.provider_key));
+const all = everything.filter((r) => !HISTORY_KEYS.has(r.provider_key));
 // The roadmap-1 rows (P2b, P5a): the series of the seed tiers key, other and twin. P16b adds the sea, wide and slow
 // tiers and the structure-internal off rows; their tests are at the end of the file.
 const ROADMAP_SERIES = new Set(
@@ -596,5 +616,166 @@ describe('scripts/gen-nl1-stations.ts fails loudly', () => {
       fs.push(structuredClone(feature(fs, 'lobith.bovenrijn.tolkamer', 'Q', 'NVT')));
     });
     expect(duplicated()).toBe(committed);
+  });
+});
+
+describe('the history twins (#184 stage 2, registry/seed/nl-1-history.csv)', () => {
+  const seed = inputs.history;
+  const primaryOf = (r: PublicStation) => {
+    const p = all.find((x) => x.id === r.id && x.quantity === r.quantity && x.role === 'primary');
+    if (p === undefined) throw new Error(`${r.provider_key}: no primary of the station and quantity`);
+    return p;
+  };
+  const placed = (over: Record<string, string>) => [
+    {
+      code: 'lobith.bovenrijn.tolkamer',
+      quantity: 'Q',
+      hoedanigheid: 'NVT',
+      method: 'other:F216',
+      bewerking: 'NVT',
+      step: 'PT10M',
+      ...over,
+    },
+  ];
+
+  it('the seed names the census it was derived from and holds its 56 groups: 26 instantaneous, 30 daily means', () => {
+    expect(readFileSync(`${repoRoot}registry/seed/nl-1-history.csv`, 'utf8')).toContain(CENSUS_SHA256);
+    expect(seed).toHaveLength(56);
+    expect(seed.filter((h) => h.bewerking === 'NVT')).toHaveLength(26);
+    expect(seed.filter((h) => h.bewerking === 'GEM24H')).toHaveLength(30);
+    expect(HISTORY_KEYS.size).toBe(56);
+  });
+
+  it('are exactly the 56 seed keys, each once: four parts for another method, five for a daily mean', () => {
+    expect(history.map((r) => r.provider_key).sort()).toEqual([...HISTORY_KEYS].sort());
+    for (const r of history)
+      expect([r.provider_key, r.provider_key.split('/').length]).toEqual([
+        r.provider_key,
+        r.aggregate === undefined ? 4 : 5,
+      ]);
+    expect(everything).toHaveLength(all.length + 56);
+  });
+
+  it('are twins of tier 2, never first_release, public like their station, with no threshold and no forecast', () => {
+    for (const r of history)
+      expect([
+        r.provider_key,
+        r.role,
+        r.tier,
+        r.first_release,
+        r.audience,
+        r.expected_threshold_source,
+        r.expected_forecast_source,
+        r.staleness_limit,
+      ]).toEqual([r.provider_key, 'twin', 2, false, 'public', null, null, 'P1D']);
+  });
+
+  it('copy their station from its primary row of the same id and quantity (the registry sync needs one station)', () => {
+    const station = (r: PublicStation) =>
+      JSON.stringify([
+        r.source,
+        r.provider_code,
+        r.name,
+        r.water_name,
+        r.country,
+        r.lon,
+        r.lat,
+        r.river,
+        r.km,
+        r.flags,
+        r.native_unit,
+        r.to_canonical,
+        r.value_kind,
+        r.datum,
+        r.licence_gate,
+        r.audience,
+      ]);
+    for (const r of history) expect([r.provider_key, station(r)]).toEqual([r.provider_key, station(primaryOf(r))]);
+    // Never the primary's own key: an instantaneous twin is under another method.
+    for (const r of history.filter((x) => x.aggregate === undefined))
+      expect(r.provider_key).not.toBe(primaryOf(r).provider_key);
+  });
+
+  it('a daily mean is an aggregate mean of P1D; an instantaneous twin keeps the census step', () => {
+    for (const r of history) {
+      const h = seed.find((x) => historyKeyOf(x) === r.provider_key) as Record<string, string>;
+      const step = h.bewerking === 'GEM24H' ? 'P1D' : h.step;
+      expect([r.provider_key, r.aggregate, r.native_step, r.expected_step]).toEqual([
+        r.provider_key,
+        h.bewerking === 'GEM24H' ? 'mean' : undefined,
+        step,
+        step,
+      ]);
+    }
+    // The census's only sub-daily GEM24H group is Megen F103, the mislabel of D-1.
+    expect(seed.filter((h) => h.bewerking === 'GEM24H' && h.step !== 'P1D').map(historyKeyOf)).toEqual([
+      'megen.maas/Q/NVT/other:F103/GEM24H',
+    ]);
+  });
+
+  it('the generator stops on a history row it cannot place', () => {
+    expect(() => run({ history: placed({}) })).not.toThrow();
+    expect(() => run({ history: placed({ bewerking: 'GEM12H' }) })).toThrow(/unknown WaardeBewerkingsMethode/);
+    expect(() => run({ history: placed({ code: 'nowhere' }) })).toThrow(/no public primary series/);
+    expect(() => run({ history: placed({ method: 'F216' }) })).toThrow(/not a method code/);
+    expect(() => run({ history: placed({ hoedanigheid: 'TAW' }) })).toThrow(/Hoedanigheid other than NVT/);
+    expect(() => run({ history: placed({ step: 'PT5M' }) })).toThrow(/unknown step/);
+    // An instantaneous twin under the primary's own method would be the primary again.
+    expect(() => run({ history: placed({ method: 'other:F230' }) })).toThrow(/the primary's own method/);
+    // A daily mean with a sub-daily step, other than the named Megen exception.
+    expect(() => run({ history: placed({ bewerking: 'GEM24H' }) })).toThrow(/a daily mean with step PT10M/);
+    // A station whose series is stale at the provider has no primary row, so no twin either.
+    const stale = placed({ code: 'westervoort.ijsselkop', method: 'other:F230', bewerking: 'GEM24H', step: 'P1D' });
+    expect(() => run({ history: stale })).toThrow(/no public primary series/);
+  });
+});
+
+describe('the census reader (gen-nl1-stations.ts --history)', () => {
+  const group = (over: Record<string, unknown>) =>
+    JSON.stringify({
+      group: {
+        code: 'lith.boven',
+        quantity: 'WATHTE',
+        hoedanigheid: 'NAP',
+        method: 'other:F001',
+        bewerking: 'NVT',
+        unit: 'cm',
+        role: null,
+        audience: null,
+        step: 'PT1H',
+        ...over,
+      },
+    });
+
+  it('keeps the unregistered instantaneous groups and every processed group, never a registered series', () => {
+    const olst = { code: 'olst', quantity: 'Q', hoedanigheid: 'NVT', unit: 'm3/s', method: 'other:F006' };
+    const census = [
+      JSON.stringify({ orphan: { series: 'x', ts: '2020-01-01T00:00:00.000Z', value: 1 } }),
+      group({}),
+      group({ method: 'other:F007', role: 'primary', audience: 'public', step: 'PT10M' }),
+      group({ method: 'other:F007', role: 'primary', audience: 'public', bewerking: 'GEM24H', step: 'P1D' }),
+      group({ ...olst, bewerking: 'GEM24H', step: 'P1D' }),
+      JSON.stringify({ totals: { groups: 4 } }),
+      '',
+    ].join('\n');
+    expect(
+      historyCsv(historyRows(census))
+        .split('\n')
+        .filter((l) => l !== '' && !l.startsWith('#')),
+    ).toEqual([
+      'code,quantity,hoedanigheid,method,bewerking,step',
+      'lith.boven,H,NAP,other:F001,NVT,PT1H',
+      'lith.boven,H,NAP,other:F007,GEM24H,P1D',
+      'olst,Q,NVT,other:F006,GEM24H,P1D',
+    ]);
+  });
+
+  it('stops on a field it does not know (the census is untrusted data)', () => {
+    expect(() => historyRows(group({ code: 'Lith Boven' }))).toThrow(/code is not a known code/);
+    expect(() => historyRows(group({ method: 'other:F001,x' }))).toThrow(/method is not a known code/);
+    expect(() => historyRows(group({ unit: 'm3/s' }))).toThrow(/datum or unit unexpected/);
+    expect(() => historyRows(group({ quantity: 'WINDRTG' }))).toThrow(/quantity is not WATHTE or Q/);
+    expect(() => historyRows(group({ role: 'twin' }))).toThrow(/role is neither null nor primary/);
+    expect(() => historyRows(group({ step: null }))).toThrow(/step is not a known code/);
   });
 });

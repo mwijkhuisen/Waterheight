@@ -1,10 +1,1514 @@
 {
- "obs": [],
+ "obs": [
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H",
+   "ts": "2010-01-01T23:00:00.000Z",
+   "value": 4035,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H",
+   "ts": "2010-01-02T23:00:00.000Z",
+   "value": 4507,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H",
+   "ts": "2010-01-03T23:00:00.000Z",
+   "value": 4611,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H",
+   "ts": "2010-01-04T23:00:00.000Z",
+   "value": 4347,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H",
+   "ts": "2010-01-05T23:00:00.000Z",
+   "value": 3884,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H",
+   "ts": "2010-01-06T23:00:00.000Z",
+   "value": 3362,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H",
+   "ts": "2010-01-07T23:00:00.000Z",
+   "value": 2973,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H",
+   "ts": "2010-01-08T23:00:00.000Z",
+   "value": 2706,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H",
+   "ts": "2010-01-09T23:00:00.000Z",
+   "value": 2497,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216/GEM24H",
+   "ts": "2010-01-10T23:00:00.000Z",
+   "value": 2322,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T00:00:00.000Z",
+   "value": 3314,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T01:00:00.000Z",
+   "value": 3322,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T02:00:00.000Z",
+   "value": 3353,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T03:00:00.000Z",
+   "value": 3376,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T04:00:00.000Z",
+   "value": 3392,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T05:00:00.000Z",
+   "value": 3408,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T06:00:00.000Z",
+   "value": 3425,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T07:00:00.000Z",
+   "value": 3441,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T08:00:00.000Z",
+   "value": 3473,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T09:00:00.000Z",
+   "value": 3522,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T10:00:00.000Z",
+   "value": 3523,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T11:00:00.000Z",
+   "value": 3556,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T12:00:00.000Z",
+   "value": 3565,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T13:00:00.000Z",
+   "value": 3582,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T14:00:00.000Z",
+   "value": 3607,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T15:00:00.000Z",
+   "value": 3633,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T16:00:00.000Z",
+   "value": 3650,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T17:00:00.000Z",
+   "value": 3660,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T18:00:00.000Z",
+   "value": 3677,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T19:00:00.000Z",
+   "value": 3704,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T20:00:00.000Z",
+   "value": 3721,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T21:00:00.000Z",
+   "value": 3739,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T22:00:00.000Z",
+   "value": 3757,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-01T23:00:00.000Z",
+   "value": 3784,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T00:00:00.000Z",
+   "value": 3802,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T01:00:00.000Z",
+   "value": 3820,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T02:00:00.000Z",
+   "value": 3838,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T03:00:00.000Z",
+   "value": 3848,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T04:00:00.000Z",
+   "value": 3866,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T05:00:00.000Z",
+   "value": 3884,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T06:00:00.000Z",
+   "value": 3921,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T07:00:00.000Z",
+   "value": 3939,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T08:00:00.000Z",
+   "value": 3958,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T09:00:00.000Z",
+   "value": 3995,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T10:00:00.000Z",
+   "value": 4023,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T11:00:00.000Z",
+   "value": 4060,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T12:00:00.000Z",
+   "value": 4061,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T13:00:00.000Z",
+   "value": 4090,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T14:00:00.000Z",
+   "value": 4118,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T15:00:00.000Z",
+   "value": 4129,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T16:00:00.000Z",
+   "value": 4176,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T17:00:00.000Z",
+   "value": 4186,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T18:00:00.000Z",
+   "value": 4216,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T19:00:00.000Z",
+   "value": 4254,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T20:00:00.000Z",
+   "value": 4265,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T21:00:00.000Z",
+   "value": 4285,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T22:00:00.000Z",
+   "value": 4315,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-02T23:00:00.000Z",
+   "value": 4326,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T00:00:00.000Z",
+   "value": 4346,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T01:00:00.000Z",
+   "value": 4366,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T02:00:00.000Z",
+   "value": 4396,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T03:00:00.000Z",
+   "value": 4417,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T04:00:00.000Z",
+   "value": 4437,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T05:00:00.000Z",
+   "value": 4438,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T06:00:00.000Z",
+   "value": 4449,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T07:00:00.000Z",
+   "value": 4469,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T08:00:00.000Z",
+   "value": 4490,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T09:00:00.000Z",
+   "value": 4520,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T10:00:00.000Z",
+   "value": 4520,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T11:00:00.000Z",
+   "value": 4521,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T12:00:00.000Z",
+   "value": 4542,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T13:00:00.000Z",
+   "value": 4542,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T14:00:00.000Z",
+   "value": 4573,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T15:00:00.000Z",
+   "value": 4583,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T16:00:00.000Z",
+   "value": 4584,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T17:00:00.000Z",
+   "value": 4615,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T18:00:00.000Z",
+   "value": 4595,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T19:00:00.000Z",
+   "value": 4605,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T20:00:00.000Z",
+   "value": 4616,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T21:00:00.000Z",
+   "value": 4596,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T22:00:00.000Z",
+   "value": 4616,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-03T23:00:00.000Z",
+   "value": 4627,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T00:00:00.000Z",
+   "value": 4617,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T01:00:00.000Z",
+   "value": 4637,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T02:00:00.000Z",
+   "value": 4627,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T03:00:00.000Z",
+   "value": 4638,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T04:00:00.000Z",
+   "value": 4638,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T05:00:00.000Z",
+   "value": 4648,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T06:00:00.000Z",
+   "value": 4648,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T07:00:00.000Z",
+   "value": 4638,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T08:00:00.000Z",
+   "value": 4638,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T09:00:00.000Z",
+   "value": 4649,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T10:00:00.000Z",
+   "value": 4628,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T11:00:00.000Z",
+   "value": 4628,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T12:00:00.000Z",
+   "value": 4628,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T13:00:00.000Z",
+   "value": 4598,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T14:00:00.000Z",
+   "value": 4608,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T15:00:00.000Z",
+   "value": 4608,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T16:00:00.000Z",
+   "value": 4587,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T17:00:00.000Z",
+   "value": 4597,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T18:00:00.000Z",
+   "value": 4577,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T19:00:00.000Z",
+   "value": 4577,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T20:00:00.000Z",
+   "value": 4566,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T21:00:00.000Z",
+   "value": 4525,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T22:00:00.000Z",
+   "value": 4536,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-04T23:00:00.000Z",
+   "value": 4515,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T00:00:00.000Z",
+   "value": 4505,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T01:00:00.000Z",
+   "value": 4484,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T02:00:00.000Z",
+   "value": 4484,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T03:00:00.000Z",
+   "value": 4474,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T04:00:00.000Z",
+   "value": 4464,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T05:00:00.000Z",
+   "value": 4444,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T06:00:00.000Z",
+   "value": 4423,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T07:00:00.000Z",
+   "value": 4393,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T08:00:00.000Z",
+   "value": 4383,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T09:00:00.000Z",
+   "value": 4383,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T10:00:00.000Z",
+   "value": 4393,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T11:00:00.000Z",
+   "value": 4373,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T12:00:00.000Z",
+   "value": 4343,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T13:00:00.000Z",
+   "value": 4313,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T14:00:00.000Z",
+   "value": 4274,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T15:00:00.000Z",
+   "value": 4273,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T16:00:00.000Z",
+   "value": 4254,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T17:00:00.000Z",
+   "value": 4234,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T18:00:00.000Z",
+   "value": 4214,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T19:00:00.000Z",
+   "value": 4205,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T20:00:00.000Z",
+   "value": 4185,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T21:00:00.000Z",
+   "value": 4166,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T22:00:00.000Z",
+   "value": 4146,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-05T23:00:00.000Z",
+   "value": 4117,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T00:00:00.000Z",
+   "value": 4117,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T01:00:00.000Z",
+   "value": 4079,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T02:00:00.000Z",
+   "value": 4060,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T03:00:00.000Z",
+   "value": 4060,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T04:00:00.000Z",
+   "value": 4012,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T05:00:00.000Z",
+   "value": 4003,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T06:00:00.000Z",
+   "value": 3984,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T07:00:00.000Z",
+   "value": 3956,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T08:00:00.000Z",
+   "value": 3928,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T09:00:00.000Z",
+   "value": 3928,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T10:00:00.000Z",
+   "value": 3909,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T11:00:00.000Z",
+   "value": 3873,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T12:00:00.000Z",
+   "value": 3863,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T13:00:00.000Z",
+   "value": 3818,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T14:00:00.000Z",
+   "value": 3800,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T15:00:00.000Z",
+   "value": 3773,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T16:00:00.000Z",
+   "value": 3773,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T17:00:00.000Z",
+   "value": 3746,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T18:00:00.000Z",
+   "value": 3728,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T19:00:00.000Z",
+   "value": 3719,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T20:00:00.000Z",
+   "value": 3675,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T21:00:00.000Z",
+   "value": 3666,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T22:00:00.000Z",
+   "value": 3631,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-06T23:00:00.000Z",
+   "value": 3596,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T00:00:00.000Z",
+   "value": 3588,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T01:00:00.000Z",
+   "value": 3554,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T02:00:00.000Z",
+   "value": 3545,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T03:00:00.000Z",
+   "value": 3503,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T04:00:00.000Z",
+   "value": 3503,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T05:00:00.000Z",
+   "value": 3478,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T06:00:00.000Z",
+   "value": 3461,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T07:00:00.000Z",
+   "value": 3461,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T08:00:00.000Z",
+   "value": 3420,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T09:00:00.000Z",
+   "value": 3379,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T10:00:00.000Z",
+   "value": 3362,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T11:00:00.000Z",
+   "value": 3346,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T12:00:00.000Z",
+   "value": 3322,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T13:00:00.000Z",
+   "value": 3323,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T14:00:00.000Z",
+   "value": 3307,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T15:00:00.000Z",
+   "value": 3259,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T16:00:00.000Z",
+   "value": 3251,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T17:00:00.000Z",
+   "value": 3220,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T18:00:00.000Z",
+   "value": 3205,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T19:00:00.000Z",
+   "value": 3190,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T20:00:00.000Z",
+   "value": 3161,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T21:00:00.000Z",
+   "value": 3139,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T22:00:00.000Z",
+   "value": 3124,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-07T23:00:00.000Z",
+   "value": 3102,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T00:00:00.000Z",
+   "value": 3111,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T01:00:00.000Z",
+   "value": 3089,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T02:00:00.000Z",
+   "value": 3074,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T03:00:00.000Z",
+   "value": 3068,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T04:00:00.000Z",
+   "value": 3031,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T05:00:00.000Z",
+   "value": 3024,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T06:00:00.000Z",
+   "value": 3024,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T07:00:00.000Z",
+   "value": 3010,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T08:00:00.000Z",
+   "value": 3003,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T09:00:00.000Z",
+   "value": 2989,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T10:00:00.000Z",
+   "value": 2982,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T11:00:00.000Z",
+   "value": 2953,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T12:00:00.000Z",
+   "value": 2953,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T13:00:00.000Z",
+   "value": 2953,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T14:00:00.000Z",
+   "value": 2932,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T15:00:00.000Z",
+   "value": 2925,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T16:00:00.000Z",
+   "value": 2903,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T17:00:00.000Z",
+   "value": 2925,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T18:00:00.000Z",
+   "value": 2897,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T19:00:00.000Z",
+   "value": 2868,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T20:00:00.000Z",
+   "value": 2854,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T21:00:00.000Z",
+   "value": 2833,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T22:00:00.000Z",
+   "value": 2840,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-08T23:00:00.000Z",
+   "value": 2819,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T00:00:00.000Z",
+   "value": 2819,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T01:00:00.000Z",
+   "value": 2798,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T02:00:00.000Z",
+   "value": 2791,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T03:00:00.000Z",
+   "value": 2784,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T04:00:00.000Z",
+   "value": 2777,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T05:00:00.000Z",
+   "value": 2764,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T06:00:00.000Z",
+   "value": 2757,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T07:00:00.000Z",
+   "value": 2743,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T08:00:00.000Z",
+   "value": 2722,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T09:00:00.000Z",
+   "value": 2708,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T10:00:00.000Z",
+   "value": 2701,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T11:00:00.000Z",
+   "value": 2674,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T12:00:00.000Z",
+   "value": 2688,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T13:00:00.000Z",
+   "value": 2674,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T14:00:00.000Z",
+   "value": 2667,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T15:00:00.000Z",
+   "value": 2660,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T16:00:00.000Z",
+   "value": 2647,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T17:00:00.000Z",
+   "value": 2647,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T18:00:00.000Z",
+   "value": 2654,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T19:00:00.000Z",
+   "value": 2626,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T20:00:00.000Z",
+   "value": 2619,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T21:00:00.000Z",
+   "value": 2613,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T22:00:00.000Z",
+   "value": 2599,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-09T23:00:00.000Z",
+   "value": 2592,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T00:00:00.000Z",
+   "value": 2572,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T01:00:00.000Z",
+   "value": 2579,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T02:00:00.000Z",
+   "value": 2545,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T03:00:00.000Z",
+   "value": 2545,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T04:00:00.000Z",
+   "value": 2545,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T05:00:00.000Z",
+   "value": 2532,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T06:00:00.000Z",
+   "value": 2525,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T07:00:00.000Z",
+   "value": 2505,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T08:00:00.000Z",
+   "value": 2512,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T09:00:00.000Z",
+   "value": 2505,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T10:00:00.000Z",
+   "value": 2505,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T11:00:00.000Z",
+   "value": 2505,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T12:00:00.000Z",
+   "value": 2492,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T13:00:00.000Z",
+   "value": 2472,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T14:00:00.000Z",
+   "value": 2465,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T15:00:00.000Z",
+   "value": 2458,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T16:00:00.000Z",
+   "value": 2452,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T17:00:00.000Z",
+   "value": 2452,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T18:00:00.000Z",
+   "value": 2445,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T19:00:00.000Z",
+   "value": 2439,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T20:00:00.000Z",
+   "value": 2445,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T21:00:00.000Z",
+   "value": 2425,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T22:00:00.000Z",
+   "value": 2419,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-10T23:00:00.000Z",
+   "value": 2412,
+   "qc": 2
+  },
+  {
+   "series": "lobith.bovenrijn.tolkamer/Q/NVT/other:F216",
+   "ts": "2010-01-11T00:00:00.000Z",
+   "value": 2412,
+   "qc": 2
+  }
+ ],
  "gaugeZeros": [],
- "dropped": {
-  "processed": 10,
-  "unregistered_method": 241
- },
+ "dropped": {},
  "unknown": 0,
  "provider_values": 251,
  "unknown_values": 0

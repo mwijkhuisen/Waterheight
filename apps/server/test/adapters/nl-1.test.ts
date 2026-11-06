@@ -3,7 +3,7 @@ import { type Normalised, ObsRow, QC, SchemaDrift, scalable, scale } from '@rws/
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import { coverage } from '../../src/adapters/nl-1/capture.ts';
-import { type Context, normalise, STALE_SERIES } from '../../src/adapters/nl-1/normalise.ts';
+import { type Context, MISLABELLED, normalise, STALE_SERIES } from '../../src/adapters/nl-1/normalise.ts';
 import { JSON_CAPS, parseWaarnemingen, type Waarnemingen } from '../../src/adapters/nl-1/parse.ts';
 import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 
@@ -12,9 +12,11 @@ import { goldenUrl, rawFixture, registryOf } from './registry.ts';
 // golden change is reviewed like code.
 
 const registry = registryOf('NL-1');
-/** The registered key of a `<code>/<Grootheid>/<Hoedanigheid>`: its method is the registry's to state. */
+/** The registered key of a `<code>/<Grootheid>/<Hoedanigheid>`: its method is the registry's to state (twins aside). */
 const keyOf = (combination: string): string => {
-  const keys = [...registry.keys()].filter((k) => k.startsWith(`${combination}/`));
+  const keys = [...registry]
+    .filter(([k, decl]) => decl.role !== 'twin' && k.startsWith(`${combination}/`))
+    .map(([k]) => k);
   if (keys.length !== 1) throw new Error(`${combination}: ${keys.length} registered series`);
   return keys[0] as string;
 };
@@ -223,7 +225,11 @@ describe('synthetic payloads [U]', () => {
       { series: EIJSDEN_Q, ts: '2026-09-30T13:50:00.000Z', value: 47.6, qc: QC.RAW },
       { series: EIJSDEN_Q, ts: '2026-09-30T14:00:00.000Z', value: 47.9, qc: QC.VALIDATED },
     ]);
-    expect(out.obs).toHaveLength(16);
+    // #184 stage 2: the Eijsden F001 list is the history twin of that method now (its 2 values load there).
+    expect(out.obs.filter((r) => r.series === 'eijsden.grens/WATHTE/NAP/other:F001').map((r) => r.value)).toEqual([
+      4410, 4411,
+    ]);
+    expect(out.obs).toHaveLength(18);
     expect(out.dropped).toEqual({
       duplicate: 2,
       gap: 1,
@@ -231,8 +237,9 @@ describe('synthetic payloads [U]', () => {
       conflict: 3,
       future: 1,
       too_old: 1,
-      // 2 Eijsden values, and (since P5a registers maaseik Q with its live method F006) the 2 F103 maaseik values.
-      unregistered_method: 4,
+      // Since P5a registers maaseik Q with its live method F006, the 2 F103 maaseik values (the 2 Eijsden F001 values
+      // were counted here until #184 stage 2 registered that method's history as a twin).
+      unregistered_method: 2,
       datum: 2,
       // The verwachting (2 values), GETETM2 (1) and BS (1) lists are under the registered Eijsden NAP key.
       registered_dropped: 4,
@@ -376,29 +383,49 @@ describe('rules', () => {
     expect(out).toEqual({ obs: [], gaugeZeros: [], dropped: { unregistered_method: 17 }, unknown: 0 });
   });
 
-  it('#184: a processed list (the daily mean GEM24H) of a series we store is counted as processed and never merged', () => {
+  it('#184: a processed list (the daily mean GEM24H) is its `<key>/GEM24H` twin where the registry holds one, else processed; it never merges', () => {
     const gem = { WaardeBewerkingsMethode: 'GEM24H' };
     const nvtOnly = normalise(eijsden, base);
     expect(nvtOnly.obs).toHaveLength(17);
-    // (i) A GEM24H copy of the registered series' list, before or after it: 17 processed, the rows are the NVT ones.
+    const TWIN = `${EIJSDEN_NAP}/GEM24H`;
+    expect(registry.get(TWIN)?.role).toBe('twin');
+    const without = { ...base, registry: new Map([...registry].filter(([k]) => k !== TWIN)) };
+    // (i) A GEM24H copy of the registered series' list, before or after it: the series' rows are the NVT ones; the
+    // copy's 17 values are the twin's rows (stage 2), or 17 processed without the twin (stage 1).
     const mean = recode(eijsden, 'eijsden.grens', gem);
     for (const order of [
       [...eijsden, ...mean],
       [...mean, ...eijsden],
     ]) {
       const out = normalise(order, base);
-      expect(out.obs).toEqual(nvtOnly.obs);
-      expect(out.dropped).toEqual({ processed: 17 });
-      expect(out.unknown).toBe(0);
+      expect(out.obs.filter((r) => r.series === EIJSDEN_NAP)).toEqual(nvtOnly.obs);
+      expect(out.obs.filter((r) => r.series === TWIN).map((r) => [r.ts, r.value])).toEqual(
+        nvtOnly.obs.map((r) => [r.ts, r.value]),
+      );
+      expect(out.dropped).toEqual({});
+      const counted = normalise(order, without);
+      expect(counted.obs).toEqual(nvtOnly.obs);
+      expect(counted.dropped).toEqual({ processed: 17 });
+      expect(counted.unknown).toBe(0);
     }
-    expect(normalise(mean, base)).toEqual({ obs: [], gaugeZeros: [], dropped: { processed: 17 }, unknown: 0 });
-    // (ii) Under another method of a registered combination (Lobith Q is F230 here): processed, not unregistered_method.
+    expect(normalise(mean, without)).toEqual({ obs: [], gaugeZeros: [], dropped: { processed: 17 }, unknown: 0 });
+    // Any other processing has no twin: processed.
+    const max = recode(eijsden, 'eijsden.grens', { WaardeBewerkingsMethode: 'MAX24H' });
+    expect(normalise(max, base)).toEqual({ obs: [], gaugeZeros: [], dropped: { processed: 17 }, unknown: 0 });
+    // (ii) Under another method of a registered combination (Lobith Q is F230 here): the F216 history and its daily
+    // mean are twins of their own (stage 2); a method without a twin stays unregistered_method, its mean processed.
     const q = lists('nl-1-obs-other-lobith-bovenrijn-tolkamer-q');
     const at = ctx('nl-1-obs-other-lobith-bovenrijn-tolkamer-q');
     const lobith = 'lobith.bovenrijn.tolkamer';
+    const series = (out: Normalised) => [...new Set(out.obs.map((r) => r.series))];
     const f216 = { WaardeBepalingsMethode: 'other:F216' };
-    expect(normalise(recode(q, lobith, f216), at).dropped).toEqual({ unregistered_method: 35 });
-    expect(normalise(recode(q, lobith, { ...f216, ...gem }), at).dropped).toEqual({ processed: 35 });
+    const asF216 = normalise(recode(q, lobith, f216), at);
+    expect([series(asF216), asF216.obs.length, asF216.dropped]).toEqual([[`${lobith}/Q/NVT/other:F216`], 35, {}]);
+    const asF216Mean = normalise(recode(q, lobith, { ...f216, ...gem }), at);
+    expect([series(asF216Mean), asF216Mean.obs.length]).toEqual([[`${lobith}/Q/NVT/other:F216/GEM24H`], 35]);
+    const f155 = { WaardeBepalingsMethode: 'other:F155' };
+    expect(normalise(recode(q, lobith, f155), at).dropped).toEqual({ unregistered_method: 35 });
+    expect(normalise(recode(q, lobith, { ...f155, ...gem }), at).dropped).toEqual({ processed: 35 });
     // (iii) A combination the registry does not hold keeps its old reading: unknown, never processed.
     expect(normalise(recode(eijsden, 'nowhere', gem), base)).toEqual({
       obs: [],
@@ -599,6 +626,121 @@ describe('bounded parsing', () => {
   });
 });
 
+describe('#184 D-1: Megen Q readings labelled GEM24H (MISLABELLED)', () => {
+  const name = 'nl-1-backfill-megen-q-20231228';
+  const meg = lists(name);
+  const at: Context = { ...ctx(name), maxAgeMs: null };
+  const is = (l: Waarnemingen, method: string, bewerking: string) =>
+    l.aquo.WaardeBepalingsMethode.Code === method && l.aquo.WaardeBewerkingsMethode.Code === bewerking;
+  const readings = meg.find((l) => is(l, 'other:F103', 'GEM24H') && l.metingen.length > 2) as Waarnemingen;
+  const means = meg.find((l) => is(l, 'other:F103', 'GEM24H') && l.metingen.length === 2) as Waarnemingen;
+  const nvt = meg.find((l) => is(l, 'other:F103', 'NVT')) as Waarnemingen;
+  const MEGEN = MISLABELLED.key;
+  const MEAN = `${MEGEN}/GEM24H`;
+  const rowsOf = (out: Normalised, key: string) => out.obs.filter((r) => r.series === key);
+  const DAY = 86_400_000;
+
+  it('names one key and one bewerking', () => {
+    expect(MISLABELLED).toEqual({ key: 'megen.maas/Q/NVT/other:F103', bewerking: 'GEM24H' });
+    expect([readings.metingen.length, means.metingen.length, nvt.metingen.length]).toEqual([150, 2, 66]);
+  });
+
+  it('the readings fill the series and the daily means go to their twin, in any list order', () => {
+    for (const order of [
+      [readings, means, nvt],
+      [nvt, means, readings],
+      [means, readings, nvt],
+    ]) {
+      const out = normalise(order, at);
+      expect(rowsOf(out, MEGEN)).toHaveLength(66 + 150);
+      expect(rowsOf(out, MEAN).map((r) => r.ts)).toEqual(['2023-12-30T23:00:00.000Z', '2023-12-31T23:00:00.000Z']);
+      expect(out.dropped).toEqual({});
+    }
+  });
+
+  it('the same readings under another key, or under another bewerking, are never an instantaneous series', () => {
+    // Hagestein Q F103 has a daily-mean twin: the readings go there, as their label says.
+    const elsewhere = normalise(recode([readings], 'hagestein.boven'), at);
+    expect(rowsOf(elsewhere, 'hagestein.boven/Q/NVT/other:F103')).toEqual([]);
+    expect(rowsOf(elsewhere, 'hagestein.boven/Q/NVT/other:F103/GEM24H')).toHaveLength(150);
+    const max = normalise(recode([readings], 'megen.maas', { WaardeBewerkingsMethode: 'MAX24H' }), at);
+    expect([max.obs, max.dropped]).toEqual([[], { processed: 150 }]);
+  });
+
+  it("a reading never replaces or contests a value of the series' own lists: theirs wins, the reading counts mislabelled_held", () => {
+    // A labelled list that states the first three reading instants with other values, before or after the readings.
+    const labelled: Waarnemingen = {
+      ...nvt,
+      metingen: readings.metingen.slice(0, 3).map((m) => ({
+        ...m,
+        Meetwaarde: { ...m.Meetwaarde, Waarde_Numeriek: m.Meetwaarde.Waarde_Numeriek + 1 },
+        WaarnemingMetadata: { ...m.WaarnemingMetadata, Statuswaarde: 'Gecontroleerd' as const },
+      })),
+    };
+    for (const order of [
+      [readings, labelled],
+      [labelled, readings],
+    ]) {
+      const out = normalise(order, at);
+      const got = rowsOf(out, MEGEN);
+      expect(got).toHaveLength(150);
+      for (const m of labelled.metingen)
+        expect(got.find((r) => Date.parse(r.ts) === Date.parse(m.Tijdstip))).toMatchObject({
+          value: m.Meetwaarde.Waarde_Numeriek,
+          qc: QC.VALIDATED,
+        });
+      expect(out.dropped).toEqual({ mislabelled_held: 3 });
+    }
+  });
+
+  it('splits one list per value by the step to its nearest instant: daily means, then readings, a hole, readings', () => {
+    const t0 = Date.parse('2023-12-26T23:00:00Z');
+    const template = readings.metingen[0] as Waarnemingen['metingen'][number];
+    const value = (ms: number, v: number) => ({
+      ...template,
+      Tijdstip: `${new Date(ms + 3_600_000).toISOString().slice(0, 23)}+01:00`,
+      Meetwaarde: { Waarde_Alfanumeriek: String(v), Waarde_Numeriek: v },
+    });
+    // As at the real boundary, the readings start on the next daily stamp; after them a hole of two days, then more
+    // readings: the first value after the hole is a reading by its successor.
+    const mixed: Waarnemingen = {
+      ...readings,
+      metingen: [
+        value(t0, 900),
+        value(t0 + DAY, 901),
+        value(t0 + 2 * DAY, 902),
+        value(t0 + 3 * DAY, 903),
+        value(t0 + 3 * DAY + 600_000, 904),
+        value(t0 + 5 * DAY + 600_000, 905),
+        value(t0 + 5 * DAY + 1_200_000, 906),
+      ],
+    };
+    const out = normalise([mixed], at);
+    expect(rowsOf(out, MEAN).map((r) => r.value)).toEqual([900, 901, 902]);
+    expect(rowsOf(out, MEGEN).map((r) => r.value)).toEqual([903, 904, 905, 906]);
+    // A lone value, or two values a day apart, have no sub-daily step: they are the means they are labelled as.
+    expect(rowsOf(normalise([{ ...readings, metingen: [value(t0, 900)] }], at), MEAN)).toHaveLength(1);
+    const daily = normalise([{ ...readings, metingen: [value(t0, 900), value(t0 + DAY, 901)] }], at);
+    expect([rowsOf(daily, MEAN).length, rowsOf(daily, MEGEN).length]).toEqual([2, 0]);
+  });
+
+  it('a mean and a reading on one instant of one list are one instant: both readings, withheld as conflict (KG-500)', () => {
+    // If RWS validated the readings, the two lists could become one (today only Statuswaarde keeps them apart): both
+    // daily means of the chunk share their instants (2023-12-30T23:00Z, 2023-12-31T23:00Z) with readings. Such an
+    // instant is withheld, never guessed; a replay never deletes what an earlier load stored.
+    const shared = means.metingen[1] as Waarnemingen['metingen'][number];
+    const reading = readings.metingen.find((m) => Date.parse(m.Tijdstip) === Date.parse(shared.Tijdstip));
+    expect(reading?.Meetwaarde.Waarde_Numeriek).not.toBe(shared.Meetwaarde.Waarde_Numeriek);
+    const one: Waarnemingen = { ...readings, metingen: [...readings.metingen, ...means.metingen] };
+    const out = normalise([one], at);
+    const sharedTs = new Date(Date.parse(shared.Tijdstip)).toISOString();
+    expect(rowsOf(out, MEGEN).map((r) => r.ts)).not.toContain(sharedTs);
+    expect(rowsOf(out, MEAN).map((r) => r.ts)).not.toContain(sharedTs);
+    // The 150 readings less the 2 shared instants; each shared instant withholds its 2 values.
+    expect([rowsOf(out, MEAN).length, rowsOf(out, MEGEN).length, out.dropped]).toEqual([0, 148, { conflict: 4 }]);
+  });
+});
+
 describe('property and fuzz tests', () => {
   const name = 'nl-1-obs-key-eijsden-grens-h';
   const base = ctx(name);
@@ -696,7 +838,7 @@ describe('property and fuzz tests', () => {
     );
   });
 
-  it('#184: a processed list of a registered key changes nothing but the processed count, whatever it holds or where it stands', () => {
+  it('#184: a processed list of a registered key never changes the series: it fills its `/GEM24H` twin where one is registered, else counts processed', () => {
     const processedValue = fc.record({
       i: fc.integer({ min: 0, max: template.metingen.length - 1 }),
       value: fc.oneof(fc.integer({ min: -1_000_000, max: 1_000_000 }), fc.double({ min: -1e6, max: 1e6, noNaN: true })),
@@ -709,12 +851,22 @@ describe('property and fuzz tests', () => {
     );
     const reference = normalise([template], base);
     expect(reference.obs.length).toBeGreaterThan(0);
+    const key = reference.obs[0]?.series as string;
+    const TWIN = `${key}/GEM24H`;
+    expect(registry.get(TWIN)?.role).toBe('twin');
+    const without = { ...base, registry: new Map([...registry].filter(([k]) => k !== TWIN)) };
+    const known = new Set(['00', '10', '20', '25', '30', '40']);
+    const extra = (code: string, picked: { quality: string }[]) => {
+      const n = picked.filter((p) => p.quality === code).length;
+      return n + (reference.dropped[code] ?? 0);
+    };
     fc.assert(
       fc.property(
         bewerking,
         fc.uniqueArray(processedValue, { selector: (v) => v.i, maxLength: template.metingen.length }),
         fc.boolean(),
-        (Code, picked, before) => {
+        fc.boolean(),
+        (Code, picked, before, withTwin) => {
           const processed: Waarnemingen = {
             ...template,
             aquo: { ...template.aquo, WaardeBewerkingsMethode: { Code, Omschrijving: '' } },
@@ -727,13 +879,32 @@ describe('property and fuzz tests', () => {
               } as Waarnemingen['metingen'][number];
             }),
           };
-          const out = normalise(before ? [processed, template] : [template, processed], base);
-          expect(out.obs).toEqual(reference.obs);
+          const out = normalise(before ? [processed, template] : [template, processed], withTwin ? base : without);
+          // The series is never touched.
+          expect(out.obs.filter((r) => r.series === key)).toEqual(reference.obs);
           expect(out.unknown).toBe(reference.unknown);
-          expect(out.dropped).toEqual({
-            ...reference.dropped,
-            ...(picked.length > 0 ? { processed: picked.length } : {}),
-          });
+          if (withTwin && Code === 'GEM24H') {
+            // The twin holds exactly the processed list's readable values, at their own instants.
+            const rows = out.obs.filter((r) => r.series === TWIN);
+            const kept = picked.filter((p) => known.has(p.quality));
+            const tsOf = (i: number) => Date.parse((template.metingen[i] as { Tijdstip: string }).Tijdstip);
+            expect(rows.map((r) => [Date.parse(r.ts), r.value])).toEqual(
+              kept.map((p) => [tsOf(p.i), scale(1, p.value)]).sort((a, b) => (a[0] as number) - (b[0] as number)),
+            );
+            expect(out.obs).toHaveLength(reference.obs.length + kept.length);
+            expect(out.dropped.processed).toBeUndefined();
+            expect([out.dropped.gap ?? 0, out.dropped.unknown_quality ?? 0]).toEqual([
+              extra('99', picked),
+              picked.filter((p) => !known.has(p.quality) && p.quality !== '99').length +
+                (reference.dropped.unknown_quality ?? 0),
+            ]);
+          } else {
+            expect(out.obs).toEqual(reference.obs);
+            expect(out.dropped).toEqual({
+              ...reference.dropped,
+              ...(picked.length > 0 ? { processed: picked.length } : {}),
+            });
+          }
         },
       ),
       { numRuns: 100 },

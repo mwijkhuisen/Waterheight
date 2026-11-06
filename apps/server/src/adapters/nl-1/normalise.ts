@@ -55,12 +55,19 @@ import type { Waarnemingen } from './parse.ts';
 //    registry declares that very series (the Eijsden-grens TAW twin);
 //  - series RWS publishes but that are stale or wrong are dropped by an
 //    explicit list (catalogue §1b, §2.1 pitfall 5, §3.1);
-//  - #184 (D2): only an instantaneous list (WaardeBewerkingsMethode NVT) is
-//    the series. A processed one, such as RWS's daily mean GEM24H, comes as a
-//    second list under the same method: of a series we store (or of its
-//    location, quantity and datum under another method) it is withheld as
-//    `processed`, never merged into the instantaneous values; under any other
-//    combination it is counted as before.
+//  - #184: only an instantaneous list (WaardeBewerkingsMethode NVT) is the
+//    series of its key. A processed one, such as RWS's daily mean GEM24H, comes
+//    as a second list under the same method; it is the series
+//    `<key>/<WaardeBewerkingsMethode>` where the registry holds one (stage 2: a
+//    twin with `aggregate: mean`, stored and shown nowhere), never part of the
+//    instantaneous values. Without such a row it is withheld as `processed`
+//    when its key or its location, quantity and datum are registered, and
+//    counted as before otherwise. A list under another method is a series of
+//    its own too: the registry holds the NL-1 history under the methods RWS
+//    used before (F001, F029, F051, F128, F216) as twins of the station;
+//  - #184 (D-1, owner 2026-11-05): RWS labels Megen Q's 10-minute readings from
+//    2023-12-30T23:00Z on `GEM24H` under the series' own method (MISLABELLED);
+//    those values fill the instantaneous series where its own lists are silent.
 // A value list is split whenever its metadata changes: the lists of one series
 // are merged and sorted by time. Where two lists state the same instant with
 // the same value, one row is kept (the validated one); with different values,
@@ -69,8 +76,9 @@ import type { Waarnemingen } from './parse.ts';
 export const SOURCE = 'NL-1';
 export const TIME: TimeConvention = { kind: 'fixed-offset', offset: '+01:00' };
 
+const DAY_MS = 86_400_000;
 /** Our longest window is P31D; an older value belongs to a request we never make. */
-const MAX_AGE_MS = 45 * 86_400_000;
+const MAX_AGE_MS = 45 * DAY_MS;
 
 export type Context = {
   registry: Registry;
@@ -112,6 +120,53 @@ const EXCLUDED_LOCATION = /^pannerden\.regelwerk\./;
 
 const isStale = (key: string) => STALE_SERIES.some((s) => key === s || key.startsWith(`${s}/`));
 
+/** `<code>/<Grootheid>/<Hoedanigheid>` of a series key, whether it has four parts or five (`…/GEM24H`, #184). */
+const combinationOf = (key: string) => key.split('/', 3).join('/');
+
+/**
+ * The registered keys by `<code>/<Grootheid>/<Hoedanigheid>`, twins left out (#184): a forecast, a tide or a high and
+ * low water attaches to the station's own series, never to the history under another method or a daily mean.
+ */
+function primariesByCombination(registry: Registry): Map<string, string[]> {
+  const out = new Map<string, string[]>();
+  for (const [key, decl] of registry) {
+    if (decl.role === 'twin') continue;
+    const combination = combinationOf(key);
+    out.set(combination, [...(out.get(combination) ?? []), key]);
+  }
+  return out;
+}
+
+/**
+ * D-1 of #184 (owner, 2026-11-05): the one list RWS mislabels. Megen Q's `GEM24H` list under the series' own method
+ * holds the daily means up to 2023-12-31T23:00Z and, as a second list, the 10-minute readings from 2023-12-30T23:00Z on
+ * (census of 2026-11-05: a median step of 3.1 m³/s and 41 % reversals over 105,406 values, which no 24-hour mean
+ * shows; recorded fixtures nl-1-backfill-megen-q-20231228 and -20240301). Only this key and this bewerking: a value
+ * whose nearest other instant in its list, earlier or later, lies less than one day away is a reading (so a reading
+ * after a hole of a day or more is still one; a lone value, or values a day apart, are the means they are labelled).
+ * One instant holding a mean and a reading in one list is one instant: both are readings, and the primary withholds
+ * it as `conflict` (KG-500).
+ */
+export const MISLABELLED = { key: 'megen.maas/Q/NVT/other:F103', bewerking: 'GEM24H' } as const;
+
+type Meting = Waarnemingen['metingen'][number];
+
+/** The readings and the daily means of a MISLABELLED list, by the step to the nearest other instant (D-1). */
+function splitMislabelled(metingen: readonly Meting[]): { readings: Meting[]; means: Meting[] } {
+  const at = metingen.map((m) => instant(m.Tijdstip));
+  const times = [...new Set(at)].sort((a, b) => a - b);
+  const sub = new Set<number>();
+  for (const [i, t] of times.entries()) {
+    const prev = i > 0 ? t - (times[i - 1] as number) : DAY_MS;
+    const next = i + 1 < times.length ? (times[i + 1] as number) - t : DAY_MS;
+    if (Math.min(prev, next) < DAY_MS) sub.add(t);
+  }
+  const readings: Meting[] = [];
+  const means: Meting[] = [];
+  for (const [i, m] of metingen.entries()) (sub.has(at[i] as number) ? readings : means).push(m);
+  return { readings, means };
+}
+
 function instant(raw: string): number {
   try {
     return parseInstant(TIME, raw);
@@ -134,16 +189,35 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
   /** A registered `<code>/<Grootheid>/<Hoedanigheid>`, whatever its method. */
   let combinations: Set<string> | undefined;
   const registeredCombination = (c: string) => {
-    combinations ??= new Set([...ctx.registry.keys()].map((k) => k.slice(0, k.lastIndexOf('/'))));
+    combinations ??= new Set([...ctx.registry.keys()].map(combinationOf));
     return combinations.has(c);
   };
-  const merged = new Map<string, { samples: Map<number, Sample>; conflicts: Set<number> }>();
+  // `held`: the instants the series' own lists held (a value or a conflict) when the first D-1 reading came.
+  const merged = new Map<string, { samples: Map<number, Sample>; conflicts: Set<number>; held?: Set<number> }>();
 
-  for (const { aquo, locatie, metingen } of lists) {
+  // D-1: a MISLABELLED list is split; its readings come after every other list, so that they only fill.
+  const entries: { list: Waarnemingen; reading: boolean }[] = [];
+  const readings: { list: Waarnemingen; reading: boolean }[] = [];
+  for (const list of lists) {
+    const { aquo, locatie } = list;
+    const key = `${locatie.Code}/${aquo.Grootheid.Code}/${aquo.Hoedanigheid.Code}/${aquo.WaardeBepalingsMethode.Code}`;
+    if (key !== MISLABELLED.key || aquo.WaardeBewerkingsMethode.Code !== MISLABELLED.bewerking) {
+      entries.push({ list, reading: false });
+      continue;
+    }
+    const split = splitMislabelled(list.metingen);
+    entries.push({ list: { ...list, metingen: split.means }, reading: false });
+    if (split.readings.length > 0) readings.push({ list: { ...list, metingen: split.readings }, reading: true });
+  }
+
+  for (const { list, reading } of [...entries, ...readings]) {
+    const { aquo, locatie, metingen } = list;
     const n = metingen.length;
     const combination = `${locatie.Code}/${aquo.Grootheid.Code}/${aquo.Hoedanigheid.Code}`;
     const key = `${combination}/${aquo.WaardeBepalingsMethode.Code}`;
-    const decl = ctx.registry.get(key);
+    // #184: a processed list is the series `<key>/<bewerking>`; a D-1 reading is the instantaneous one.
+    const bewerking = reading ? INSTANTANEOUS : aquo.WaardeBewerkingsMethode.Code;
+    const decl = ctx.registry.get(bewerking === INSTANTANEOUS ? key : `${key}/${bewerking}`);
     const reason =
       aquo.ProcesType !== 'meting'
         ? 'process'
@@ -166,14 +240,17 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
       // (RWSM-F232, other:F058), a tide or a HW/LW extreme under a grouping or a method of its own: never a
       // registered key, and a plain count.
       const registered =
-        decl !== undefined && (reason === 'process' || reason === 'compartment' || reason === 'grouping');
+        (decl !== undefined || ctx.registry.has(key)) &&
+        (reason === 'process' || reason === 'compartment' || reason === 'grouping');
       count(out, registered ? 'registered_dropped' : reason, n);
       continue;
     }
-    // #184: a daily mean (or any other processed list) of a combination we store is never part of its series.
+    // #184: a daily mean (or any other processed list) with no series of its own, of a key or combination we store,
+    // is never part of the instantaneous series.
     if (
-      aquo.WaardeBewerkingsMethode.Code !== INSTANTANEOUS &&
-      (decl !== undefined || registeredCombination(combination))
+      bewerking !== INSTANTANEOUS &&
+      decl === undefined &&
+      (ctx.registry.has(key) || registeredCombination(combination))
     ) {
       count(out, 'processed', n);
       continue;
@@ -197,6 +274,8 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
       series = { samples: new Map(), conflicts: new Set() };
       merged.set(decl.key, series);
     }
+    // D-1: the readings come last; what the series' own lists held by then is theirs.
+    if (reading) series.held ??= new Set([...series.samples.keys(), ...series.conflicts]);
     for (const m of metingen) {
       const ts = instant(m.Tijdstip);
       const quality = m.WaarnemingMetadata.Kwaliteitswaardecode;
@@ -216,6 +295,12 @@ export function normalise(lists: readonly Waarnemingen[], ctx: Context): Normali
                     : null;
       if (dropped !== null) {
         count(out, dropped);
+        continue;
+      }
+      // D-1: a reading never replaces or contests an instant the series' own lists stated (counted on its own, so
+      // that a wrong premise of D-1 shows; none is expected, KG-500).
+      if (series.held?.has(ts) === true) {
+        count(out, 'mislabelled_held');
         continue;
       }
       const value = scale(decl.to_canonical, m.Meetwaarde.Waarde_Numeriek);
@@ -291,14 +376,8 @@ const FORECAST_QUALITY = '00';
 export function normaliseForecast(lists: readonly Waarnemingen[], ctx: Context): Normalised {
   const runs: ForecastRunIn[] = [];
   const out = { ...emptyNormalised(), forecasts: runs };
-  /** The registered keys under `<code>/<Grootheid>/<Hoedanigheid>`, built once. */
-  const byCombination = new Map<string, string[]>();
-  for (const key of ctx.registry.keys()) {
-    const combination = key.slice(0, key.lastIndexOf('/'));
-    const keys = byCombination.get(combination) ?? [];
-    keys.push(key);
-    byCombination.set(combination, keys);
-  }
+  /** The registered keys under `<code>/<Grootheid>/<Hoedanigheid>`, twins left out, built once. */
+  const byCombination = primariesByCombination(ctx.registry);
   const merged = new Map<string, { samples: Map<number, number>; conflicts: Set<number> }>();
   const unknown = new Set<string>();
 
@@ -431,7 +510,6 @@ const TIDE_METHODS: Record<TideKind, ReadonlySet<string>> = {
   extreme: new Set(['other:F009', 'other:F010', 'other:F029', '', 'NVT']),
   extreme_astro: new Set(['other:F012']),
 };
-const DAY_MS = 86_400_000;
 /** The request asks P400D from now (adapters/nl-1/capture.ts); one day of slack on both sides. */
 const TIDE_AHEAD_MS = 401 * DAY_MS;
 
@@ -465,13 +543,7 @@ export function normaliseTide(lists: readonly Waarnemingen[], ctx: Context, kind
   const tide: TideRowIn[] = [];
   const out = { ...emptyNormalised(), tide };
   const maxAge = ctx.maxAgeMs === undefined ? MAX_AGE_MS : ctx.maxAgeMs;
-  const byCombination = new Map<string, string[]>();
-  for (const key of ctx.registry.keys()) {
-    const combination = key.slice(0, key.lastIndexOf('/'));
-    const keys = byCombination.get(combination) ?? [];
-    keys.push(key);
-    byCombination.set(combination, keys);
-  }
+  const byCombination = primariesByCombination(ctx.registry);
   // `holes`: the instants of every value dropped from a series (only those between its first and last kept value
   // matter: the time-window drops lie outside by construction).
   const merged = new Map<string, { samples: Map<number, number>; conflicts: Set<number>; holes: number[] }>();
@@ -597,13 +669,7 @@ const TYPE_WORD: Readonly<Record<string, 'high' | 'low'>> = { hoogwater: 'high',
 export function normaliseTideType(lists: readonly Waarnemingen[], ctx: Context): Normalised {
   const tideLabels: TideLabelIn[] = [];
   const out = { ...emptyNormalised(), tideLabels };
-  const byCombination = new Map<string, string[]>();
-  for (const key of ctx.registry.keys()) {
-    const combination = key.slice(0, key.lastIndexOf('/'));
-    const keys = byCombination.get(combination) ?? [];
-    keys.push(key);
-    byCombination.set(combination, keys);
-  }
+  const byCombination = primariesByCombination(ctx.registry);
   const merged = new Map<string, { labels: Map<number, 'high' | 'low'>; conflicts: Set<number> }>();
   const unknown = new Set<string>();
 

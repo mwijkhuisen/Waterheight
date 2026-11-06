@@ -132,12 +132,14 @@ function dayMs(iso: string): number {
  * there; invariant 11), and its unit declarations agree (a discharge row has
  * a discharge unit and no value_kind, a level row the reverse, and to_canonical
  * is the factor of its native_unit). A provider_key is unique inside its
- * source, and a first-release row is a tier-1 row. A station has one row per
- * quantity, plus at most one more with role `twin`: the same gauge published
- * a second time (the Eijsden-grens TAW series beside its NAP one), and P14b one
- * twin per provider aggregate (FR-2 QmnJ `mean`, HIXnJ `max`): role twin,
- * native_step = expected_step = P1D, staleness_limit at most P1D. Returns
- * every problem found.
+ * source, and a first-release row is a tier-1 row. A station has one primary
+ * (or mirror) row per quantity. Its rows with role `twin` are told apart by
+ * their provider_key alone, so a station may hold several per quantity: the
+ * same gauge published a second time (the Eijsden-grens TAW series beside its
+ * NAP one), P14b one per provider aggregate (FR-2 QmnJ `mean`, HIXnJ `max`),
+ * and #184 the NL-1 history under another method and RWS's daily means. An
+ * aggregate row is a twin with native_step = expected_step = P1D and a
+ * staleness_limit of at most P1D. Returns every problem found.
  */
 export function validateStations(
   stationsInput: unknown,
@@ -152,9 +154,12 @@ export function validateStations(
   for (const row of parsed.data.stations) {
     const at = `station ${row.id} (${row.quantity})`;
     const aggregate = 'aggregate' in row ? row.aggregate : undefined;
-    const key = `${row.id}/${row.quantity}${row.role === 'twin' ? '/twin' : ''}${aggregate === undefined ? '' : `/${aggregate}`}`;
-    if (seen.has(key)) problems.push(`${at}: duplicate`);
-    seen.add(key);
+    // #184: one primary (or mirror) per station and quantity; a twin is unique by its provider_key (below).
+    if (row.role !== 'twin') {
+      const key = `${row.id}/${row.quantity}`;
+      if (seen.has(key)) problems.push(`${at}: duplicate`);
+      seen.add(key);
+    }
     const providerKey = `${row.source}/${row.provider_key}`;
     if (seenKeys.has(providerKey)) problems.push(`${at}: duplicate provider_key ${row.provider_key} in ${row.source}`);
     seenKeys.add(providerKey);

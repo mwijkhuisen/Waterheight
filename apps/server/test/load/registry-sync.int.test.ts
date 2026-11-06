@@ -123,8 +123,9 @@ describe('registry sync', { timeout: 60_000 }, () => {
       { source_id: 'NL-1', n: 18 },
     ]);
     // DE-1 238, NL-1 85, FR-1 550, FR-3 67 (#235: 26 before), CH-1 412, CH-2 380, DE-7 251 and LU-1 42 series, and from P5c the owner
-    // audience's BE-3 607 and LU-2 39 (registry/stations/*.yaml); P14b: + 71 FR-1 aggregate twins (FR-2 QmnJ, HIXnJ).
-    expect(await h.count('series')).toBe(3086);
+    // audience's BE-3 607 and LU-2 39 (registry/stations/*.yaml); P14b: + 71 FR-1 aggregate twins (FR-2 QmnJ, HIXnJ);
+    // #184 stage 2: + 56 NL-1 history twins (registry/seed/nl-1-history.csv).
+    expect(await h.count('series')).toBe(3086 + 56);
     // A cm series without a published gauge zero has a local datum: 8 before P5b, and the 41 LU-1 gauges in cm
     // (their zeros are LU-4's, an owner source; Esch-Sure is a level in m NG95). The 251 DE-7 gauges are NHN.
     const local = (
@@ -234,7 +235,8 @@ describe('registry sync', { timeout: 60_000 }, () => {
     const result = await syncRegistry(owner.db, readRegistry());
     await owner.close();
     // P5c: 332 BE-3 and 39 LU-2 stations; 7 public twin pairs, 38 BE-3 and 39 LU-1/LU-2 owner pairs.
-    expect(result).toMatchObject({ stations: 2030, series: 3086, deactivated: 0, twins: 84, references: 2311 });
+    // #184 stage 2: + 56 NL-1 history twins at existing stations (the station count is unchanged).
+    expect(result).toMatchObject({ stations: 2030, series: 3086 + 56, deactivated: 0, twins: 84, references: 2311 });
     expect((await h.t.admin.query('SELECT id, provider_key, active FROM series ORDER BY id')).rows).toEqual(before);
   });
 
@@ -314,15 +316,17 @@ describe('registry sync', { timeout: 60_000 }, () => {
               (count(*) FILTER (WHERE audience IS NOT NULL OR lic_override IS NOT NULL))::int AS narrowed
        FROM series WHERE source_id = 'NL-1'`,
     );
-    // P5a adds the 7 Belgian points of catalogue §0.6 (6 H, 3 Q), fetched every 30 minutes: 90 min.
+    // P5a adds the 7 Belgian points of catalogue §0.6 (6 H, 3 Q), fetched every 30 minutes: 90 min. #184 stage 2 adds
+    // the 56 history twins at existing stations (37 H, 19 Q; h_nap counts primaries, twin the TAW ones): 9 of them at
+    // 10 minutes, the others hourly or daily, every one with staleness P1D.
     expect(rows).toEqual([
       {
-        series: 429,
+        series: 429 + 56,
         stations: 391,
         h_nap: 306,
-        q: 109,
+        q: 109 + 19,
         twin: 2,
-        ten_minutes: 429,
+        ten_minutes: 429 + 9,
         stale60: 55,
         stale90: 150,
         stale120: 1,
@@ -334,14 +338,18 @@ describe('registry sync', { timeout: 60_000 }, () => {
       "SELECT provider_key FROM series WHERE source_id = 'NL-1' AND staleness_limit = '2 hours'",
     );
     expect(late.rows).toEqual([{ provider_key: 'eijsden.grens/Q/NVT/other:F216' }]);
-    // One station carries both Eijsden-grens level series; it is a primary station with one alias.
+    // One station carries both Eijsden-grens level series; it is a primary station with one alias. #184 stage 2: and
+    // its three level history twins (F001, F001/GEM24H, F007/GEM24H), which leave the station tier 1.
     const eijsden = await h.t.admin.query(
       `SELECT s.provider_key, s.role, st.tier, a.role AS alias_role
        FROM series s JOIN station st ON st.id = s.station_id JOIN station_alias a ON a.station_id = st.id
        WHERE st.id = 'nl.rws.eijsden.grens' AND s.quantity = 'H' ORDER BY 1`,
     );
     expect(eijsden.rows).toEqual([
+      { provider_key: 'eijsden.grens/WATHTE/NAP/other:F001', role: 'twin', tier: 1, alias_role: 'primary' },
+      { provider_key: 'eijsden.grens/WATHTE/NAP/other:F001/GEM24H', role: 'twin', tier: 1, alias_role: 'primary' },
       { provider_key: 'eijsden.grens/WATHTE/NAP/other:F007', role: 'primary', tier: 1, alias_role: 'primary' },
+      { provider_key: 'eijsden.grens/WATHTE/NAP/other:F007/GEM24H', role: 'twin', tier: 1, alias_role: 'primary' },
       { provider_key: 'eijsden.grens/WATHTE/TAW/other:F007', role: 'twin', tier: 1, alias_role: 'primary' },
     ]);
     const tidal = await h.t.admin.query(
@@ -540,7 +548,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     const dir = mkdtempSync(`${tmpdir()}/rws-registry-`);
     cpSync(new URL('../../../../registry/', import.meta.url), dir, { recursive: true });
     const url = pathToFileURL(`${dir}/`);
-    expect(readRegistry(url).stations).toHaveLength(3086);
+    expect(readRegistry(url).stations).toHaveLength(3086 + 56);
     // An owner source that loses its private_basis.
     const sources = read(`${dir}/sources.yaml`, 'utf8');
     writeFileSync(
@@ -555,7 +563,7 @@ describe('registry sync', { timeout: 60_000 }, () => {
     writeFileSync(`${dir}/permissions/BE-3.md`, '---\nsource: BE-3\n---\n');
     expect(() => readRegistry(url)).toThrow(/permissions/);
     rmSync(`${dir}/permissions/BE-3.md`);
-    expect(readRegistry(url).stations).toHaveLength(3086);
+    expect(readRegistry(url).stations).toHaveLength(3086 + 56);
     // A withholding record names registered series that are audience off, else the sync refuses it.
     const record = read(`${dir}/permissions/LU-1.md`, 'utf8');
     writeFileSync(`${dir}/permissions/LU-1.md`, record.replace('[Bollendorf, Gemünd_Our]', '[Bollendorf, Diekirch]'));

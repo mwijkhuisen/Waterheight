@@ -65,6 +65,17 @@ describe('series selection', () => {
     expect(new Set(spec.series.map((s) => s.series_key)).size).toBe(spec.series.length);
   });
 
+  // 71 as on main d1bf48c: P14a's 41 plus P16b's 29 sea rows and Epen Q (the plan comment's "41" predates P16b).
+  it('#184 stage 2: the same 71 units as main; no history twin is one (twins are not first_release)', () => {
+    expect(spec.series).toHaveLength(71);
+    const twins = new Set(stations.filter((r) => r.role === 'twin').map((r) => r.provider_key));
+    expect(twins.size).toBeGreaterThan(56);
+    for (const s of spec.series) {
+      expect(twins.has(s.series_key)).toBe(false);
+      expect(s.series_key.split('/')).toHaveLength(4);
+    }
+  });
+
   it('has no TAW twin and no tier-2 row', () => {
     expect(spec.series.map((s) => s.series_key)).not.toContain('eijsden.grens/WATHTE/TAW/other:F007');
     for (const s of spec.series) {
