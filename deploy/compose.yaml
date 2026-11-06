@@ -43,7 +43,7 @@ services:
     <<: *hardening
     image: ${RWS_WEB_IMAGE:?}
     user: "65533:65533"
-    # No capability: the image strips caddy's file capability, and a non-root
+    # No capability: the image's caddy carries no file capability, and a non-root
     # process binds 80/443 through this namespaced sysctl (it covers IPv6 too).
     sysctls:
       net.ipv4.ip_unprivileged_port_start: 80
@@ -280,7 +280,7 @@ services:
   # installed by bootstrap.sh to /etc/rws/postgres).
   db:
     <<: *hardening
-    image: postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+    image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
     user: "999:999"
     group_add: ["61004"]
     environment:
