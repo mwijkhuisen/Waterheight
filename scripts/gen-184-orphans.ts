@@ -97,6 +97,7 @@ export function orphanRows(census: string, stations: readonly StationRow[]): Orp
     kept.push({ key: series, epoch: epoch / 1000, value });
   }
   if (totals === null) throw new Error('census: no totals line (an interrupted census is no census)');
+  if (kept.length === 0) throw new Error(`census: no orphan outside ${KEPT}, so there is nothing to delete`);
   if (totals !== megen + kept.length)
     throw new Error(`census: totals.orphan ${totals} is not ${megen} + ${kept.length}`);
   const keys = [...new Set(kept.map((r) => r.key))].sort();
