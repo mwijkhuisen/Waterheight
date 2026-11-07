@@ -15,7 +15,8 @@
 --       3  venlo/WATHTE/NAP/other:F007
 --
 -- Before the merge every fail_* column must be 0 (else the migration would abort the deploy) and present + absent
--- must equal listed. After the deploy present must be 0, and twin_rows unchanged. It writes nothing: READ ONLY.
+-- must equal listed; failing_rows names the first 20 failing rows of a series (instant and guards). After the deploy
+-- present must be 0, and twin_rows (the twin's rows within the orphans' time range) unchanged. It writes nothing.
 --   sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -v ON_ERROR_STOP=1 < 184-orphans-check.sql
 
 BEGIN READ ONLY;
@@ -1872,7 +1873,18 @@ SELECT l.key, count(*) AS listed, count(o.ts) AS present, count(*) - count(o.ts)
        count(*) FILTER (WHERE o.ts IS NOT NULL AND (l.tid IS NOT NULL AND (w.value IS NULL OR w.value <> l.v))) AS fail_twin_row,
        count(*) FILTER (WHERE o.ts IS NOT NULL AND (x.series_id IS NOT NULL)) AS fail_latest,
        count(*) FILTER (WHERE o.ts IS NOT NULL AND (EXISTS (SELECT 1 FROM obs_revision r WHERE r.series_id = o.series_id AND r.ts = o.ts))) AS fail_revision,
-       (SELECT count(*) FROM obs c WHERE c.series_id = l.tid) AS twin_rows
+       (SELECT count(*) FROM obs c WHERE c.series_id = l.tid
+          AND c.ts >= timestamptz '1990-01-01 00:00:00+00' AND c.ts < timestamptz '2023-12-31 00:00:00+00') AS twin_rows,
+       (array_agg(to_char(l.ts, 'YYYY-MM-DD"T"HH24:MI"Z"') || ' ' || concat_ws('+',
+           CASE WHEN (o.qc & 512) = 0 THEN 'bit512' END,
+           CASE WHEN b.origin IS DISTINCT FROM 'backfill' THEN 'origin' END,
+           CASE WHEN o.ts >= timestamptz '2026-08-01 00:00:00+00' THEN 'floor' END,
+           CASE WHEN o.value <> l.v THEN 'value' END,
+           CASE WHEN l.tid IS NULL THEN 'twin_series' END,
+           CASE WHEN l.tid IS NOT NULL AND (w.value IS NULL OR w.value <> l.v) THEN 'twin_row' END,
+           CASE WHEN x.series_id IS NOT NULL THEN 'latest' END,
+           CASE WHEN EXISTS (SELECT 1 FROM obs_revision r WHERE r.series_id = o.series_id AND r.ts = o.ts) THEN 'revision' END) ORDER BY l.ts)
+          FILTER (WHERE o.ts IS NOT NULL AND (((o.qc & 512) = 0) OR (b.origin IS DISTINCT FROM 'backfill') OR (o.ts >= timestamptz '2026-08-01 00:00:00+00') OR (o.value <> l.v) OR (l.tid IS NULL) OR (l.tid IS NOT NULL AND (w.value IS NULL OR w.value <> l.v)) OR (x.series_id IS NOT NULL) OR (EXISTS (SELECT 1 FROM obs_revision r WHERE r.series_id = o.series_id AND r.ts = o.ts)))))[1:20] AS failing_rows
 FROM l
 LEFT JOIN obs o ON o.series_id = l.sid AND o.ts = l.ts
        AND o.ts >= timestamptz '1990-01-01 00:00:00+00' AND o.ts < timestamptz '2023-12-31 00:00:00+00'

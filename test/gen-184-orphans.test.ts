@@ -69,6 +69,18 @@ describe('the committed orphan migration (#184 PR B)', () => {
     ]);
   });
 
+  it("recomputes the buckets with the store's own expressions (pinned, review CR-9: the migration is frozen)", () => {
+    const store = readFileSync(new URL('../apps/server/src/load/store.ts', import.meta.url), 'utf8');
+    const squash = (s: string) => s.replace(/\s+/g, ' ');
+    for (const part of [
+      'SELECT o.series_id, t.bucket, min(o.value), max(o.value), avg(o.value)::real, (array_agg(o.value ORDER BY o.ts DESC))[1], count(*)::int, bit_or(o.qc)',
+      'ON CONFLICT (series_id, bucket) DO UPDATE SET vmin = EXCLUDED.vmin, vmax = EXCLUDED.vmax, vavg = EXCLUDED.vavg, vlast = EXCLUDED.vlast, n = EXCLUDED.n, qc_or = EXCLUDED.qc_or',
+    ]) {
+      expect(squash(store), 'store.ts changed its rollup: a new migration must follow it').toContain(part);
+      expect(squash(migration)).toContain(part);
+    }
+  });
+
   it('the check is one read-only SELECT that it rolls back', () => {
     const body = check
       .split('\n')
@@ -135,6 +147,12 @@ describe('orphanRows (the census is untrusted data)', () => {
   it('refuses a primary without its daily-mean twin', () => {
     const noTwin = stations.filter((s) => s.provider_key !== `${A}/GEM24H`);
     expect(() => orphanRows(census([line(A, '1990-01-01T23:00:00.000Z', 1)]), noTwin)).toThrow(/no registered/);
+  });
+
+  it('refuses a census with no orphan outside Megen Q F103 (nothing to delete, review CR-4)', () => {
+    expect(() => orphanRows(census([line(KEPT, '2024-03-01T00:10:00.000Z', 1051)]), stations)).toThrow(
+      /nothing to delete/,
+    );
   });
 
   it('refuses a census whose totals do not count the orphans read, or that has no totals line', () => {

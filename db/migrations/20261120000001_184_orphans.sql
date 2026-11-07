@@ -20,7 +20,7 @@
 -- row that is absent is counted and skipped (a fresh database holds none, so this is a no-op there). A present row
 -- that fails a guard aborts the whole migration: nothing is deleted. The touched hourly and daily buckets are
 -- recomputed with the store's expressions, and a bucket no row holds any more is deleted. Under the loader lock, as
--- the nightly reconciliation runs. One NOTICE per series: listed, found, deleted, absent.
+-- the nightly reconciliation runs (a wait over 120 s aborts it). One NOTICE per series: listed, deleted, absent.
 
 -- migrate:up
 DO $$
@@ -1869,10 +1869,16 @@ DECLARE
   d_ts timestamptz[];
   n_deleted int;
   n_listed int[];
-  n_found int[];
   n_gone int[];
 BEGIN
-  PERFORM 1 FROM app_meta WHERE key = 'loader_lock' FOR UPDATE;
+  -- The loader lock, as the loader's own lock() takes it, but with a bound: the previous release's load still runs
+  -- while migrate does, and a long loader transaction must fail the deploy (it is tried again), never hang it.
+  PERFORM set_config('lock_timeout', '120s', true);
+  BEGIN
+    PERFORM 1 FROM app_meta WHERE key = 'loader_lock' FOR UPDATE;
+  EXCEPTION WHEN lock_not_available THEN
+    RAISE EXCEPTION '184 orphans: the loader lock was busy for 120 s: nothing deleted';
+  END;
   IF NOT FOUND THEN
     RAISE EXCEPTION '184 orphans: no loader_lock row';
   END IF;
@@ -1911,18 +1917,11 @@ BEGIN
       g.bit512, g.origin, g.floor, g.value, g.twin_series, g.twin_row, g.latest, g.revision;
   END IF;
 
-  -- Per key: the rows listed, and those present (before the delete).
+  -- Per key: the rows listed (the arrays only; every present row is deleted, or the block has aborted).
   SELECT array_agg(c.n ORDER BY c.ix) INTO n_listed
     FROM (SELECT q.ix, count(u.ix)::int AS n
           FROM generate_subscripts(p_keys, 1) AS q(ix) LEFT JOIN unnest(p_ix) AS u(ix) ON u.ix = q.ix
           GROUP BY q.ix) c;
-  SELECT array_agg(coalesce(c.n, 0) ORDER BY q.ix) INTO n_found
-    FROM generate_subscripts(p_keys, 1) AS q(ix)
-    LEFT JOIN (SELECT u.ix, count(*)::int AS n
-               FROM unnest(p_ix, p_epoch) AS u(ix, e)
-               JOIN obs o ON o.series_id = p_sid[u.ix] AND o.ts = to_timestamp(u.e)
-                         AND o.ts >= timestamptz '1990-01-01 00:00:00+00' AND o.ts < timestamptz '2023-12-31 00:00:00+00'
-               GROUP BY u.ix) c ON c.ix = q.ix;
 
   WITH l AS (SELECT p_sid[u.ix] AS sid, to_timestamp(u.e) AS ts
              FROM unnest(p_ix, p_epoch) AS u(ix, e)),
@@ -1986,8 +1985,8 @@ BEGIN
     FROM generate_subscripts(p_keys, 1) AS q(ix)
     LEFT JOIN (SELECT u.s, count(*)::int AS n FROM unnest(d_sid) AS u(s) GROUP BY u.s) c ON c.s = p_sid[q.ix];
   FOR i IN 1 .. array_length(p_keys, 1) LOOP
-    RAISE NOTICE '184 orphans: % listed %, found %, deleted %, absent %',
-      p_keys[i], n_listed[i], n_found[i], n_gone[i], n_listed[i] - n_found[i];
+    RAISE NOTICE '184 orphans: % listed %, deleted %, absent %',
+      p_keys[i], n_listed[i], n_gone[i], n_listed[i] - n_gone[i];
   END LOOP;
 END
 $$;

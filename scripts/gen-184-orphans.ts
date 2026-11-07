@@ -97,6 +97,7 @@ export function orphanRows(census: string, stations: readonly StationRow[]): Orp
     kept.push({ key: series, epoch: epoch / 1000, value });
   }
   if (totals === null) throw new Error('census: no totals line (an interrupted census is no census)');
+  if (kept.length === 0) throw new Error(`census: no orphan outside ${KEPT}, so there is nothing to delete`);
   if (totals !== megen + kept.length)
     throw new Error(`census: totals.orphan ${totals} is not ${megen} + ${kept.length}`);
   const keys = [...new Set(kept.map((r) => r.key))].sort();
@@ -243,7 +244,7 @@ export function migrationSql(o: Orphans): string {
 -- row that is absent is counted and skipped (a fresh database holds none, so this is a no-op there). A present row
 -- that fails a guard aborts the whole migration: nothing is deleted. The touched hourly and daily buckets are
 -- recomputed with the store's expressions, and a bucket no row holds any more is deleted. Under the loader lock, as
--- the nightly reconciliation runs. One NOTICE per series: listed, found, deleted, absent.
+-- the nightly reconciliation runs (a wait over 120 s aborts it). One NOTICE per series: listed, deleted, absent.
 
 -- migrate:up
 DO $$
@@ -259,10 +260,16 @@ DECLARE
   d_ts timestamptz[];
   n_deleted int;
   n_listed int[];
-  n_found int[];
   n_gone int[];
 BEGIN
-  PERFORM 1 FROM app_meta WHERE key = 'loader_lock' FOR UPDATE;
+  -- The loader lock, as the loader's own lock() takes it, but with a bound: the previous release's load still runs
+  -- while migrate does, and a long loader transaction must fail the deploy (it is tried again), never hang it.
+  PERFORM set_config('lock_timeout', '120s', true);
+  BEGIN
+    PERFORM 1 FROM app_meta WHERE key = 'loader_lock' FOR UPDATE;
+  EXCEPTION WHEN lock_not_available THEN
+    RAISE EXCEPTION '184 orphans: the loader lock was busy for 120 s: nothing deleted';
+  END;
   IF NOT FOUND THEN
     RAISE EXCEPTION '184 orphans: no loader_lock row';
   END IF;
@@ -292,18 +299,11 @@ ${presentJoins(lo, hi, false)
       g.bit512, g.origin, g.floor, g.value, g.twin_series, g.twin_row, g.latest, g.revision;
   END IF;
 
-  -- Per key: the rows listed, and those present (before the delete).
+  -- Per key: the rows listed (the arrays only; every present row is deleted, or the block has aborted).
   SELECT array_agg(c.n ORDER BY c.ix) INTO n_listed
     FROM (SELECT q.ix, count(u.ix)::int AS n
           FROM generate_subscripts(p_keys, 1) AS q(ix) LEFT JOIN unnest(p_ix) AS u(ix) ON u.ix = q.ix
           GROUP BY q.ix) c;
-  SELECT array_agg(coalesce(c.n, 0) ORDER BY q.ix) INTO n_found
-    FROM generate_subscripts(p_keys, 1) AS q(ix)
-    LEFT JOIN (SELECT u.ix, count(*)::int AS n
-               FROM unnest(p_ix, p_epoch) AS u(ix, e)
-               JOIN obs o ON o.series_id = p_sid[u.ix] AND o.ts = to_timestamp(u.e)
-                         AND o.ts >= timestamptz '${lo}' AND o.ts < timestamptz '${hi}'
-               GROUP BY u.ix) c ON c.ix = q.ix;
 
   WITH l AS (SELECT p_sid[u.ix] AS sid, to_timestamp(u.e) AS ts
              FROM unnest(p_ix, p_epoch) AS u(ix, e)),
@@ -325,8 +325,8 @@ ${indent(rollup('obs_1d', '1 day', lo, hi))}
     FROM generate_subscripts(p_keys, 1) AS q(ix)
     LEFT JOIN (SELECT u.s, count(*)::int AS n FROM unnest(d_sid) AS u(s) GROUP BY u.s) c ON c.s = p_sid[q.ix];
   FOR i IN 1 .. array_length(p_keys, 1) LOOP
-    RAISE NOTICE '184 orphans: % listed %, found %, deleted %, absent %',
-      p_keys[i], n_listed[i], n_found[i], n_gone[i], n_listed[i] - n_found[i];
+    RAISE NOTICE '184 orphans: % listed %, deleted %, absent %',
+      p_keys[i], n_listed[i], n_gone[i], n_listed[i] - n_gone[i];
   END LOOP;
 END
 $$;
@@ -344,10 +344,13 @@ export function checkSql(o: Orphans): string {
   const failed = GUARDS.map(
     ([name, expr]) => `       count(*) FILTER (WHERE o.ts IS NOT NULL AND (${expr})) AS fail_${name}`,
   ).join(',\n');
+  const anyFails = GUARDS.map(([, expr]) => `(${expr})`).join(' OR ');
+  const names = GUARDS.map(([name, expr]) => `CASE WHEN ${expr} THEN '${name}' END`).join(',\n           ');
   return `${header(o, 'the read-only check of the orphan migration (20261120000001_184_orphans.sql).')}
 --
 -- Before the merge every fail_* column must be 0 (else the migration would abort the deploy) and present + absent
--- must equal listed. After the deploy present must be 0, and twin_rows unchanged. It writes nothing: READ ONLY.
+-- must equal listed; failing_rows names the first 20 failing rows of a series (instant and guards). After the deploy
+-- present must be 0, and twin_rows (the twin's rows within the orphans' time range) unchanged. It writes nothing.
 --   sudo docker exec -i rws-db-1 psql -X -U postgres -d rws -v ON_ERROR_STOP=1 < 184-orphans-check.sql
 
 BEGIN READ ONLY;
@@ -364,7 +367,11 @@ WITH q AS (SELECT u.key, u.ix FROM unnest(${a.keys}::text[]) WITH ORDINALITY AS 
            JOIN s ON s.ix = u.ix)
 SELECT l.key, count(*) AS listed, count(o.ts) AS present, count(*) - count(o.ts) AS absent,
 ${failed},
-       (SELECT count(*) FROM obs c WHERE c.series_id = l.tid) AS twin_rows
+       (SELECT count(*) FROM obs c WHERE c.series_id = l.tid
+          AND c.ts >= timestamptz '${lo}' AND c.ts < timestamptz '${hi}') AS twin_rows,
+       (array_agg(to_char(l.ts, 'YYYY-MM-DD"T"HH24:MI"Z"') || ' ' || concat_ws('+',
+           ${names}) ORDER BY l.ts)
+          FILTER (WHERE o.ts IS NOT NULL AND (${anyFails})))[1:20] AS failing_rows
 FROM l
 ${presentJoins(lo, hi, true)}
 GROUP BY l.key, l.tid

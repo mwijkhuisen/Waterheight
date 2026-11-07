@@ -50,20 +50,31 @@ async function migrate(text: string): Promise<Run> {
 }
 
 /** The check file's report (one row per key), read as the owner reads it. */
-async function check(): Promise<Record<string, Record<string, number>>> {
+async function check(): Promise<Record<string, Record<string, unknown>>> {
   const results = (await admin.query(CHECK_TEXT)) as unknown as pg.QueryResult[];
   const select = results.find((r) => r.command === 'SELECT') as pg.QueryResult;
+  // Counts come back as text (bigint); failing_rows is an array or null.
+  const value = (v: unknown) => (typeof v === 'string' && /^\d+$/.test(v) ? Number(v) : v);
   return Object.fromEntries(
     select.rows.map((r: Record<string, unknown>) => [
       r.key as string,
       Object.fromEntries(
         Object.entries(r)
           .filter(([k]) => k !== 'key')
-          .map(([k, v]) => [k, Number(v)]),
+          .map(([k, v]) => [k, value(v)]),
       ),
     ]),
   );
 }
+
+// Borgharen days with exactly one listed stamp, and the days with two (D-6): disjoint by construction.
+const day = (r: { epoch: number }) => Math.floor(r.epoch / 86_400);
+const BORGHAREN_ROWS = committed.rows.filter((r) => keyOf(r) === BORGHAREN);
+const stampsOn = (r: { epoch: number }) => BORGHAREN_ROWS.filter((s) => day(s) === day(r)).length;
+const SINGLES = BORGHAREN_ROWS.filter((r) => stampsOn(r) === 1);
+const DOUBLED = BORGHAREN_ROWS.filter((r) => stampsOn(r) === 2).slice(0, 2);
+/** "2026-08-01T00:00Z", as the check prints an instant. */
+const minute = (epoch: number) => `${new Date(epoch * 1000).toISOString().slice(0, 16)}Z`;
 
 const id = async (key: string) => h.seriesId(key);
 const twin = async (key: string) => h.seriesId(`${key}/GEM24H`);
@@ -169,16 +180,15 @@ describe('the committed orphan migration (#184 PR B, D-5)', () => {
     expect(run.error).toBeNull();
     expect(await state()).toEqual(before);
     expect(run.notices).toHaveLength(committed.keys.length);
-    expect(notice(run, BORGHAREN)).toBe(`184 orphans: ${BORGHAREN} listed 7582, found 0, deleted 0, absent 7582`);
+    expect(notice(run, BORGHAREN)).toBe(`184 orphans: ${BORGHAREN} listed 7582, deleted 0, absent 7582`);
   });
 
   describe('on a database holding orphans, their twins, neighbours, live rows and buckets', () => {
-    const borgharen = rowsOf(BORGHAREN);
-    // A day with two listed stamps (11:00Z and 23:00Z, D-6): its daily bucket empties.
-    const day = (r: { epoch: number }) => Math.floor(r.epoch / 86_400);
-    const doubled = borgharen.filter((r) => borgharen.filter((s) => day(s) === day(r)).length === 2).slice(0, 2);
-    const lone = borgharen[0] as (typeof borgharen)[number];
-    const withNeighbours = borgharen[1] as (typeof borgharen)[number];
+    // A day with two listed stamps (11:00Z and 23:00Z, D-6): its daily bucket empties. The lone row and the row with
+    // neighbours sit on days with one stamp each (review CR-5).
+    const doubled = DOUBLED;
+    const lone = SINGLES[0] as (typeof SINGLES)[number];
+    const withNeighbours = SINGLES[1] as (typeof SINGLES)[number];
     const seeded = [lone, withNeighbours, ...doubled, ...rowsOf(EIJSDEN).slice(0, 2), ...rowsOf(GRAVE_H).slice(0, 1)];
     let before: Awaited<ReturnType<typeof state>>;
     let keep: string;
@@ -228,9 +238,9 @@ describe('the committed orphan migration (#184 PR B, D-5)', () => {
     it('deletes exactly the seeded listed rows and recomputes their buckets', async () => {
       const run = await migrate(MIGRATION_TEXT);
       expect(run.error).toBeNull();
-      expect(notice(run, BORGHAREN)).toBe(`184 orphans: ${BORGHAREN} listed 7582, found 4, deleted 4, absent 7578`);
-      expect(notice(run, EIJSDEN)).toBe(`184 orphans: ${EIJSDEN} listed 1786, found 2, deleted 2, absent 1784`);
-      expect(notice(run, GRAVE_H)).toBe(`184 orphans: ${GRAVE_H} listed 4, found 1, deleted 1, absent 3`);
+      expect(notice(run, BORGHAREN)).toBe(`184 orphans: ${BORGHAREN} listed 7582, deleted 4, absent 7578`);
+      expect(notice(run, EIJSDEN)).toBe(`184 orphans: ${EIJSDEN} listed 1786, deleted 2, absent 1784`);
+      expect(notice(run, GRAVE_H)).toBe(`184 orphans: ${GRAVE_H} listed 4, deleted 1, absent 3`);
 
       const after = await state();
       expect(await md5('obs', 'series_id, ts')).toBe(keep);
@@ -266,7 +276,7 @@ describe('the committed orphan migration (#184 PR B, D-5)', () => {
       const run = await migrate(MIGRATION_TEXT);
       expect(run.error).toBeNull();
       expect(await state()).toEqual(before2);
-      expect(notice(run, BORGHAREN)).toBe(`184 orphans: ${BORGHAREN} listed 7582, found 0, deleted 0, absent 7582`);
+      expect(notice(run, BORGHAREN)).toBe(`184 orphans: ${BORGHAREN} listed 7582, deleted 0, absent 7582`);
     });
   });
 
@@ -274,13 +284,22 @@ describe('the committed orphan migration (#184 PR B, D-5)', () => {
     const r = rowsOf(OLST)[0] as (typeof committed.rows)[number];
     const ts = iso(r.epoch);
 
+    // A listed row that passes every guard sits beside each failing one: it must stay too (review CR-6).
+    const passing = SINGLES[2] as (typeof SINGLES)[number];
+
     const aborts = async (text: string, guard: string) => {
+      await seedListed(passing);
       await rebuildRollups();
       const before = await state();
       const run = await migrate(text);
       expect(run.error).toMatch(/fail a guard/);
       expect(run.error).toContain(`${guard} 1`);
       expect(await state()).toEqual(before);
+      await admin.query('DELETE FROM obs WHERE series_id IN ($1, $2) AND ts = $3', [
+        await id(BORGHAREN),
+        await twin(BORGHAREN),
+        iso(passing.epoch),
+      ]);
       return run;
     };
     const cleanup = async () => {
@@ -289,9 +308,13 @@ describe('the committed orphan migration (#184 PR B, D-5)', () => {
       await admin.query('DELETE FROM obs_latest WHERE series_id = $1', [await id(OLST)]);
     };
 
-    it('qc bit 512', async () => {
+    it('qc bit 512 (the check names the failing row and its guard)', async () => {
       await seedListed(r, { qc: 2 });
-      expect((await check())[OLST]).toMatchObject({ present: 1, fail_bit512: 1 });
+      expect((await check())[OLST]).toMatchObject({
+        present: 1,
+        fail_bit512: 1,
+        failing_rows: [`${minute(r.epoch)} bit512`],
+      });
       await aborts(MIGRATION_TEXT, 'bit512');
       await cleanup();
     });
@@ -305,9 +328,15 @@ describe('the committed orphan migration (#184 PR B, D-5)', () => {
       await cleanup();
     });
 
-    it('a ts before DATA_FLOOR (a synthetic list, since the committed one holds no later row)', async () => {
+    it('a ts before DATA_FLOOR (a row at the floor, in a synthetic list: the committed one holds none)', async () => {
       const at = Date.parse('2026-08-01T00:00:00Z') / 1000;
-      const synthetic: Orphans = { keys: [OLST], rows: [{ ix: 1, epoch: at, value: 42 }] };
+      const synthetic: Orphans = {
+        keys: [BORGHAREN, OLST],
+        rows: [
+          { ix: 1, epoch: passing.epoch, value: passing.value },
+          { ix: 2, epoch: at, value: 42 },
+        ],
+      };
       await insertObs(await id(OLST), iso(at), 42, 512, backfill);
       await insertObs(await twin(OLST), iso(at), 42, 512, backfill);
       await aborts(migrationSql(synthetic), 'floor');
