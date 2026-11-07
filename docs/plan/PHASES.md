@@ -4870,3 +4870,8 @@ What PR A of issue #184 stage 2 (KG-342) built: the history under other methods 
   - each guard broken alone aborting with nothing changed (the floor guard through a synthetic list built by `migrationSql`);
   - the check file before and after.
 - **[U]** KG-505 (the owner's pre-check and post-check), KG-506 (the production run time). KG-507 is accepted (the next `travel-times` run may shift).
+- **Merged and run, 2026-11-07** (KG-505 and KG-506 closed; [#184 comment](https://github.com/mwijkhuisen/Waterheight/issues/184#issuecomment-6708057476)):
+  - #263 was merged at `0472679`, before review round 1's fix commit, and deployed with build `f95add4`; the migration ran without a guard failure.
+  - The owner's post-check shows `present` 0 and every `fail_*` 0 in all 10 series, and the 56 twin counts are identical to the stage-2 count.
+  - The round-1 changes to the migration (CR-2 a 120 s lock bound, CR-8 one probe fewer) are not in the applied file (sha256 `b2627a38…`) and never will be.
+  - A follow-up PR carries the rest: SR-1 in the threat model, the generator's empty-census guard (CR-4), the integration test's disjoint picks and a passing row beside every failing one (CR-5 to CR-7), and the rollup text pinned against `store.ts` (CR-9). The generator still reproduces the applied file byte for byte.
