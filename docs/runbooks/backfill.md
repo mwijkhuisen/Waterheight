@@ -431,6 +431,11 @@ It prints one row per series:
 - Run the count per twin of the stage-2 replay above; it should be unchanged.
 - Paste both on #184. KG-342 closes then.
 
+**Done 2026-11-07** ([#184 comment](https://github.com/mwijkhuisen/Waterheight/issues/184#issuecomment-6708057476)):
+- The migration ran at the deploy of `f95add4`. #263 was merged before the pre-check, so the pre-check was skipped.
+- The post-check shows `present` 0 and every `fail_*` 0 in all 10 series, and all 56 twin counts are unchanged.
+- The applied migration is the one with sha256 `b2627a38…`. Review round 1's changes to it (a 120 s lock bound, one probe fewer) came after the merge and are not in it. An applied migration never changes, and the generator keeps reproducing this file.
+
 ## What not to do
 
 - Do not run it outside the window or around the clock. One `run` at a time: a second one is refused as `busy` (the lease), and after a crash the next one must wait the 2 minutes the lease takes to lapse. Never clear `backfill_lease` by hand while a runner may still be alive: two runners would break the 1 request/s rule.
