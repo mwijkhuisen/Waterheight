@@ -13,7 +13,7 @@
 # they clear Grype. The Go stage from ARG GO_VERSION to ARG GO_FIXES is the same
 # text as in deploy/backup/Dockerfile and deploy/web/Dockerfile, which builds Caddy
 # with it (#252; test/check-bom.test.ts).
-FROM node:26.12.0-trixie-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11 AS go
+FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS go
 ARG GO_VERSION=1.27.2
 ADD --checksum=sha256:ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5 \
   https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz \
@@ -44,7 +44,7 @@ RUN m=github.com/protomaps/go-pmtiles@v${GO_PMTILES_VERSION} \
   && go get ${GO_FIXES} \
   && go build -trimpath -ldflags "-s -w -X main.version=${GO_PMTILES_VERSION}" -o /gobin/pmtiles .
 
-FROM node:26.12.0-trixie-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11 AS build
+FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS build
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
@@ -65,7 +65,7 @@ RUN pnpm install --frozen-lockfile \
 # The layout is part of the P1a ↔ P1b contract: capture reads <root>/registry
 # next to <root>/apps/server/dist; migrate runs <root>/bin/dbmate on
 # <root>/db/migrations; basemap runs <root>/bin/pmtiles.
-FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:9b945e92c1b5463a4b75f11e8417515e4bea7355f6adfd79ec220fbbe905dda8
+FROM gcr.io/distroless/nodejs26-debian13:nonroot@sha256:33c86a63859efc2ebd88ea0a355863582ec6f1220d048de62baffb2584e709b3
 WORKDIR /app
 COPY --from=build /out /app
 COPY --from=go /gobin /app/bin
