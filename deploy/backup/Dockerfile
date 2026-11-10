@@ -10,7 +10,7 @@
 # Grype. The Go stage from ARG GO_VERSION to ARG GO_FIXES is the same text as in
 # deploy/server/Dockerfile and deploy/web/Dockerfile, which builds Caddy with it
 # (#252; test/check-bom.test.ts).
-FROM node:26.12.0-trixie-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11 AS restic
+FROM node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0 AS restic
 ARG GO_VERSION=1.27.2
 ADD --checksum=sha256:ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5 \
   https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz \
