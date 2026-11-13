@@ -9,7 +9,7 @@
     "start": "node dist/main.js api"
   },
   "dependencies": {
-    "@hono/node-server": "2.1.5",
+    "@hono/node-server": "2.1.6",
     "@rws/contracts": "workspace:*",
     "@rws/core": "workspace:*",
     "croner": "11.0.0",
