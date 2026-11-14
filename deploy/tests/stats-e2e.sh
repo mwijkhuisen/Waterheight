@@ -124,7 +124,17 @@ code=$("${peer[@]}" -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: app
   -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"e2e","version":"0"}}}' \
   "$base/mcp") || fail "/mcp from wgpeer"
 [[ $code == 401 ]] || fail "/mcp without a key: HTTP $code"
-proof "from wgpeer: heartbeat 200 $(cat "$out/heartbeat.json"); admin/umami login gave a token; website $website; POST /api/send 200 with no Set-Cookie ($(head -c 200 "$out/send.json")); OPTIONS /api/send $(grep -i '^access-control-allow-origin:' "$out/options.headers" | tr -d '\r'); /mcp without a key 401"
+sleep 2
+views=$("${peer[@]}" -H "Authorization: Bearer $token" \
+  "$base/api/websites/$website/stats?startAt=0&endAt=$(date +%s)000" |
+  jq -er '.pageviews | if type == "object" then .value else . end') || fail "read the website's stats"
+((views >= 1)) || fail "the event was not stored (pageviews $views)"
+# Umami stores no IP (it hashes the address into the session id): the visitor address is nowhere in the database.
+# shellcheck disable=SC2016 # expanded by the container's shell, so the password never leaves it
+"${compose[@]}" exec -T db sh -c 'PGPASSWORD=$(cat /run/secrets/db_umami) exec pg_dump -U umami -h 127.0.0.1 umami' \
+  >"$out/dump.sql" || fail "pg_dump"
+if grep -qF 198.51.100.7 "$out/dump.sql"; then fail "the visitor's address is in the database"; fi
+proof "from wgpeer: heartbeat 200 $(cat "$out/heartbeat.json"); admin/umami login gave a token; website $website; POST /api/send 200 with no Set-Cookie ($(head -c 200 "$out/send.json")); OPTIONS /api/send $(grep -i '^access-control-allow-origin:' "$out/options.headers" | tr -d '\r'); /mcp without a key 401; pageviews $views; the address 198.51.100.7 is in none of the $(wc -l <"$out/dump.sql") lines of pg_dump"
 
 step "6b. Negatives and the hardening audit"
 if docker run --rm --network bridge --entrypoint curl "$umami_image" -sS --max-time 5 -o /dev/null "$base/api/heartbeat"; then
@@ -155,7 +165,12 @@ done
 for value in "$db_pw" "$app_secret" "$cf_token"; do
   if grep -qF "$value" "$out/audit.txt"; then fail "a secret value is in docker inspect, docker top or the logs"; fi
 done
-proof "docker0 container: no answer from $base; only umami publishes, on 10.66.0.1:8444; umami has no egress (1.1.1.1:443) and no way to 10.66.0.1; every container non-root, read-only root, CapDrop ALL, no-new-privileges, memory, cpus and pids bounded; no secret value in docker inspect, docker top or $(wc -l <"$out/audit.txt") lines of audit output"
+if "${compose[@]}" logs --no-color umami | grep -E 'EROFS|EACCES|read-only file system'; then
+  fail "umami tried to write outside its tmpfs"
+fi
+echo "-- umami's log (no secret in it, checked above):"
+"${compose[@]}" logs --no-color --no-log-prefix umami | tail -n 25
+proof "docker0 container: no answer from $base; only umami publishes, on 10.66.0.1:8444; umami has no egress (1.1.1.1:443) and no way to 10.66.0.1; every container non-root, read-only root, CapDrop ALL, no-new-privileges, memory, cpus and pids bounded; no secret value in docker inspect, docker top or $(wc -l <"$out/audit.txt") lines of audit output; no EROFS or EACCES in umami's log (U1)"
 
 "${compose[@]}" down
 echo "stats-e2e: all proofs passed"
