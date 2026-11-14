@@ -1161,7 +1161,7 @@ P5c uses the P5 build model and the default P5 reviewers (as P5a): `opus` xhigh,
   - **Disclaimer — "Geen officiële waarschuwingsdienst / Not an official warning service"** (catalogue gap item 18): one consolidated page, linked from the footer of every page and from the beta banner, naming the official channel per country: NL RWS/WMCN (waterberichtgeving.rws.nl and waterinfo.rws.nl), DE LHP (hochwasserzentralen.de) and the state flood centres, BE waterinfo.be and SPW (hydrometrie.wallonie.be), FR Vigicrues, LU inondations.lu, CH naturgefahren.ch. It states that real-time data are raw and unvalidated (§0.3) and that NL-4 classes are Waterinfo display classes, not warnings.
   - **Colofon / Colophon (legal)**: operator and contact (D2 mailbox; the owner approves the text, E5), the licence of our own code and of the ODbL river graph, and a link to the sources page.
   - **Methode / Method**: `docs/classification.md` rendered (the signed-off §4.9 crosswalk), datums (and why French stations have no converted height), indicative travel times, the §0.5 forecast coverage, and the **rivers that are not covered** and why (D21: the Kempen rivers until VMM, the RLP tributaries until RLP, Austria and Liechtenstein, the Dutch water-board stretches).
-  - **Privacy**: no cookies, no trackers, no analytics, no third-party requests; access logs IP-masked (IPv4 /24, IPv6 /48) and kept 14 days; rate-limiter state held in memory only; if the CDN break-glass (D20) is ever armed, the CDN is named here before it goes live.
+  - **Privacy**: no cookies, no trackers, no third-party analytics, no third-party requests (page views are counted by the owner's own Umami, ADR-0024, tracker from part B of #270); access logs IP-masked (IPv4 /24, IPv6 /48) and kept 14 days; rate-limiter state held in memory only; if the CDN break-glass (D20) is ever armed, the CDN is named here before it goes live.
   - **Status**: per-source freshness from `status.json`.
   - An **accessibility statement** and a 404 page, all in NL and EN.
 - **P10c** (built; issue #90, the evidence in §31): the Rivierkijker brand (D23): name, titles, subtitle and meta description in NL and EN, the logo and favicon, the self-hosted fonts, the brand tokens and the signal set (`docs/design/BRAND.md`).
@@ -4875,3 +4875,27 @@ What PR A of issue #184 stage 2 (KG-342) built: the history under other methods 
   - The owner's post-check shows `present` 0 and every `fail_*` 0 in all 10 series, and the 56 twin counts are identical to the stage-2 count.
   - The round-1 changes to the migration (CR-2 a 120 s lock bound, CR-8 one probe fewer) are not in the applied file (sha256 `b2627a38…`) and never will be.
   - A follow-up PR carries the rest: SR-1 in the threat model, the generator's empty-census guard (CR-4), the integration test's disjoint picks and a passing row beside every failing one (CR-5 to CR-7), and the rollup text pinned against `store.ts` (CR-9). The generator still reproduces the applied file byte for byte.
+
+## 65. Amendment: #270 self-hosted statistics (2026-11-14)
+
+What part A of issue #270 built: a second compose project, `stats`, on the production VM (`deploy/stats/`): Umami 3.4.1, its own PostgreSQL 18 and its own cloudflared, at `stats.waterradar.io`. Part B (the tracker, the CSP and the privacy text) is a separate PR and is not built here. Design and reasons: `docs/adr/0024-self-hosted-statistics-umami.md`.
+
+- **Owner decisions (2026-11-12).** Umami chosen; Plausible CE and GoatCounter rejected. **D1** the dashboard and `/mcp` over WireGuard only. **D2** no backup and no healthchecks. **D3** history kept until the owner deletes it. **D4** updates by hand. **D5** two PRs: A is the stack, B is the tracker, the CSP and the privacy text.
+- **Owner decision (2026-11-14).** One line in `table inet rws` may name the stats bridge (a named waiver of "never touch `table inet rws`").
+- **Built.**
+  - `deploy/stats/compose.yaml`: umami, db and cloudflared on four `stats-*` bridges, 10.63.1 to 4.0/24, secrets with GIDs 63001 to 63003, the dashboard published on `10.66.0.1:8444` only.
+  - `deploy/stats/cloudflared.yml`: `^/api/send$` to Umami, everything else 404.
+  - `deploy/stats/nftables-stats.conf`, `stats-firewall.service`, `stats-resolvers.{sh,service,path}`: `table inet stats`, loaded and reloaded without a flush.
+  - `deploy/host/nftables.conf`: the wg0 forward line gains `stats-publish`.
+  - `test/stats-stack.test.ts`; the `caddy-owner` and `compose-prod` tests follow; `docs/runbooks/stats.md`.
+- **Deviations from #270 (ADR-0024).**
+  1. The rws line above (one bootstrap re-run; R-117).
+  2. Host files in `deploy/stats/`, installed by hand, because rws `bootstrap.sh` installs every `deploy/systemd/*` and `rws-lib.sh host_files()` hashes `deploy/host/*` and `deploy/systemd/*`.
+  3. The tunnel secret is the token read with `--token-file`; the tunnel stays locally managed with the repo ingress.
+- **Text changes.** ARCHITECTURE.md (the requirements table, the privacy bullets of the web and security sections, A§11.5) and the P10b privacy bullet of this file now say "no cookies, no third-party analytics; page views are counted by the owner's own Umami". Security invariants (A§12.1) are unchanged.
+- **[U] items** (KG-508): U1 `start-docker.sh` under `read_only`; U2 the CORS answer of `OPTIONS /api/send`; U3 `CHECKPOINT_DISABLE`; U4 Cloudflare's header handling; U5 http2 on the VM; U6 the token-file tunnel uses the repo ingress; U7 the 10.66.0.1:8444 publish and the rws line on Docker 29.8.1; U8 one MCP tool call.
+- **Criteria.**
+  - **[CI]**: `pnpm check` with `test/stats-stack.test.ts`; the CI job `stats` (`deploy/tests/stats-e2e.sh`: real nft load next to Docker, ingress rules, heartbeat, login, send and OPTIONS from a WireGuard namespace, egress block, `docker inspect` audit, secret-leak grep); `deploy/tests/runbooks-lint.test.sh`.
+  - **[agent-prod]**: 404 for `/`, `/login`, `/mcp`, `/api/auth/login` and `/script.js` at `https://stats.waterradar.io`; `/api/send` reaches Umami; the OPTIONS answer through the tunnel (U2, U4, U6).
+  - **[owner]**: the tunnel, the secrets and the install (`docs/runbooks/stats.md`); the rws bootstrap re-run; the first login and the website ID for part B; `nft list table inet stats` after every boot (R-116); the dashboard from a WireGuard peer (U7); one MCP call (U8).
+- **Risks and gaps.** R-111 to R-117, KG-508 to KG-512; threat model v4.90.
