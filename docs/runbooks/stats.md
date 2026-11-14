@@ -20,7 +20,11 @@ On the owner's workstation, logged in to the Cloudflare account (`cloudflared tu
 cloudflared tunnel create stats
 cloudflared tunnel route dns stats stats.waterradar.io
 cloudflared tunnel token stats    # put the output in the password manager; it becomes /etc/stats/secrets/cf_stats_tunnel
+ls ~/.cloudflared/                # cert.pem (the login) and <tunnel UUID>.json (the tunnel's credentials)
+rm ~/.cloudflared/cert.pem ~/.cloudflared/*.json
 ```
+
+The login leaves `cert.pem`, which holds an API token for the zone and the account: whoever copies it can create a tunnel and repoint any hostname of the zone (`route dns --overwrite-dns`), around the hardware-key sign-in. The VM needs only the token, so both files go at once (review SR-1). In the dashboard (My Profile, API Tokens), delete the token the login created if it is listed; `docs/runbooks/edge-switch.md` §1 allows no standing API token. Section 10 and a leaked token need a new `cloudflared tunnel login` and the same clean-up afterwards.
 
 Never migrate this tunnel to the dashboard ("remotely managed"): its remote configuration would replace the repository's ingress and could route more than `/api/send`. The tunnel stays locally managed; the token only authenticates the connector. Whoever holds it can run a connector and receive the `/api/send` traffic (as R-105 for the rws token): if it leaks, delete the tunnel (`cloudflared tunnel delete stats`), repeat this section and replace the file of section 3.
 
@@ -46,8 +50,8 @@ Each secret is a file, readable by its consumers' group only (nothing else is a 
 install -d -m 0700 /etc/stats/secrets
 openssl rand -hex 32 | install -m 0440 -o root -g 63001 /dev/stdin /etc/stats/secrets/db_umami
 openssl rand -hex 32 | install -m 0440 -o root -g 63002 /dev/stdin /etc/stats/secrets/umami_app_secret
-# the tunnel token of section 1, pasted on stdin then Ctrl-D (never an argument, never in shell history):
-install -m 0440 -o root -g 63003 /dev/stdin /etc/stats/secrets/cf_stats_tunnel
+# the tunnel token of section 1, pasted without echo (never an argument, never in shell history):
+read -rs token && printf '%s\n' "$token" | install -m 0440 -o root -g 63003 /dev/stdin /etc/stats/secrets/cf_stats_tunnel; unset token
 install -d -m 0700 -o 999 -g 999 /srv/stats/pgdata
 stat -c '%n %a %u:%g' /etc/stats/secrets/* /srv/stats/pgdata
 ```
@@ -85,13 +89,22 @@ docker compose -f /etc/stats/compose.yaml ps
 docker compose -f /etc/stats/compose.yaml logs --no-log-prefix umami | tail -20
 ```
 
-Expected: `db`, `umami` and `cloudflared` `running (healthy)`. The first start runs Umami's migrations (U1, KG-508); wait for `umami` to turn healthy.
+Expected: `db`, `umami` and `cloudflared` `running (healthy)`. The first start runs Umami's migrations (U1, KG-508); wait for `umami` to turn healthy. The first migration creates the login `admin`/`umami`: go on to section 7 at once.
 
 ## 7. First login, the website and the optional MCP key
 
-From a WireGuard peer, open `http://10.66.0.1:8444`:
+1. **Replace the default password before any browser is used**, from a WireGuard peer with `curl` (the calls `deploy/tests/stats-e2e.sh` runs in CI). Umami checks no Host header and does not rate-limit its login, so a page in any browser tab on a peer could reach the dashboard by DNS rebinding while `admin`/`umami` works (R-113, review SR-3). The new password (at least 8 characters, from the password manager) goes in without echo and reaches `jq` through its environment, never argv:
 
-1. Log in as `admin` / `umami` and **replace the password at once** (Profile, Password). The default is created by the first migration; until it is changed, any peer can log in (R-113).
+   ```bash
+   read -rs pw
+   t=$(curl -s -H 'Content-Type: application/json' -d '{"username":"admin","password":"umami"}' http://10.66.0.1:8444/api/auth/login | jq -r .token)
+   PW=$pw jq -nc '{currentPassword:"umami",newPassword:env.PW}' |
+     curl -s -o /dev/null -w '%{http_code}\n' -H "Authorization: Bearer $t" -H 'Content-Type: application/json' -d @- http://10.66.0.1:8444/api/me/password   # 200
+   unset pw t
+   curl -s -o /dev/null -w '%{http_code}\n' -H 'Content-Type: application/json' -d '{"username":"admin","password":"umami"}' http://10.66.0.1:8444/api/auth/login   # 401
+   ```
+
+   Then open `http://10.66.0.1:8444` in the browser and log in with the new password.
 2. Settings, Websites, add `waterradar.io`. Its **website ID** goes to part B of #270 (the tracker); it is not a secret.
 3. Optional, for MCP: Settings, API keys, create a key. Use it as the bearer token at `http://10.66.0.1:8444/mcp`. The key is a general Umami API credential (R-115): keep it in the password manager only, and delete it in the dashboard if it leaks.
 
@@ -119,6 +132,15 @@ docker port $(docker compose -f /etc/stats/compose.yaml ps -q umami)    # only 1
 
 Expected: the table exists; cloudflared's log shows http2 connections (U5); each container has a numeric user, a read-only root, `[ALL]` dropped and memory and PID limits.
 
+The database grows with every event, on the disk rws uses too, and anyone can send events (R-111). The rws disk check (`disk < 75 %`) pages before the disk is full; watch the size here as well:
+
+```bash
+du -sh /srv/stats/pgdata
+df -h /srv/stats
+```
+
+If it grows by more than real visits explain, a Cloudflare rate-limiting rule on `stats.waterradar.io/api/send` (per client IP) is the owner's option, if the plan has one free.
+
 [owner], from a WireGuard peer (U7, U8):
 
 ```bash
@@ -140,6 +162,8 @@ Nothing updates itself, and the stats images are outside the rws Grype gate (KG-
    ```bash
    docker compose -f /etc/stats/compose.yaml exec -T db pg_dump -U umami umami | gzip > ~/stats-$(date -u +%Y%m%d).sql.gz
    ```
+
+   The session id hashes a visitor's address with `APP_SECRET`, so a dump together with `umami_app_secret` lets someone recover IPv4 addresses by brute force (review SR-7). Keep the dump on the VM, never next to a copy of the secret, and delete it once the update has worked.
 
 5. Install the new compose file and recreate:
 
