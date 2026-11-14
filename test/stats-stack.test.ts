@@ -99,6 +99,44 @@ describe('deploy/stats/compose.yaml', () => {
       expect(read(join('deploy', rel)), rel).not.toMatch(/10\.63\.|stats-/);
   });
 
+  it('overlaps nothing of rws, F1 Timings or WireGuard (the #270 criterion)', () => {
+    const ip = (a: string) => a.split('.').reduce((n, o) => n * 256 + Number(o), 0);
+    const range = (cidr: string) => {
+      const [a = '', bits = '32'] = cidr.split('/');
+      const size = 2 ** (32 - Number(bits));
+      const lo = Math.floor(ip(a) / size) * size;
+      return [lo, lo + size - 1] as const;
+    };
+    const overlap = (x: string, y: string) => {
+      const [a, b] = range(x);
+      const [c, d] = range(y);
+      return a <= d && c <= b;
+    };
+    // rws 172.30.0.0/16 (and fd7a:7773::/32: stats has no IPv6), F1 Timings 10.62.0.0/16, WireGuard 10.66.0.0/24.
+    const taken = ['172.30.0.0/16', '10.62.0.0/16', '10.66.0.0/24'];
+    for (const [k, n] of Object.entries(doc.networks))
+      for (const { subnet } of n.ipam.config as { subnet: string }[]) {
+        expect(subnet, k).toMatch(/^\d+\.\d+\.\d+\.\d+\/\d+$/);
+        for (const other of taken) expect(overlap(subnet, other), `${k} ${subnet} vs ${other}`).toBe(false);
+      }
+    expect(live(text)).not.toMatch(/fd7a:|enable_ipv6/);
+    // GIDs: rws 61001-61099, F1 Timings from 62001 (62001-62099 reserved).
+    for (const gid of Object.values(GID).map(Number)) {
+      expect(gid < 61001 || gid > 61099, String(gid)).toBe(true);
+      expect(gid < 62001 || gid > 62099, String(gid)).toBe(true);
+    }
+    // Names and paths: every network and bridge is stats-*; nothing names an rws or f1 path, network or table.
+    for (const [k, n] of Object.entries(doc.networks)) {
+      expect(k).toMatch(/^stats-/);
+      expect(n.driver_opts['com.docker.network.bridge.name']).toMatch(/^stats-/);
+    }
+    for (const rel of ['deploy/stats/compose.yaml', 'deploy/stats/nftables-stats.conf', 'deploy/stats/cloudflared.yml'])
+      expect(live(read(rel)), rel).not.toMatch(
+        /\/etc\/(?:rws|f1)\b|\/srv\/(?:rws|f1)\b|\b(?:rws|f1)-|inet (?:rws|f1)\b/,
+      );
+    expect(overlap('10.62.0.0/16', '10.62.3.0/24')).toBe(true); // the helper itself
+  });
+
   it('runs cloudflared over http2 with loopback metrics, the repo ingress and the token from its file', () => {
     const cf = svc.cloudflared as Service;
     const args = [...(cf.entrypoint as string[]), ...(cf.command as string[])].join(' ');
