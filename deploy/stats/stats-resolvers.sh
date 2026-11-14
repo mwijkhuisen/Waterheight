@@ -11,8 +11,9 @@ set -euo pipefail
 # nameserver lines of a resolv.conf, without zone ids.
 servers() { awk '$1 == "nameserver" { sub(/%.*/, "", $2); print $2 }' "$1" 2>/dev/null || true; }
 
+# The set is IPv4 only, so resolved's own file is used unless resolv.conf names a non-loopback IPv4 server.
 conf=/etc/resolv.conf
-if ! servers "$conf" | grep -qvE '^(127\.|::1$)' && [[ -r /run/systemd/resolve/resolv.conf ]]; then
+if ! servers "$conf" | grep -E '^[0-9]{1,3}(\.[0-9]{1,3}){3}$' | grep -qv '^127\.' && [[ -r /run/systemd/resolve/resolv.conf ]]; then
   conf=/run/systemd/resolve/resolv.conf
 fi
 v4=()

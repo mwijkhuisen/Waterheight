@@ -95,6 +95,8 @@ describe('deploy/stats/compose.yaml', () => {
       if (!n.internal) expect(n.driver_opts['com.docker.network.bridge.enable_icc'], k).toBe('false');
     }
     expect(subnets.sort()).toEqual(['10.63.1.0/24', '10.63.2.0/24', '10.63.3.0/24', '10.63.4.0/24']);
+    // umami's bridge is not masqueraded: a packet that leaves without table inet stats gets no answer (review CR-2).
+    expect(doc.networks['stats-publish'].driver_opts['com.docker.network.bridge.enable_ip_masquerade']).toBe('false');
     for (const rel of readdirSync(join(repoRoot, 'deploy')).filter((f) => /^compose.*\.yaml$/.test(f)))
       expect(read(join('deploy', rel)), rel).not.toMatch(/10\.63\.|stats-/);
   });
@@ -155,6 +157,8 @@ describe('deploy/stats/compose.yaml', () => {
     expect(cmd).toMatch(/exec sh scripts\/start-docker\.sh$/);
     expect(cmd).not.toMatch(/echo "?\$|set -x|printenv|env\b/);
     expect(svc.db?.environment.POSTGRES_INITDB_ARGS).toContain('--auth-local=scram-sha-256 --auth-host=scram-sha-256');
+    // No third-party favicon per referrer domain in the owner's browser (review SR-2).
+    expect((svc.umami as Service).environment.PRIVATE_MODE).toBe('1');
   });
 });
 

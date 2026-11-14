@@ -19,7 +19,8 @@ ExecStart=/usr/sbin/nft -f /etc/stats/nftables-stats.conf
 ExecStartPost=-/usr/local/bin/stats-resolvers
 ExecReload=/usr/sbin/nft -c -f /etc/stats/nftables-stats.conf
 ExecReload=/usr/sbin/nft -f /etc/stats/nftables-stats.conf
-ExecReload=-/usr/local/bin/stats-resolvers
+# The reload recreates the table, which empties resolvers4: a failed refill fails the reload (review CR-8).
+ExecReload=/usr/local/bin/stats-resolvers
 
 [Install]
 WantedBy=sysinit.target

@@ -58,6 +58,9 @@ services:
       DISABLE_UPDATES: "1"
       # Prisma CLI's call to checkpoint.prisma.io (and its write to ~/.cache) during the migrations.
       CHECKPOINT_DISABLE: "1"
+      # No favicon from icons.duckduckgo.com for each referrer domain (a visitor chooses those, so it would tell an
+      # outsider when the owner looks), no telemetry script, no update notice. Nothing stored changes (review SR-2).
+      PRIVATE_MODE: "1"
     secrets: [db_umami, umami_app_secret]
     tmpfs:
       - /tmp:size=16m,mode=1777
@@ -180,11 +183,13 @@ networks:
     ipam:
       config:
         - subnet: 10.63.2.0/24
-  # umami alone: the published 10.66.0.1:8444. The firewall drops everything it sends out.
+  # umami alone: the published 10.66.0.1:8444. The firewall drops everything it sends out, and without masquerading
+  # a packet that left anyway (no table inet stats, R-116) carries a private source and gets no answer (review CR-2).
   stats-publish:
     driver_opts:
       com.docker.network.bridge.name: stats-publish
       com.docker.network.bridge.enable_icc: "false"
+      com.docker.network.bridge.enable_ip_masquerade: "false"
     ipam:
       config:
         - subnet: 10.63.3.0/24
