@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # CI only (#270 part A, ADR-0024; ci.yml job `stats`), as root on a GitHub runner, with the runner's own Docker (not
-# production's 29.8.1: that is U7, an [agent-prod] check). The [CI] proofs of the stats stack (deploy/stats/):
-#   1. the three pinned images, pulled before any firewall load;
+# production's 29.8.1: that is U7, an [agent-prod] check) on production's deploy/host/daemon.json. The [CI] proofs of
+# the stats stack (deploy/stats/):
+#   1. production's daemon.json, then the three pinned images, pulled before any firewall load;
 #   2. the real rws table and the stats table side by side: nft -c, the stats table loaded twice, exactly one
 #      table inet stats, the rws table byte-identical, no `flush ruleset` anywhere in deploy/stats;
 #   3. systemd-analyze verify of the stats units (the script at its ExecStart path);
@@ -44,9 +45,15 @@ images=$(sed -nE 's/^[[:space:]]*image:[[:space:]]*([^[:space:]]+).*$/\1/p' "$st
 cf_image=$(grep '^cloudflare/cloudflared:' <<<"$images")
 umami_image=$(grep '^ghcr.io/umami-software/umami:' <<<"$images")
 
-step "1. The three pinned images, before any firewall load"
+step "1. Production's daemon.json, then the three pinned images, before any firewall load"
+# The runner's daemon.json sends container DNS to harden-runner's proxy on 172.17.0.1, a host address, which table
+# inet stats drops like any other container packet to the host. Production's (as deploy/tests/e2e/run.sh installs it)
+# leaves DNS to the host's resolvers, the ones stats-resolvers allows.
+echo "runner daemon.json: $(cat /etc/docker/daemon.json 2>/dev/null || echo none)"
+install -m 0644 "$repo/deploy/host/daemon.json" /etc/docker/daemon.json
+systemctl restart docker
 for image in $images; do docker pull -q "$image"; done
-proof "pulled: $(tr '\n' ' ' <<<"$images")"
+proof "Docker $(docker version --format '{{.Server.Version}}') on deploy/host/daemon.json; pulled: $(tr '\n' ' ' <<<"$images")"
 
 step "2. nftables: the rws table, then the stats table twice beside it"
 if grep -rnE '^[^#]*flush ruleset' "$stats"; then fail "flush ruleset in deploy/stats"; fi
