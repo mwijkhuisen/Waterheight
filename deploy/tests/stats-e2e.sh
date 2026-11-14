@@ -6,10 +6,12 @@
 #      table inet stats, the rws table byte-identical, no `flush ruleset` anywhere in deploy/stats;
 #   3. systemd-analyze verify of the stats units (the script at its ExecStart path);
 #   4. cloudflared's own ingress matcher (`tunnel ingress rule`) on every URL of the criteria;
-#   5. the stack (umami and db; cloudflared needs a real token) behind wg-veth.sh's wg0 stand-in;
-#   6. from the WireGuard peer: heartbeat, the first login under read_only (U1), a website, an event, the OPTIONS
-#      answer (U2) and /mcp without a key; from docker0: nothing; from umami: no egress; the hardening flags; no
-#      secret value in `docker inspect`, `docker top` or the logs.
+#   5. the stack (umami and db) behind wg-veth.sh's wg0 stand-in;
+#   6. from the WireGuard peer: heartbeat, the first login under read_only (U1), a website, an event (stored, with
+#      no IP in the database), the OPTIONS answer (U2), /mcp without a key, and the runbook's password change;
+#      cloudflared with a well-formed token of no real tunnel (flags, ingress and token parsed, http2), and the
+#      stats-tunnel egress (DNS and TCP 7844 to Cloudflare only); from docker0 and umami: nothing (time-outs); the
+#      hardening flags of all three; no secret value in `docker inspect`, `docker top` or the logs.
 # Usage: sudo deploy/tests/stats-e2e.sh
 set -euo pipefail
 
@@ -26,6 +28,14 @@ fail() {
   printf 'FAIL: %s\n' "$*" >&2
   "${compose[@]}" logs --no-color >&2 || true
   exit 1
+}
+# A dropped packet: curl times out (exit 28). Any other failure (no curl, a stopped container, DNS) is not a proof.
+blocked() {
+  local what=$1 rc=0
+  shift
+  "$@" >/dev/null 2>&1 || rc=$?
+  ((rc == 28)) || fail "$what: expected a time-out (curl exit 28), got exit $rc"
+  echo "blocked: $what (curl exit 28)"
 }
 (($(id -u) == 0)) || { echo "stats-e2e: run as root" >&2; exit 1; }
 
@@ -88,7 +98,9 @@ install -d -m 0755 /etc/stats
 install -d -m 0700 /etc/stats/secrets
 db_pw=$(openssl rand -hex 32)
 app_secret=$(openssl rand -hex 32)
-cf_token=$(openssl rand -hex 32)
+# Well-formed (cloudflared's TunnelToken: account, tunnel UUID, secret) for a tunnel that does not exist.
+cf_token=$(printf '{"a":"%s","t":"%s","s":"%s"}' "$(openssl rand -hex 16)" "$(cat /proc/sys/kernel/random/uuid)" \
+  "$(openssl rand -base64 32)" | base64 -w0)
 put_secret() { printf '%s' "$2" >"/etc/stats/secrets/$1" && chown "root:$3" "/etc/stats/secrets/$1" && chmod 0440 "/etc/stats/secrets/$1"; }
 put_secret db_umami "$db_pw" 63001
 put_secret umami_app_secret "$app_secret" 63002
@@ -134,22 +146,53 @@ views=$("${peer[@]}" -H "Authorization: Bearer $token" \
 "${compose[@]}" exec -T db sh -c 'PGPASSWORD=$(cat /run/secrets/db_umami) exec pg_dump -U umami -h 127.0.0.1 umami' \
   >"$out/dump.sql" || fail "pg_dump"
 if grep -qF 198.51.100.7 "$out/dump.sql"; then fail "the visitor's address is in the database"; fi
-proof "from wgpeer: heartbeat 200 $(cat "$out/heartbeat.json"); admin/umami login gave a token; website $website; POST /api/send 200 with no Set-Cookie ($(head -c 200 "$out/send.json")); OPTIONS /api/send $(grep -i '^access-control-allow-origin:' "$out/options.headers" | tr -d '\r'); /mcp without a key 401; pageviews $views; the address 198.51.100.7 is in none of the $(wc -l <"$out/dump.sql") lines of pg_dump"
+# The runbook's first step (docs/runbooks/stats.md §7, review SR-3): the default password replaced over the API, the
+# new one on stdin, never in argv.
+new_pw=$(openssl rand -hex 24)
+code=$(PW=$new_pw jq -nc '{currentPassword:"umami",newPassword:env.PW}' |
+  "${peer[@]}" -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+    -d @- "$base/api/me/password") || fail "password change from wgpeer"
+[[ $code == 200 ]] || fail "password change: HTTP $code"
+code=$("${peer[@]}" -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"umami"}' "$base/api/auth/login") || fail "login from wgpeer"
+[[ $code == 401 ]] || fail "admin/umami still logs in after the change: HTTP $code"
+PW=$new_pw jq -nc '{username:"admin",password:env.PW}' |
+  "${peer[@]}" -H 'Content-Type: application/json' -d @- "$base/api/auth/login" | jq -e .token >/dev/null ||
+  fail "login with the new password"
+proof "from wgpeer: heartbeat 200 $(cat "$out/heartbeat.json"); admin/umami login gave a token; website $website; POST /api/send 200 with no Set-Cookie ($(head -c 200 "$out/send.json")); OPTIONS /api/send $(grep -i '^access-control-allow-origin:' "$out/options.headers" | tr -d '\r'); /mcp without a key 401; pageviews $views; the address 198.51.100.7 is in none of the $(wc -l <"$out/dump.sql") lines of pg_dump; after the runbook's password change admin/umami gets 401 and the new password logs in"
 
-step "6b. Negatives and the hardening audit"
-if docker run --rm --network bridge --entrypoint curl "$umami_image" -sS --max-time 5 -o /dev/null "$base/api/heartbeat"; then
-  fail "a container on docker0 reached the dashboard"
+step "6b. cloudflared, and the stats-tunnel egress"
+"${compose[@]}" up -d cloudflared || fail "compose up cloudflared"
+sleep 15
+"${compose[@]}" logs --no-color --no-log-prefix cloudflared >"$out/cloudflared.log" 2>&1
+tail -n 30 "$out/cloudflared.log"
+if grep -E 'Incorrect Usage|flag provided but not defined|Provided Tunnel token is not valid' "$out/cloudflared.log"; then
+  fail "cloudflared refused its flags or token"
 fi
+# Logged after the token, the flags and the local ingress are parsed (configuration.go, prepareTunnelConfig).
+grep -q 'Initial protocol http2' "$out/cloudflared.log" || fail "cloudflared did not reach 'Initial protocol http2'"
+tunnel_net=$(docker network ls -q --filter label=com.docker.compose.project=stats --filter label=com.docker.compose.network=stats-tunnel)
+[[ -n $tunnel_net ]] || fail "no stats-tunnel network"
+probe=(docker run --rm --network "$tunnel_net" --entrypoint sh "$umami_image" -c)
+edge=$("${probe[@]}" 'nslookup region1.v2.argotunnel.com' 2>&1 | grep -oE '198\.41\.(192|200)\.[0-9]+' | head -n 1) ||
+  fail "no DNS answer on stats-tunnel"
+[[ -n $edge ]] || fail "no DNS answer for region1.v2.argotunnel.com on stats-tunnel"
+# TCP 7844 to the edge connects (curl's time_connect is set even when the TLS that follows fails).
+connect=$("${probe[@]}" "curl -sk -o /dev/null --connect-timeout 5 --max-time 8 -w '%{time_connect}' https://$edge:7844/" || true)
+[[ $connect =~ ^0\.[0-9]*[1-9] || $connect =~ ^[1-9] ]] || fail "no TCP connection to $edge:7844 from stats-tunnel ($connect)"
+blocked "stats-tunnel to $edge:443" "${probe[@]}" "curl -sS --max-time 5 -o /dev/null https://$edge/"
+blocked "stats-tunnel to 1.1.1.1:443" "${probe[@]}" 'curl -sS --max-time 5 -o /dev/null https://1.1.1.1/'
+blocked "stats-tunnel to 10.66.0.1:8444" "${probe[@]}" 'curl -sS --max-time 5 -o /dev/null http://10.66.0.1:8444/'
+proof "cloudflared parsed its flags, the token and the repo ingress and chose http2 (U5 and U6 up to the edge); on stats-tunnel DNS answers ($edge) and TCP 7844 to Cloudflare connects (time_connect $connect), while 443 to Cloudflare, 1.1.1.1 and the dashboard time out"
+
+step "6c. Negatives and the hardening audit"
+blocked "docker0 to the dashboard" docker run --rm --network bridge --entrypoint curl "$umami_image" -sS --max-time 5 -o /dev/null "$base/api/heartbeat"
 ports=$(for id in $("${compose[@]}" ps -q); do
   docker port "$id" | sed "s|^|$(docker inspect -f '{{index .Config.Labels "com.docker.compose.service"}}' "$id") |"
 done)
 [[ $ports == 'umami 3000/tcp -> 10.66.0.1:8444' ]] || fail "published ports: $ports"
-if "${compose[@]}" exec -T umami curl -sS --max-time 5 -o /dev/null https://1.1.1.1/; then
-  fail "umami reached the internet"
-fi
-if "${compose[@]}" exec -T umami curl -sS --max-time 5 -o /dev/null http://10.66.0.1:8444/api/heartbeat; then
-  fail "umami reached the host's WireGuard address"
-fi
+blocked "umami to 1.1.1.1:443" "${compose[@]}" exec -T umami curl -sS --max-time 5 -o /dev/null https://1.1.1.1/
+blocked "umami to 10.66.0.1:8444" "${compose[@]}" exec -T umami curl -sS --max-time 5 -o /dev/null http://10.66.0.1:8444/api/heartbeat
 for id in $("${compose[@]}" ps -aq); do
   docker inspect "$id" | jq -e '.[0] | (.Config.User | test("^[1-9][0-9]*:[1-9][0-9]*$"))
     and .HostConfig.ReadonlyRootfs and .HostConfig.CapDrop == ["ALL"]
@@ -162,7 +205,7 @@ done
   for id in $("${compose[@]}" ps -aq); do docker inspect "$id"; docker top "$id" -eo pid,args || true; done
   "${compose[@]}" logs --no-color
 } >"$out/audit.txt" 2>&1
-for value in "$db_pw" "$app_secret" "$cf_token"; do
+for value in "$db_pw" "$app_secret" "$cf_token" "$new_pw"; do
   if grep -qF "$value" "$out/audit.txt"; then fail "a secret value is in docker inspect, docker top or the logs"; fi
 done
 if "${compose[@]}" logs --no-color umami | grep -E 'EROFS|EACCES|read-only file system'; then
