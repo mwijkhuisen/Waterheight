@@ -356,7 +356,8 @@ describe('the owner site is reachable over WireGuard only (P12a)', () => {
     expect(fw).toContain(
       'iifname "wg0" meta l4proto tcp ct original ip daddr 10.66.0.1 ct original proto-dst 443 accept',
     );
-    expect(fw).toContain('iifname "wg0" oifname != "rws-owner-pub" drop');
+    // #270 (ADR-0024): the one other bridge a peer may reach is the stats dashboard's, narrowed by table inet stats.
+    expect(fw).toContain('iifname "wg0" oifname != { "rws-owner-pub", "stats-publish" } drop');
     // The owner site's bridge gets no way out, DNS included (review SR-1): dropped before the resolver accepts.
     const fromContainers = fw.slice(fw.indexOf('chain from_containers'));
     expect(fromContainers.indexOf('iifname "rws-owner-pub" drop')).toBeGreaterThan(0);
