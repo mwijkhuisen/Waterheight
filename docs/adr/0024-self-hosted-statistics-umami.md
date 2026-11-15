@@ -53,5 +53,5 @@
 
 - A visit count exists only after part B ships the tracker; until then the stack holds no data and the public site is unchanged.
 - The VM carries a third compose project and a second cloudflared; its images are outside the rws Grype gate and updated by hand (KG-509).
-- Open risks and gaps: R-111 to R-117, KG-508 to KG-512. Threats: `docs/threat-model.md` v4.90.
+- Open risks and gaps: R-111 to R-117, KG-508 to KG-512. Threats: `docs/threat-model.md` v4.91.
 - Rejected variants stay rejected; a different tool is a new ADR.

@@ -4898,4 +4898,4 @@ What part A of issue #270 built: a second compose project, `stats`, on the produ
   - **[CI]**: `pnpm check` with `test/stats-stack.test.ts`; the CI job `stats` (`deploy/tests/stats-e2e.sh`: real nft load next to Docker, ingress rules, heartbeat, login, send and OPTIONS from a WireGuard namespace, egress block, `docker inspect` audit, secret-leak grep); `deploy/tests/runbooks-lint.test.sh`.
   - **[agent-prod]**: 404 for `/`, `/login`, `/mcp`, `/api/auth/login` and `/script.js` at `https://stats.waterradar.io`; `/api/send` reaches Umami; the OPTIONS answer through the tunnel (U2, U4, U6).
   - **[owner]**: the tunnel, the secrets and the install (`docs/runbooks/stats.md`); the rws bootstrap re-run; the first login and the website ID for part B; `nft list table inet stats` after every boot (R-116); the dashboard from a WireGuard peer (U7); one MCP call (U8).
-- **Risks and gaps.** R-111 to R-117, KG-508 to KG-512; threat model v4.90.
+- **Risks and gaps.** R-111 to R-117, KG-508 to KG-512; threat model v4.91.
