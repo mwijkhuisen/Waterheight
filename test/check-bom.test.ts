@@ -56,8 +56,8 @@ describe('check-bom', () => {
 
   it('fails on a wrong pin in a package.json', () => {
     const dir = scratch();
-    edit(dir, 'apps/server/package.json', '"hono": "4.13.14"', '"hono": "4.13.15"');
-    expect(checkBom(dir).join('\n')).toMatch(/hono@4\.13\.15: the bill of materials says 4\.13\.14/);
+    edit(dir, 'apps/server/package.json', '"hono": "4.13.16"', '"hono": "4.13.17"');
+    expect(checkBom(dir).join('\n')).toMatch(/hono@4\.13\.17: the bill of materials says 4\.13\.16/);
   });
 
   it('fails on a version range', () => {
@@ -68,8 +68,8 @@ describe('check-bom', () => {
 
   it('fails when the bill of materials drifts from the pins', () => {
     const dir = scratch();
-    edit(dir, 'CLAUDE.md', '| vitest | npm | 5.0.5 |', '| vitest | npm | 5.0.6 |');
-    expect(checkBom(dir).join('\n')).toMatch(/vitest@5\.0\.5: the bill of materials says 5\.0\.6/);
+    edit(dir, 'CLAUDE.md', '| vitest | npm | 5.1.0 |', '| vitest | npm | 5.1.1 |');
+    expect(checkBom(dir).join('\n')).toMatch(/vitest@5\.1\.0: the bill of materials says 5\.1\.1/);
   });
 
   it('fails when a dependency has no row', () => {
@@ -80,8 +80,8 @@ describe('check-bom', () => {
 
   it('fails when the lockfile does not match', () => {
     const dir = scratch();
-    edit(dir, 'pnpm-lock.yaml', /(\n {6}hono:\n {8}specifier: )4\.13\.14/, '$14.13.10');
-    expect(checkBom(dir).join('\n')).toMatch(/hono@4\.13\.14: pnpm-lock\.yaml has 4\.13\.10/);
+    edit(dir, 'pnpm-lock.yaml', /(\n {6}hono:\n {8}specifier: )4\.13\.16/, '$14.13.10');
+    expect(checkBom(dir).join('\n')).toMatch(/hono@4\.13\.16: pnpm-lock\.yaml has 4\.13\.10/);
   });
 
   it('fails on TypeScript 7', () => {
@@ -199,10 +199,10 @@ describe('supply-chain rules (risk R-008)', () => {
     edit(
       dir,
       'pnpm-lock.yaml',
-      /(\n {2}hono@4\.13\.14:\n {4}resolution: )\{integrity: [^}]+\}/,
-      '$1{tarball: https://example.com/hono-4.13.14.tgz}',
+      /(\n {2}hono@4\.13\.16:\n {4}resolution: )\{integrity: [^}]+\}/,
+      '$1{tarball: https://example.com/hono-4.13.16.tgz}',
     );
-    expect(checkSupplyChain(dir).join('\n')).toMatch(/hono@4\.13\.14: resolves by tarball, not by registry integrity/);
+    expect(checkSupplyChain(dir).join('\n')).toMatch(/hono@4\.13\.16: resolves by tarball, not by registry integrity/);
   });
 
   it.each([

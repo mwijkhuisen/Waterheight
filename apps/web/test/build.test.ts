@@ -164,8 +164,8 @@ describe('web build', () => {
       'echarts@6.1.0 — Apache-2.0',
       'zrender@6.1.0 — BSD-3-Clause',
       'tslib@2.3.0 — 0BSD',
-      '@tanstack/react-query@5.105.0 — MIT',
-      '@tanstack/query-core@5.105.0 — MIT',
+      '@tanstack/react-query@5.105.3 — MIT',
+      '@tanstack/query-core@5.105.3 — MIT',
       'zod@4.6.7 — MIT',
     ])
       expect(text, header).toContain(`\n${header}\n`);

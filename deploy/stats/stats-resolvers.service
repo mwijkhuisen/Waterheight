@@ -1,0 +1,14 @@
+# Loads the host's IPv4 resolvers into table inet stats (cloudflared's DNS), once at boot once the network is up:
+# the firewall's own run at sysinit may find no resolver yet. stats-resolvers.path runs it again on every change.
+[Unit]
+Description=stats: cloudflared's DNS allowlist from resolv.conf
+Wants=network-online.target
+After=stats-firewall.service network-online.target systemd-resolved.service
+Requisite=stats-firewall.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/stats-resolvers
+
+[Install]
+WantedBy=multi-user.target

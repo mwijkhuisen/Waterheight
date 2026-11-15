@@ -83,6 +83,7 @@ describe('the owner api routes (P9b)', () => {
     expect(globals).toContain('trusted_proxies_strict\n');
     expect(globals).toContain('client_ip_headers X-Forwarded-For\n');
     expect(read('deploy/web/Caddyfile.owner')).not.toContain('trusted_proxies');
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal compose interpolation, not a template
     expect(read('deploy/compose.yaml')).toContain('RWS_TRUSTED_PROXIES: ${RWS_TRUSTED_PROXIES:-}\n');
   });
 
@@ -356,7 +357,8 @@ describe('the owner site is reachable over WireGuard only (P12a)', () => {
     expect(fw).toContain(
       'iifname "wg0" meta l4proto tcp ct original ip daddr 10.66.0.1 ct original proto-dst 443 accept',
     );
-    expect(fw).toContain('iifname "wg0" oifname != "rws-owner-pub" drop');
+    // #270 (ADR-0024): the one other bridge a peer may reach is the stats dashboard's, narrowed by table inet stats.
+    expect(fw).toContain('iifname "wg0" oifname != { "rws-owner-pub", "stats-publish" } drop');
     // The owner site's bridge gets no way out, DNS included (review SR-1): dropped before the resolver accepts.
     const fromContainers = fw.slice(fw.indexOf('chain from_containers'));
     expect(fromContainers.indexOf('iifname "rws-owner-pub" drop')).toBeGreaterThan(0);
