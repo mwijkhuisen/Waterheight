@@ -96,6 +96,28 @@ describe('web build', () => {
     expect(notices).toContain('Source Sans 3 (font, @fontsource/source-sans-3)@5.3.0 — OFL-1.1');
   });
 
+  // #270 B (ADR-0024): the statistics script ships as it was vendored, the two map shells carry its tag as written (Vite
+  // leaves a classic script alone and moves only its module entry into the head), and its MIT text is in the notices.
+  it('ships the statistics script byte for byte, its tag unchanged after the entry, and its licence in the notices', () => {
+    const name = 'assets/stats-654f12c7.js';
+    expect(readFileSync(join(out, name))).toEqual(readFileSync(join(webDir, 'public', name)));
+    for (const [html, source] of [
+      ['index.html', 'index.html'],
+      ['en/index.html', 'en/index.html'],
+    ] as const) {
+      const tag = /^\s*(<script type="\[\[`text\/javascript`\]\]"[^\n]*<\/script>)$/m.exec(
+        readFileSync(join(webDir, source), 'utf8'),
+      )?.[1];
+      expect(tag, source).toBeDefined();
+      const built = page(html);
+      expect(built.split(tag ?? '-').length - 1, html).toBe(1);
+      expect(built.indexOf(tag ?? '-')).toBeGreaterThan(built.indexOf('<script type="module"'));
+    }
+    for (const html of ['404.html', 'en/404.html']) expect(page(html)).not.toContain('stats-');
+    expect(page('third-party-notices.txt')).toContain('\nUmami tracker (umami-software/umami)@3.4.1 — MIT\n');
+    expect(page('third-party-notices.txt')).toContain('Copyright (c) 2022 Umami Software, Inc.');
+  });
+
   // P10f (#128): the public name is Water Radar since 2026-10-10. The old name is in no production file, in any case and
   // any file type (a page, a chunk, the favicon's title, a text chunk of og.png), and the favicon names the new one.
   it('names Water Radar and never the old name Rivierkijker in any production file', () => {

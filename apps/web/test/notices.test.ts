@@ -113,9 +113,10 @@ describe('thirdPartyNotices on a synthetic project', () => {
     expect(text).toContain('--- LICENSE ---\nMIT licence text\n');
     expect(text).not.toContain('a directory is not');
     expect(text).not.toContain('local.js');
-    // Two packages and the two vendored fonts (P10c), each between two rules.
-    expect(text.match(/^={72}$/gm)).toHaveLength(8);
+    // Two packages, the two vendored fonts (P10c) and the vendored statistics script (#270 B), each between two rules.
+    expect(text.match(/^={72}$/gm)).toHaveLength(10);
     expect(text).toContain('Source Sans 3 (font, @fontsource/source-sans-3)@5.3.0 — OFL-1.1');
+    expect(text).toContain('\nUmami tracker (umami-software/umami)@3.4.1 — MIT\n');
     expect(text).toContain('/assets/map/abc1234/LICENSES.md');
   });
 

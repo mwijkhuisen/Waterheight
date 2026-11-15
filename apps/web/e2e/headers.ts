@@ -81,5 +81,10 @@ function launchBody(marker: 'ROBOTS' | 'SITEMAP', domain: string): string {
 export const robotsTxt = (domain: string): string => launchBody('ROBOTS', domain);
 export const sitemapXml = (domain: string): string => launchBody('SITEMAP', domain);
 
-/** What Caddy's templates module makes of the shells' one expression (apps/web/index.html): RWS_DOMAIN as configured. */
-export const fillShell = (html: string, domain: string): string => html.replaceAll('[[env `RWS_DOMAIN`]]', domain);
+/**
+ * What Caddy's templates module makes of the shells' two expressions (apps/web/index.html): RWS_DOMAIN as configured,
+ * and the statistics script's type (#270 B: only the public site renders it, so on the owner site the tag stays an
+ * inert data block that the browser never fetches).
+ */
+export const fillShell = (html: string, domain: string): string =>
+  html.replaceAll('[[env `RWS_DOMAIN`]]', domain).replaceAll('[[`text/javascript`]]', 'text/javascript');

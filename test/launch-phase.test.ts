@@ -197,13 +197,16 @@ describe('the phase files', () => {
 
 describe('the Open Graph tags', () => {
   const SHELLS = ['apps/web/index.html', 'apps/web/en/index.html'];
-  /** The one template expression the files may hold: the domain, in the absolute og:image URL. */
+  /** The template expressions the files may hold: the domain, in the absolute og:image URL. */
   const ALLOWED = 'https://[[env `RWS_DOMAIN`]]';
+  /** #270 B: and the statistics script's type, rendered by the public site only (test/stats-tracker.test.ts). */
+  const TRACKER_TYPE = 'type="[[`text/javascript`]]"';
 
-  it.each(SHELLS)('%s has no [[ or ]] outside the one allowed expression, and no og:url', (file) => {
+  it.each(SHELLS)('%s has no [[ or ]] outside the two allowed expressions, and no og:url', (file) => {
     const html = read(file);
     expect(html.split(ALLOWED).length - 1).toBe(1);
-    const rest = html.replaceAll(ALLOWED, '');
+    expect(html.split(TRACKER_TYPE).length - 1).toBe(1);
+    const rest = html.replaceAll(ALLOWED, '').replaceAll(TRACKER_TYPE, '');
     expect(rest).not.toContain('[[');
     expect(rest).not.toContain(']]');
     expect(html).toContain(`<meta property="og:image" content="${ALLOWED}/og.png" />`);
