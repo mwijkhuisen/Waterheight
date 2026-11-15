@@ -207,7 +207,8 @@ ignore:
       type: go-module
   # zlib1g +b1 (deb) in postgres and cloudflared (and the server image's distroless base until it moves): no image
   # with trixie-security's +deb13u1 yet (owner, 2026-11-15, #277, R-095). cloudflared is static Go and never loads
-  # libz; postgres's own pg_dump -Fc compresses with deflate(), not the gz* file API of CVE-2026-85091.
+  # libz; both CVEs are in zlib's gz_write (one fixing commit, df84af25), which postgres's pg_dump -Fc never calls: it
+  # compresses with deflate().
   - vulnerability: CVE-2026-76844
     package:
       name: zlib1g
