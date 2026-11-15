@@ -109,7 +109,7 @@ mode=${RWS_E2E_MODE:-}
 [[ -n $mode ]] || : "${PLAYWRIGHT_IMAGE:?set PLAYWRIGHT_IMAGE (ci.yml deploy job)}"
 readonly MC_IMAGE=cgr.dev/chainguard/minio-client@sha256:be51ef820151a708a8e140037e3746862a8c1dd5e624f84b404a1d71bcefb167
 # The build image's Node (the job's own node is not on sudo's PATH): runs scripts/fixture-archive.ts.
-readonly NODE_IMAGE=node:26.12.0-trixie-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11
+readonly NODE_IMAGE=node:26.12.1-trixie-slim@sha256:94816674c62774da0d099a947bf4613b9e1972a2733abd0d0cd80e795f8411d0
 readonly REL=$RWS_STATE_DIR/releases/prod-ci
 
 proofs=()
@@ -205,7 +205,7 @@ proof "Docker $(docker version --format '{{.Server.Version}}') and Compose $(doc
 
 # ------------------------------------------------------------------ images
 step "Build the server, web and backup images (at once), and pull the other images meanwhile"
-readonly CADDY_PROBE_IMAGE=caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+readonly CADDY_PROBE_IMAGE=caddy:2.11.7-alpine@sha256:e70b164da81ef698b3ad19af799ea6086ce6d9e48ed4079eb9fe26f6fbf14ee5
 # #217: the third-party images of the stack (every digest-pinned image line of the compose files), the other images this
 # script and the degraded spec run, pulled while the three images build; each pull and each build has its own log, and
 # every one is waited for and its exit status checked.
