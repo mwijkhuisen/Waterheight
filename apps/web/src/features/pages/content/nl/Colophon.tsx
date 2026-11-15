@@ -32,10 +32,11 @@ export default function Colophon() {
         <a href="/third-party-notices.txt">Licenties van software van derden</a>.
       </p>
 
-      <h2>Zonder trackers</h2>
+      <h2>Zonder diensten van derden</h2>
       <p>
-        Deze site is gebouwd zonder trackers en zonder diensten van derden: alle bestanden, ook de kaarttegels, komen
-        van deze site zelf. Meer daarover staat op de pagina{' '}
+        Deze site is gebouwd zonder diensten van derden: alle bestanden, ook de kaarttegels, komen van deze site zelf.
+        Bezoeken telt onze eigen statistiekserver, zonder cookies en zonder je IP-adres op te slaan. Meer daarover staat
+        op de pagina{' '}
         <PageLink id="privacy" locale="nl">
           Privacy
         </PageLink>

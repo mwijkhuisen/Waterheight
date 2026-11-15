@@ -32,10 +32,11 @@ export default function Colophon() {
         <a href="/third-party-notices.txt">Third-party software licences</a>.
       </p>
 
-      <h2>No trackers</h2>
+      <h2>No third-party services</h2>
       <p>
-        This site is built without trackers and without third-party services: every file, the map tiles included, comes
-        from this site itself. More on the page{' '}
+        This site is built without third-party services: every file, the map tiles included, comes from this site
+        itself. Visits are counted by our own statistics server, without cookies and without storing your IP address.
+        More on the page{' '}
         <PageLink id="privacy" locale="en">
           Privacy
         </PageLink>

@@ -13,18 +13,34 @@ export default function Privacy() {
       <h2>Who is responsible</h2>
       <Contact locale="en" />
 
-      <h2>No cookies, no trackers</h2>
+      <h2>Visit statistics</h2>
       <p>
-        This site uses no cookies, no trackers and no statistics or analytics services. Your browser asks no other
-        server for anything when you visit: every file the page loads, the map included, comes from this site itself. A
-        link to another site loads only when you click it.
+        To know how many people use this site and which pages they read, each page you open sends one short message to{' '}
+        <code>stats.waterradar.io</code>: our own statistics server (Umami), which runs on the same machine as this
+        site. The message passes through Cloudflare’s network, so Cloudflare receives it with your IP address. It is the
+        only request your browser makes beyond this site: every file the page loads, the map included, comes from this
+        site itself, and a link to another site loads only when you click it.
+      </p>
+      <p>
+        The message holds the address of the page without the part after the question mark (so not the time or station
+        you chose), the page title, the site and page you came from (also without that part), the language of your
+        browser and the size of your screen. From the request, the statistics server works out the browser, the
+        operating system, the kind of device and the country, and the region and city where Cloudflare supplies them. It
+        stores no IP address and sets no cookie. To count a visitor once, it makes a code from your IP address and
+        browser, a secret key and the current month that cannot be turned back into your IP address; from the next month
+        you count as a new visitor.
+      </p>
+      <p>
+        If your browser sends Do Not Track, no message is sent. The statistics are for us alone, are shared with no one
+        and are kept until we delete them.
       </p>
 
       <h2>Nothing stored in your browser</h2>
       <p>
         We store nothing in your browser: no cookies, no localStorage and no other storage. The view you choose (time,
         station, map mode and river) is kept only in the web address, and your language follows from the address: pages
-        with /en/ in the address are English.
+        with /en/ in the address are English. The statistics script writes nothing either: it only checks whether the
+        setting <code>umami.disabled</code> is there, and then sends nothing.
       </p>
 
       <h2>Access log</h2>
@@ -58,9 +74,10 @@ export default function Privacy() {
       <h2>Your rights</h2>
       <p>
         You can ask us, through the contact address above, for access to the data we hold about you, for correction or
-        deletion, and you can object to the processing. Because the log holds only shortened addresses, we may not be
-        able to link a request to you. If you have a complaint about how we handle your data, you can lodge it with the
-        Autoriteit Persoonsgegevens, the Dutch data protection authority.
+        deletion, and you can object to the processing. Because the log holds only shortened addresses and the
+        statistics hold no address at all, we may not be able to link a request or a visit to you. If you have a
+        complaint about how we handle your data, you can lodge it with the Autoriteit Persoonsgegevens, the Dutch data
+        protection authority.
       </p>
     </>
   );
