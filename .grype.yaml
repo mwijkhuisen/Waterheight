@@ -8,6 +8,11 @@
 #   #252); scoped to the cloudflared binary, so our own images still fail on it.
 # - postgres 18.6-trixie: the stdlib go1.24.6 findings of its gosu 1.19, which never runs, since db and the restore
 #   drill start as 999:999 (owner 2026-10-16, #167).
+# - zlib1g 1:1.3.dfsg+really1.3.1-1+b1 (deb) in postgres 18.6-trixie and cloudflared 2026.10.6: CVE-2026-76844 and
+#   CVE-2026-85091, fixed only in trixie-security's +deb13u1 (DSA-6613-1), which no postgres or cloudflared image has
+#   yet, not even postgres:18-trixie of 2026-11-15 or cloudflared 2026.11.0 (owner 2026-11-15, #277). The rules also
+#   cover the server image until its distroless base moves to a digest with +deb13u1 (33c86a63, 7 days old from
+#   2026-11-15T21:55Z). No location: distroless keeps the package at the same path in cloudflared and the server image.
 # History: #131 built restic, dbmate and go-pmtiles from their release modules with GO_FIXES; #252 did the same for
 # Caddy and moved cloudflared to 2026.10.6, which retired every other rule. R-095 keeps the full record.
 #
@@ -200,3 +205,16 @@ ignore:
       name: stdlib
       version: go1.24.6
       type: go-module
+  # zlib1g +b1 (deb) in postgres and cloudflared (and the server image's distroless base until it moves): no image
+  # with trixie-security's +deb13u1 yet (owner, 2026-11-15, #277, R-095). cloudflared is static Go and never loads
+  # libz; postgres's own pg_dump -Fc compresses with deflate(), not the gz* file API of CVE-2026-85091.
+  - vulnerability: CVE-2026-76844
+    package:
+      name: zlib1g
+      version: "1:1.3.dfsg+really1.3.1-1+b1"
+      type: deb
+  - vulnerability: CVE-2026-85091
+    package:
+      name: zlib1g
+      version: "1:1.3.dfsg+really1.3.1-1+b1"
+      type: deb
