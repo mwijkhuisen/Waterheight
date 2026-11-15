@@ -1,0 +1,13 @@
+# The stats tunnel's ingress (#270, ADR-0024), installed as /etc/stats/cloudflared.yml and mounted read-only into
+# cloudflared (compose.yaml). The tunnel is locally managed (`cloudflared tunnel create stats`), so this file is its
+# whole ingress: never migrate the tunnel to the dashboard, whose remote configuration would replace it.
+#
+# The public path is the event endpoint alone. cloudflared matches `path` as a regular expression against the
+# request's decoded path, so ^/api/send$ admits exactly /api/send (any method: Umami answers 405 to all but POST and
+# its own OPTIONS). The dashboard, /api/auth, /mcp and /script.js answer 404 here: they exist over WireGuard only (D1).
+# deploy/tests/stats-e2e.sh checks every URL of the #270 criteria with `cloudflared tunnel ingress rule`.
+ingress:
+  - hostname: stats.waterradar.io
+    path: ^/api/send$
+    service: http://umami:3000
+  - service: http_status:404

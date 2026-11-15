@@ -1,0 +1,211 @@
+# The statistics stack (#270 part A, ADR-0024): Umami, its own PostgreSQL 18 and its own cloudflared, as compose
+# project "stats", installed as /etc/stats/compose.yaml and started by hand (docs/runbooks/stats.md).
+#
+# It shares nothing with the rws project: no network, volume, secret, group id, subnet or nftables table. Its host
+# firewall is table inet stats (nftables-stats.conf, stats-firewall.service); the one rws line that names it is the
+# wg0 forward exception in deploy/host/nftables.conf (ADR-0024).
+#
+# Reachability:
+#   - Visitors: Cloudflare -> cloudflared -> umami:3000, for POST /api/send only (cloudflared.yml, the repo file
+#     as the ingress of a locally managed tunnel). Everything else at stats.waterradar.io answers 404 at the edge.
+#   - The owner: the dashboard and /mcp at http://10.66.0.1:8444, the host's WireGuard address, from a WireGuard
+#     peer only (D1). nftables-stats.conf accepts nothing else into stats-publish.
+#   - Egress: cloudflared alone, TCP 7844 to Cloudflare's tunnel ranges and DNS to the host's resolvers. umami and
+#     db reach nothing outside (no telemetry, no update check, no Prisma checkpoint, no geo download).
+#
+# Secrets are files, root:<gid> 0440 under /etc/stats/secrets, each readable by its consumers' group only:
+#   db_umami 63001 (umami, db), umami_app_secret 63002 (umami), cf_stats_tunnel 63003 (cloudflared).
+# Umami reads no *_FILE variable, so its entrypoint builds DATABASE_URL and APP_SECRET from the files in its own
+# process; the values never appear in this file, `docker inspect`, argv or a log (deploy/tests/stats-e2e.sh).
+# test/stats-stack.test.ts holds this file to these rules.
+name: stats
+
+x-hardening: &hardening
+  read_only: true
+  tmpfs:
+    - /tmp:size=16m,mode=1777
+  cap_drop: [ALL]
+  security_opt:
+    - no-new-privileges:true
+  restart: unless-stopped
+
+services:
+  umami:
+    <<: *hardening
+    # BOM row umami (stats) 3.4.1, the multi-arch index digest. The image's user nextjs is 1001:65533.
+    image: ghcr.io/umami-software/umami:3.4.1@sha256:e69d1a7932e9dab0fc523edc7be1f3a53f3c261f57856fc2167ae74a8fc022e8
+    user: "1001:65533"
+    group_add: ["63001", "63002"]
+    # The password is hex (docs/runbooks/stats.md), so it needs no URL encoding. The image's start script runs the
+    # migrations (prisma migrate deploy), then `exec node server.js`.
+    entrypoint:
+      - /bin/sh
+      - -c
+      - >-
+        set -e;
+        p=$$(cat /run/secrets/db_umami); s=$$(cat /run/secrets/umami_app_secret);
+        if [ -z "$$p" ] || [ -z "$$s" ]; then echo 'stats: empty secret file' >&2; exit 78; fi;
+        export DATABASE_URL="postgresql://umami:$$p@db:5432/umami" APP_SECRET="$$s";
+        unset p s;
+        exec sh scripts/start-docker.sh
+    environment:
+      # /mcp (read-only tools, an `umami_` API key as the bearer): reachable over WireGuard only.
+      MCP_ENABLED: "1"
+      # Cloudflare's visitor address. Umami stores no IP; it hashes it into the session id only.
+      CLIENT_IP_HEADER: cf-connecting-ip
+      # The dashboard's own calls from the owner's browser: no telemetry beacon, no update check.
+      DISABLE_TELEMETRY: "1"
+      DISABLE_UPDATES: "1"
+      # Prisma CLI's call to checkpoint.prisma.io (and its write to ~/.cache) during the migrations.
+      CHECKPOINT_DISABLE: "1"
+      # No favicon from icons.duckduckgo.com for each referrer domain (a visitor chooses those, so it would tell an
+      # outsider when the owner looks), no telemetry script, no update notice. Nothing stored changes (review SR-2).
+      PRIVATE_MODE: "1"
+    secrets: [db_umami, umami_app_secret]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      # Next's image optimiser cache; the rest of the root stays read-only.
+      - /app/.next/cache:size=64m,uid=1001,gid=65533,mode=0700
+    # The host's WireGuard address only, never a wildcard or a public address. stats-publish is the one network
+    # that is not internal: Docker publishes no port of a container whose networks are all internal.
+    ports:
+      - "10.66.0.1:8444:3000/tcp"
+    networks: [stats-db, stats-edge, stats-publish]
+    depends_on:
+      db:
+        condition: service_healthy
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    healthcheck:
+      # No database needed: {"ok":true}.
+      test: ["CMD", "curl", "-fsS", "-o", "/dev/null", "http://127.0.0.1:3000/api/heartbeat"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+      start_interval: 2s
+
+  db:
+    <<: *hardening
+    # BOM row postgres (stats): the rws pin of the same day, a row of its own so the two never have to move together.
+    image: postgres:18.6-trixie@sha256:bd5dfa494a5a259704365813dbfa5fa6b3e69be7348d43b547f540c730478583
+    user: "999:999"
+    group_add: ["63001"]
+    environment:
+      # umami is the superuser of this one-database cluster (risk register R-114).
+      POSTGRES_USER: umami
+      POSTGRES_DB: umami
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_umami
+      # scram-sha-256 on the socket too: peer would refuse role umami for OS user postgres, and the image's entrypoint
+      # sets PGPASSWORD for its own first-run psql.
+      POSTGRES_INITDB_ARGS: --locale-provider=builtin --builtin-locale=C.UTF-8 --locale=C.UTF-8 --encoding=UTF8 --auth-local=scram-sha-256 --auth-host=scram-sha-256
+    secrets: [db_umami]
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /var/run/postgresql:size=1m,uid=999,gid=999,mode=0775
+    shm_size: 128m
+    volumes:
+      # PGDATA is /var/lib/postgresql/18/docker; the host directory is 999:999 0700 (docs/runbooks/stats.md).
+      - /srv/stats/pgdata:/var/lib/postgresql
+    networks: [stats-db]
+    mem_limit: 512m
+    cpus: 1.0
+    pids_limit: 128
+    stop_grace_period: 60s
+    healthcheck:
+      # PID 1 is postgres only once the entrypoint's first-run set-up has finished.
+      test: ["CMD-SHELL", "grep -qx postgres /proc/1/comm && pg_isready -q"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 120s
+      start_interval: 2s
+
+  cloudflared:
+    <<: *hardening
+    # BOM row cloudflared (stats) 2026.10.6, the multi-arch index digest; distroless, runs as 65532.
+    image: cloudflare/cloudflared:2026.10.6@sha256:004d843fa5fdc3103983fd580ee19fab4a8fa98add31f87249c1659e848c98e0
+    entrypoint: [cloudflared, --no-autoupdate]
+    # The token (from `cloudflared tunnel token stats`) is read from its file, never --token or TUNNEL_TOKEN. The
+    # tunnel is locally managed: the ingress is the repo's cloudflared.yml, parsed on the token path too.
+    # --protocol http2: TCP 7844 only. --metrics on loopback (the image binds 0.0.0.0 by default). --loglevel info:
+    # debug would log requests. --edge-ip-version 4: stats-tunnel is IPv4 only.
+    command:
+      - tunnel
+      - --loglevel
+      - info
+      - --edge-ip-version
+      - "4"
+      - --protocol
+      - http2
+      - --metrics
+      - 127.0.0.1:20241
+      - --config
+      - /etc/cloudflared/config.yml
+      - run
+      - --token-file
+      - /run/secrets/cf_stats_tunnel
+    user: "65532:65532"
+    group_add: ["63003"]
+    environment:
+      # 90 % of mem_limit (ADR-0019 §5).
+      GOMEMLIMIT: 230MiB
+    secrets: [cf_stats_tunnel]
+    volumes:
+      - /etc/stats/cloudflared.yml:/etc/cloudflared/config.yml:ro
+    networks: [stats-tunnel, stats-edge]
+    mem_limit: 256m
+    cpus: 1.0
+    pids_limit: 128
+    healthcheck:
+      test: ["CMD", "cloudflared", "--no-autoupdate", "tunnel", "--metrics", "127.0.0.1:20241", "ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# IPv4 only; each bridge is named after its network, so nftables-stats.conf can match "stats-*".
+networks:
+  # umami and db.
+  stats-db:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: stats-db
+    ipam:
+      config:
+        - subnet: 10.63.1.0/24
+  # cloudflared and umami.
+  stats-edge:
+    internal: true
+    driver_opts:
+      com.docker.network.bridge.name: stats-edge
+    ipam:
+      config:
+        - subnet: 10.63.2.0/24
+  # umami alone: the published 10.66.0.1:8444. The firewall drops everything it sends out, and without masquerading
+  # a packet that left anyway (no table inet stats, R-116) carries a private source and gets no answer (review CR-2).
+  stats-publish:
+    driver_opts:
+      com.docker.network.bridge.name: stats-publish
+      com.docker.network.bridge.enable_icc: "false"
+      com.docker.network.bridge.enable_ip_masquerade: "false"
+    ipam:
+      config:
+        - subnet: 10.63.3.0/24
+  # cloudflared alone: TCP 7844 to Cloudflare and DNS to the host's resolvers.
+  stats-tunnel:
+    driver_opts:
+      com.docker.network.bridge.name: stats-tunnel
+      com.docker.network.bridge.enable_icc: "false"
+    ipam:
+      config:
+        - subnet: 10.63.4.0/24
+
+secrets:
+  db_umami:
+    file: /etc/stats/secrets/db_umami
+  umami_app_secret:
+    file: /etc/stats/secrets/umami_app_secret
+  cf_stats_tunnel:
+    file: /etc/stats/secrets/cf_stats_tunnel

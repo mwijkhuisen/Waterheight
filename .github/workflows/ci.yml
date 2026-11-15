@@ -451,6 +451,29 @@ jobs:
           sudo deploy/tests/e2e/tunnel.sh
           sudo deploy/tests/hardening.sh --ci
 
+  # #270 part A (ADR-0024): the stats stack (deploy/stats/) on the runner's own Docker: its nftables table beside the
+  # real rws one, its units, cloudflared's ingress matcher on every URL of the criteria, and the stack behind the wg0
+  # stand-in, probed from the WireGuard peer namespace (deploy/tests/stats-e2e.sh).
+  stats:
+    name: stats
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: step-security/harden-runner@46b06cea07f9e64621fdf066ba77ac6915163d43 # v2.22.3
+        with:
+          egress-policy: audit
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Host tools (Ubuntu's signed repository)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq nftables >/dev/null
+      - name: The stats stack end to end (deploy/tests/stats-e2e.sh)
+        run: sudo deploy/tests/stats-e2e.sh
+
   # P3 (issue #18): the map spike under the exact production headers, served by
   # the real Caddy image and deploy/web/site.caddy over HTTPS (Caddy's local
   # CA), tested by Playwright 1.63.0 in its digest-pinned image (browsers and
@@ -697,7 +720,7 @@ jobs:
   ci:
     name: ci
     if: always()
-    needs: [check, integration, dbmate, bench, bench-4000, bench-q2, shellcheck, fresh-start, hook, deploy-host, deploy, e2e]
+    needs: [check, integration, dbmate, bench, bench-4000, bench-q2, shellcheck, fresh-start, hook, deploy-host, deploy, stats, e2e]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions: {}

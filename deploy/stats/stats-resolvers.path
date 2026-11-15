@@ -1,0 +1,11 @@
+# Refreshes cloudflared's DNS allowlist whenever the host's resolvers change (DHCP, resolved).
+[Unit]
+Description=stats: watch resolv.conf
+
+[Path]
+PathChanged=/etc/resolv.conf
+PathChanged=/run/systemd/resolve/resolv.conf
+Unit=stats-resolvers.service
+
+[Install]
+WantedBy=paths.target
