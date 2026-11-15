@@ -83,6 +83,7 @@ describe('the owner api routes (P9b)', () => {
     expect(globals).toContain('trusted_proxies_strict\n');
     expect(globals).toContain('client_ip_headers X-Forwarded-For\n');
     expect(read('deploy/web/Caddyfile.owner')).not.toContain('trusted_proxies');
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: the literal compose interpolation, not a template
     expect(read('deploy/compose.yaml')).toContain('RWS_TRUSTED_PROXIES: ${RWS_TRUSTED_PROXIES:-}\n');
   });
 
