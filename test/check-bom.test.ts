@@ -72,6 +72,13 @@ describe('check-bom', () => {
     expect(checkBom(dir).join('\n')).toMatch(/vitest@5\.1\.0: the bill of materials says 5\.1\.1/);
   });
 
+  // #270 B: a vendored asset is pinned by its sha256, which its file name starts.
+  it('fails when the vendored statistics script differs from its asset row', () => {
+    const dir = scratch();
+    edit(dir, 'apps/web/public/assets/stats-654f12c7.js', /^!function/, '!function ');
+    expect(checkBom(dir).join('\n')).toMatch(/BOM row umami tracker: no single file under apps\/web\/public\//);
+  });
+
   it('fails when a dependency has no row', () => {
     const dir = scratch();
     edit(dir, 'CLAUDE.md', /^\| yaml \| npm .*\n/m, '');
