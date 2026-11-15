@@ -183,7 +183,7 @@ Nothing updates itself, and the stats images are outside the rws Grype gate (KG-
    docker compose -f /etc/stats/compose.yaml ps
    ```
 
-6. **Refresh the tracker on every image bump.** The vendored script must come from the new image: run `scripts/umami-tracker.sh ghcr.io/umami-software/umami:<tag>@sha256:<index digest> /tmp/stats.js`, save it as `apps/web/public/assets/stats-<first 8 hex of its sha256>.js`, delete the old file, update the BOM row `umami tracker` (version and sha256) in `CLAUDE.md`, and the `src` in both page shells. `test/stats-tracker.test.ts` fails until the version matches the image.
+6. **Refresh the tracker on every image bump.** The vendored script must come from the new image: run `scripts/umami-tracker.sh ghcr.io/umami-software/umami:<tag>@sha256:<index digest> /tmp/stats.js`, save it as `apps/web/public/assets/stats-<first 8 hex of its sha256>.js`, delete the old file, update the BOM row `umami tracker` (version and sha256) in `CLAUDE.md`, and the `src` in both page shells. `test/stats-tracker.test.ts` fails until the version matches the image, and the `stats` CI job until the file is the new image's.
 7. Repeat the checks of section 8. Reinstall the other files of section 2 only if the PR changed them, then `systemctl reload stats-firewall.service`.
 
 ## 10. Removal
