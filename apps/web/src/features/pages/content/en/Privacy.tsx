@@ -27,8 +27,8 @@ export default function Privacy() {
         browser and the size of your screen. From the request, the statistics server works out the browser, the
         operating system, the kind of device and the country, and the region and city where Cloudflare supplies them. It
         stores no IP address and sets no cookie. To count a visitor once, it makes a code from your IP address and
-        browser, a secret key and the current month that cannot be turned back into your IP address; from the next month
-        you count as a new visitor.
+        browser, a secret key and the current month. Only with that key could the code be matched to an IP address, and
+        we never do that; from the next month you count as a new visitor.
       </p>
       <p>
         If your browser sends Do Not Track, no message is sent. The statistics are for us alone, are shared with no one

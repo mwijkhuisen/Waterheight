@@ -9,8 +9,9 @@ import { finish, start } from './helpers.ts';
 //    clean request log (every request same-origin, no CSP violation) holds. The owner site's check is in owner.spec.ts.
 // 2. On a routed https://waterradar.io/ (no network: the page, the script and the stats host are Playwright routes), the
 //    real tag under the production CSP sends exactly one page view to https://stats.waterradar.io/api/send, with the
-//    page address but not its query, none for a `?t=` replaceState (what lib/url/useUrlState.ts does on every timebar
-//    step; data-exclude-search), none under Do Not Track, and the page's storage and cookies stay empty.
+//    page address but not its query or fragment (data-exclude-search, data-exclude-hash), none for a `?t=`
+//    replaceState (what lib/url/useUrlState.ts does on every timebar step), none under Do Not Track, and the page's
+//    storage and cookies stay empty.
 
 const SCRIPT = '/assets/stats-654f12c7.js';
 const shellSource = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
@@ -62,12 +63,12 @@ async function production(page: Page, sends: { url: string; body: unknown; heade
   return requests;
 }
 
-test('on waterradar.io it sends one page view without the query, none for a replaceState, and stores nothing', async ({
+test('on waterradar.io it sends one page view without the query or fragment, none for a replaceState, and stores nothing', async ({
   page,
 }) => {
   const sends: { url: string; body: unknown; headers: Record<string, string> }[] = [];
   const requests = await production(page, sends);
-  await page.goto('https://waterradar.io/?t=2026-11-15T10:00Z&s=nl.rws.lobith');
+  await page.goto('https://waterradar.io/?t=2026-11-15T10:00Z&s=nl.rws.lobith#kaart');
   await expect.poll(() => sends.length).toBe(1);
   expect(sends[0]?.url).toBe('https://stats.waterradar.io/api/send');
   expect(sends[0]?.headers['content-type']).toBe('application/json');
@@ -83,11 +84,11 @@ test('on waterradar.io it sends one page view without the query, none for a repl
   expect(sends).toHaveLength(1);
   expect(await page.evaluate(() => [localStorage.length, sessionStorage.length, document.cookie])).toEqual([0, 0, '']);
   // Only the page, the script and the stats host were asked (a CORS preflight, where the browser sends one, is the
-  // stats host's too).
+  // stats host's too; a browser may also ask for this origin's /favicon.ico, which the stub page does not name).
   expect(
     requests.filter(
       (r) =>
-        !/^(GET https:\/\/waterradar\.io\/(\?|assets\/stats-)|(POST|OPTIONS) https:\/\/stats\.waterradar\.io\/api\/send$)/.test(
+        !/^(GET https:\/\/waterradar\.io\/(\?|assets\/stats-|favicon\.ico$)|(POST|OPTIONS) https:\/\/stats\.waterradar\.io\/api\/send$)/.test(
           r,
         ),
     ),

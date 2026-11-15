@@ -19,7 +19,7 @@ const HOST = 'https://stats.waterradar.io';
 
 /** The one tag, attribute for attribute; the website ID is the owner's (docs/runbooks/stats.md §7). */
 const TAG =
-  /^ {4}<script type="\[\[`text\/javascript`\]\]" defer src="\/assets\/stats-([0-9a-f]{8})\.js" data-website-id="([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})" data-host-url="https:\/\/stats\.waterradar\.io" data-domains="waterradar\.io" data-do-not-track="true" data-exclude-search="true"><\/script>$/m;
+  /^ {4}<script type="\[\[`text\/javascript`\]\]" defer src="\/assets\/stats-([0-9a-f]{8})\.js" data-website-id="([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})" data-host-url="https:\/\/stats\.waterradar\.io" data-domains="waterradar\.io" data-do-not-track="true" data-exclude-search="true" data-exclude-hash="true"><\/script>$/m;
 
 describe('the vendored statistics script', () => {
   it('is the one asset row, of the release the stats stack runs', () => {

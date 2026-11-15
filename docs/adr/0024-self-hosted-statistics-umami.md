@@ -52,9 +52,9 @@
 ## Part B: the tracker and the CSP
 
 - **The tag.** Last in `<body>` of `apps/web/index.html` and `apps/web/en/index.html`:
-  `<script type="[[`text/javascript`]]" defer src="/assets/stats-654f12c7.js" data-website-id="<id>" data-host-url="https://stats.waterradar.io" data-domains="waterradar.io" data-do-not-track="true" data-exclude-search="true"></script>`
+  `<script type="[[`text/javascript`]]" defer src="/assets/stats-654f12c7.js" data-website-id="<id>" data-host-url="https://stats.waterradar.io" data-domains="waterradar.io" data-do-not-track="true" data-exclude-search="true" data-exclude-hash="true"></script>`
   The website ID is the one of runbook §7; the repository holds the nil UUID until the owner pastes it.
-- **The script is vendored.** `apps/web/public/assets/stats-654f12c7.js` is byte for byte `/app/public/script.js` of the pinned image (Umami 3.4.1, sha256 `654f12c7548be726eba5b71d5ef8bffc2a41a39a0053e2a49a847869ccd7ac3f`, 4773 bytes, MIT; licence in `apps/web/vendor/umami/LICENSE` and `/third-party-notices.txt`). `scripts/umami-tracker.sh` reads it from the registry for every linux platform and fails unless they agree. It is a BOM row of kind `asset` (`umami tracker`), checked by `check-bom`, and refreshed with every image bump (runbook §9).
+- **The script is vendored.** `apps/web/public/assets/stats-654f12c7.js` is byte for byte `/app/public/script.js` of the pinned image (Umami 3.4.1, sha256 `654f12c7548be726eba5b71d5ef8bffc2a41a39a0053e2a49a847869ccd7ac3f`, 4773 bytes, MIT; licence in `apps/web/vendor/umami/LICENSE` and `/third-party-notices.txt`). `scripts/umami-tracker.sh` reads it from the registry for every linux platform and fails unless they agree. It is a BOM row of kind `asset` (`umami tracker`), checked by `check-bom`, and refreshed with every image bump (runbook §9). The `stats` CI job compares it byte for byte with `/app/public/script.js` of the image pinned in `deploy/stats/compose.yaml` (`deploy/tests/stats-e2e.sh`), so an edited file, or an image bump without the refresh, fails CI.
 - **The CSP diff** (`deploy/web/site.caddy`, both copies; `docs/plan/ARCHITECTURE.md:1020`; ADR-0016; `test/verify-prod.test.ts`):
   - before: `connect-src 'self'`
   - after: `connect-src 'self' https://stats.waterradar.io`
@@ -65,7 +65,7 @@
 
 ### Where part B differs from #270
 
-1. **A fifth attribute, `data-exclude-search="true"`.** `apps/web/src/lib/url/useUrlState.ts:44` rewrites `?t=` and `?s=` with `history.replaceState`, which the tracker hooks. Without the attribute every timebar step or station pick would be a page view and the query would be stored. With it a page counts once, no query is stored and the referrer's query is stripped.
+1. **Two more attributes, `data-exclude-search="true"` and `data-exclude-hash="true"`.** `apps/web/src/lib/url/useUrlState.ts:44` rewrites `?t=` and `?s=` with `history.replaceState`, which the tracker hooks. Without the first attribute every timebar step or station pick would be a page view and the query would be stored. With it a page counts once, no query is stored and the referrer's query is stripped. The second keeps a `#fragment` out too: the app uses none, but a link may carry one, and Umami would store it with the path (security review).
 2. **The owner site gate.** The owner site serves the same `/srv/www`. Only `site.caddy` runs the templates module over the page shells, so only there does `type` render as `text/javascript`. On the owner site the raw `[[...]]` value is no JavaScript MIME type, so the tag is an inert data block: never fetched, never run. `owner.caddy` stays unchanged and keeps `connect-src 'self'`.
 3. **`/assets/stats-<sha8>.js` instead of `/<name>.js`.** The existing immutable `@assets` route serves it, so no route is added and the page routes are untouched. A new version is a new file name.
 4. **"Part of #270", not a closing change.** The [owner] and [agent-prod] boxes of A, B's [agent-prod] checks and the E5 approval stay open after the merge; the owner closes #270.

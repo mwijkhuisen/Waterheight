@@ -27,8 +27,8 @@ export default function Privacy() {
         browser en de grootte van je scherm. Uit het verzoek leidt de statistiekserver de browser, het
         besturingssysteem, het soort apparaat en het land af, en de regio en plaats als Cloudflare die meestuurt. Hij
         slaat geen IP-adres op en plaatst geen cookie. Om een bezoeker één keer te tellen, maakt hij uit je IP-adres en
-        browser, een geheime sleutel en de huidige maand een code die niet terug te rekenen is naar je IP-adres; vanaf
-        de volgende maand tel je als nieuwe bezoeker.
+        browser, een geheime sleutel en de huidige maand een code. Alleen met die sleutel is de code aan een IP-adres te
+        koppelen, en dat doen wij nooit; vanaf de volgende maand tel je als nieuwe bezoeker.
       </p>
       <p>
         Stuurt je browser Do Not Track mee, dan gaat er geen bericht. De statistieken zijn alleen voor ons, worden met
