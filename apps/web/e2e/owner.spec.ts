@@ -329,3 +329,15 @@ test('the chain of Eijsden on the owner site starts with the SPW gauges, each ma
   }
   await finish(page, s);
 });
+
+// #270 B (ADR-0024): the owner site serves the same shells but runs no templates module, so the statistics tag keeps its
+// raw type: a data block that the browser never fetches or runs (invariant 11: the owner view is never counted).
+test('the statistics script is never fetched or run on the owner site', async ({ page, context, baseURL }) => {
+  const s = await start(page, context, baseURL, 'state');
+  await page.goto('/');
+  await page.waitForLoadState('load');
+  await expect(page.locator('script[src^="/assets/stats-"]')).toHaveAttribute('type', '[[`text/javascript`]]');
+  expect(await page.evaluate(() => typeof (window as { umami?: unknown }).umami)).toBe('undefined');
+  expect(s.log.requests.filter((u) => u.includes('/assets/stats-'))).toEqual([]);
+  await finish(page, s);
+});
