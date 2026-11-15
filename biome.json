@@ -18,10 +18,28 @@
       "!tools/geo/fixtures/wikidata",
       "!tools/geo/fixtures/geofabrik",
       "!test/fixtures/reaches-fixture.json",
-      "!apps/web/e2e/fixtures/visual"
+      "!apps/web/e2e/fixtures/visual",
+      "!**/*.md",
+      "!**/*.yaml",
+      "!**/*.yml"
     ]
   },
   "formatter": { "indentStyle": "space", "indentWidth": 2, "lineWidth": 120 },
   "javascript": { "formatter": { "quoteStyle": "single" } },
-  "linter": { "rules": { "preset": "recommended" } }
+  "linter": {
+    "rules": {
+      "preset": "recommended",
+      "complexity": { "useMathMinMax": "off" }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/web/e2e/**"],
+      "linter": { "rules": { "performance": { "useDomNodeTextContent": "off" } } }
+    },
+    {
+      "includes": ["**", "!apps/web/e2e/**"],
+      "linter": { "rules": { "correctness": { "usePlaywrightValidDescribeCallback": "off" } } }
+    }
+  ]
 }
