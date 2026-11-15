@@ -221,7 +221,7 @@ const ownerHosts = () => ownerSourceIds(registry).flatMap((id) => registry.hosts
 describe('the A§12.2 headers', () => {
   it('reads the CSP and the other headers verbatim from ARCHITECTURE.md', () => {
     expect(expected['content-security-policy']).toBe(
-      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp",
+      "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://stats.waterradar.io; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp",
     );
     expect(expected['content-security-policy']).not.toContain("'unsafe-inline'");
     expect(expected).toMatchObject({
@@ -5301,11 +5301,15 @@ describe('the launch profile (P12b)', () => {
     page(body, { 'content-type': 'text/plain; charset=utf-8', 'cache-control': 'public, max-age=300', ...over });
   const sitemap = (over: Record<string, string> = {}, body = sitemapBody) =>
     page(body, { 'content-type': 'application/xml; charset=utf-8', 'cache-control': 'public, max-age=300', ...over });
-  /** The shells as Caddy's templates module serves them: the messages filled in (as Vite does), RWS_DOMAIN as configured. */
+  /**
+   * The shells as Caddy's templates module serves them: the messages filled in (as Vite does), RWS_DOMAIN as configured
+   * and the statistics script's type (#270 B).
+   */
   const shell = (file: string) =>
     read(file)
       .replaceAll(/%m:[a-z0-9_]+%/g, 'text')
-      .replaceAll('[[env `RWS_DOMAIN`]]', domain);
+      .replaceAll('[[env `RWS_DOMAIN`]]', domain)
+      .replaceAll('[[`text/javascript`]]', 'text/javascript');
   const image = (over: Partial<Page> = {}): Page => ({
     status: 200,
     headers: { 'content-type': 'image/png' },

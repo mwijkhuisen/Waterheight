@@ -33,10 +33,14 @@ describe('owner site headers', () => {
     // (P12b: the public header block has no X-Robots-Tag any more: deploy/web/phase-<phase>.caddy sets it, test/launch-phase.test.ts)
     expect(pub.filter(robots)).toEqual(['Referrer-Policy "strict-origin-when-cross-origin"']);
     expect(own.filter(robots)).toEqual(['Referrer-Policy "no-referrer"', 'X-Robots-Tag "noindex, nofollow"']);
-    // Cache-Control and `defer` (so a proxied answer cannot override it) are the additions.
+    // Cache-Control and `defer` (so a proxied answer cannot override it) are the additions. #270 B (ADR-0024): the
+    // public CSP's connect-src also names the statistics host; the owner site gets no tracker and keeps 'self'.
     expect(own.filter((l) => !robots(l) && l !== 'Cache-Control "private, no-store"' && l !== 'defer')).toEqual(
-      pub.filter((l) => !robots(l)),
+      pub
+        .filter((l) => !robots(l))
+        .map((l) => l.replace("connect-src 'self' https://stats.waterradar.io;", "connect-src 'self';")),
     );
+    expect(pub.filter((l) => l.includes('https://stats.waterradar.io'))).toHaveLength(1);
     expect(own).toContain('Cache-Control "private, no-store"');
     // #109 review round 2: verify-prod's owner listener (--edge cloudflare) recognises the owner site by these exact
     // values; changing them here without its constants would blind that check.

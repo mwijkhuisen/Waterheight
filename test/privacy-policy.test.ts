@@ -182,14 +182,26 @@ describe('the browser asks no third party (invariant 7)', () => {
   const csp = /\n\t\tContent-Security-Policy "([^"]+)"/.exec(SITE)?.[1] ?? '';
   const directives = csp.split(';').map((d) => d.trim().split(/\s+/));
 
-  it('has no source in the CSP but self, none and data:', () => {
+  // #270 B (ADR-0024): the one other source is the owner's own statistics host, for the tracker's POST only.
+  it('has no source in the CSP but self, none, data: and the statistics host in connect-src', () => {
     expect(directives.length).toBeGreaterThan(8);
-    expect(csp).not.toMatch(/https?:|wss?:|\*/);
+    expect(csp.match(/https?:\/\/[^\s;]+|wss?:|\*/g)).toEqual(['https://stats.waterradar.io']);
     for (const [name, ...values] of directives) {
       if (name === 'upgrade-insecure-requests' || name === 'report-to') continue;
-      for (const v of values) expect([name, ["'self'", "'none'", 'data:'].includes(v)]).toEqual([name, true]);
+      for (const v of values)
+        expect([name, ["'self'", "'none'", 'data:'].includes(v) || name === 'connect-src']).toEqual([name, true]);
     }
-    expect(directives.find(([n]) => n === 'connect-src')).toEqual(['connect-src', "'self'"]);
+    expect(directives.find(([n]) => n === 'connect-src')).toEqual([
+      'connect-src',
+      "'self'",
+      'https://stats.waterradar.io',
+    ]);
+    expect(directives.find(([n]) => n === 'script-src')).toEqual(['script-src', "'self'"]);
+  });
+
+  it('the owner site keeps connect-src self (invariant 11: it gets no tracker)', () => {
+    expect(OWNER_SITE).toContain("connect-src 'self'; worker-src");
+    expect(OWNER_SITE).not.toContain('stats.waterradar.io');
   });
 });
 
