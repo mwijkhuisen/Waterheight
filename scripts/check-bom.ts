@@ -7,15 +7,18 @@
 //   - action, image and binary rows (installed) <-> the pins in the workflows,
 //     the hook, scripts/*.sh, every file under deploy/ (bootstrap, Dockerfiles,
 //     compose files) and tools/geo/Dockerfile, and every action, CI image or Dockerfile base has a row.
+//   - asset rows (installed, #270 B) <-> one file under apps/web/public/ with that sha256 and its first 8 hex digits
+//     in its name;
 //   - supply chain: every locked package resolves by registry integrity, and
 //     every minimumReleaseAgeExclude entry carries an unexpired "# expires" date.
 // "planned" rows are skipped. Usage: node scripts/check-bom.ts [repo-root]
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { parse, parseAllDocuments } from 'yaml';
 
 type Row = { name: string; kind: string; version: string; status: string; pin: string };
-const KINDS = ['npm', 'runtime', 'tool', 'action', 'image', 'binary'];
+const KINDS = ['npm', 'runtime', 'tool', 'action', 'image', 'binary', 'asset'];
 const EXACT = /^\d+\.\d+\.\d+$/;
 
 export function readBom(claudeMd: string): Row[] {
@@ -249,6 +252,24 @@ export function checkBom(root: string): string[] {
     for (const [, image = ''] of text.matchAll(/^FROM\s+(\S+)/gm)) {
       if (!imageRows.has(image)) problems.push(`${path}: base image ${image} has no installed image row with that pin`);
     }
+  }
+  // Vendored web assets (#270 B, the statistics script): the pin is the sha256 of exactly one file under
+  // apps/web/public/ whose name carries its first 8 hex digits, so a new version is a new name and the immutable
+  // /assets route never serves an old copy under it.
+  const web = join(root, 'apps/web/public');
+  const webFiles = existsSync(web) ? readdirSync(web, { recursive: true, encoding: 'utf8' }) : [];
+  for (const r of installed.filter((r) => r.kind === 'asset')) {
+    const sha = (f: string) =>
+      createHash('sha256')
+        .update(readFileSync(join(web, f)))
+        .digest('hex');
+    const hits = /^[0-9a-f]{64}$/.test(r.pin)
+      ? webFiles.filter((f) => f.includes(r.pin.slice(0, 8)) && statSync(join(web, f)).isFile() && sha(f) === r.pin)
+      : [];
+    if (hits.length !== 1)
+      problems.push(
+        `BOM row ${r.name}: no single file under apps/web/public/ named with its pin's first 8 digits has that sha256`,
+      );
   }
   return [...problems, ...checkSupplyChain(root)];
 }

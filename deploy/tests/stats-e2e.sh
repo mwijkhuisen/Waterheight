@@ -2,7 +2,8 @@
 # CI only (#270 part A, ADR-0024; ci.yml job `stats`), as root on a GitHub runner, with the runner's own Docker (not
 # production's 29.8.1: that is U7, an [agent-prod] check) on production's deploy/host/daemon.json. The [CI] proofs of
 # the stats stack (deploy/stats/):
-#   1. production's daemon.json, then the three pinned images, pulled before any firewall load;
+#   1. production's daemon.json, then the three pinned images, pulled before any firewall load; the vendored tracker
+#      (#270 B, apps/web/public/assets/stats-*.js) byte for byte the umami image's /app/public/script.js;
 #   2. the real rws table and the stats table side by side: nft -c, the stats table loaded twice, exactly one
 #      table inet stats, the rws table byte-identical, no `flush ruleset` anywhere in deploy/stats;
 #   3. systemd-analyze verify of the stats units (the script at its ExecStart path);
@@ -54,6 +55,15 @@ install -m 0644 "$repo/deploy/host/daemon.json" /etc/docker/daemon.json
 systemctl restart docker
 for image in $images; do docker pull -q "$image"; done
 proof "Docker $(docker version --format '{{.Server.Version}}') on deploy/host/daemon.json; pulled: $(tr '\n' ' ' <<<"$images")"
+# #270 B: the BOM pins the vendored tracker by its own sha256; this ties it to the image, so an edited file, or an
+# image bump without runbook §9's refresh, fails here.
+trackers=("$repo"/apps/web/public/assets/stats-*.js)
+((${#trackers[@]} == 1)) || fail "expected one vendored tracker, found ${#trackers[@]}"
+c=$(docker create "$umami_image")
+docker cp "$c:/app/public/script.js" "$out/script.js"
+docker rm "$c" >/dev/null
+cmp "$out/script.js" "${trackers[0]}" || fail "${trackers[0]#"$repo"/} is not /app/public/script.js of $umami_image"
+proof "${trackers[0]#"$repo"/} is byte for byte /app/public/script.js of the pinned umami image (sha256 $(sha256sum <"$out/script.js" | cut -d' ' -f1))"
 
 step "2. nftables: the rws table, then the stats table twice beside it"
 if grep -rnE '^[^#]*flush ruleset' "$stats"; then fail "flush ruleset in deploy/stats"; fi
