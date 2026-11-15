@@ -6,7 +6,7 @@
 - an update of the Umami, PostgreSQL or cloudflared image (section 9, D4);
 - the stack is to be removed (section 10).
 
-An [owner] task: it needs the owner's workstation (Cloudflare), the VM and a WireGuard peer. Agents have no production access and no peer. Design and reasons: `docs/adr/0024-self-hosted-statistics-umami.md`; threats: `docs/threat-model.md` v4.91; risks R-111 to R-117; gaps KG-508 to KG-512.
+An [owner] task: it needs the owner's workstation (Cloudflare), the VM and a WireGuard peer. Agents have no production access and no peer. Design and reasons: `docs/adr/0024-self-hosted-statistics-umami.md`; threats: `docs/threat-model.md` v4.91 and v4.92 (part B); risks R-111 to R-117; gaps KG-508 to KG-513.
 
 What it is: the compose project `stats` (`deploy/stats/compose.yaml`) with Umami, its own PostgreSQL 18 and its own cloudflared. The tunnel routes `^/api/send$` only (`deploy/stats/cloudflared.yml`); the dashboard and `/mcp` listen on `10.66.0.1:8444`, from a WireGuard peer only (D1). Its host files are installed by hand, not by `bootstrap.sh`: they live in `deploy/stats/` so that `rws-update` never sees them. The stack has no backup, no healthcheck ping and no tick (D2); the history stays until the owner deletes it (D3).
 
@@ -105,7 +105,7 @@ Expected: `db`, `umami` and `cloudflared` `running (healthy)`. The first start r
    ```
 
    Then open `http://10.66.0.1:8444` in the browser and log in with the new password.
-2. Settings, Websites, add `waterradar.io`. Its **website ID** goes to part B of #270 (the tracker); it is not a secret.
+2. Settings, Websites, add `waterradar.io`. Its **website ID** goes into PR B of #270, in the `data-website-id` of both page shells (`apps/web/index.html`, `apps/web/en/index.html`); the agent swaps the nil-UUID placeholder. It is not a secret.
 3. Optional, for MCP: Settings, API keys, create a key. Use it as the bearer token at `http://10.66.0.1:8444/mcp`. The key is a general Umami API credential (R-115): keep it in the password manager only, and delete it in the dashboard if it leaks.
 
 ## 8. Checks
@@ -119,6 +119,15 @@ done
 curl -s -o /dev/null -w "send GET %{http_code}\n" https://stats.waterradar.io/api/send                 # 405 from Umami: the path reaches it
 curl -s -i -X OPTIONS https://stats.waterradar.io/api/send | grep -i '^access-control\|^HTTP'          # the CORS answer (U2)
 ```
+
+[agent-prod], part B (the tracker), after the deploy:
+
+```bash
+scripts/verify-prod.sh waterradar.io --edge cloudflare     # passes with the new CSP, incl. the og check (the tag's type was rendered)
+curl -sI https://waterradar.io/assets/stats-654f12c7.js     # 200, Cache-Control immutable
+```
+
+B1: a Playwright run against production loads `https://waterradar.io/` and sees exactly one POST (plus a preflight) to `https://stats.waterradar.io/api/send`, answered 2xx with no `Set-Cookie`, and no report at `/api/v1/beacon` (KG-513).
 
 [owner], on the VM, after every install, update and **every reboot** (R-116: the firewall fails open if its unit fails):
 
@@ -174,7 +183,8 @@ Nothing updates itself, and the stats images are outside the rws Grype gate (KG-
    docker compose -f /etc/stats/compose.yaml ps
    ```
 
-6. Repeat the checks of section 8. Reinstall the other files of section 2 only if the PR changed them, then `systemctl reload stats-firewall.service`.
+6. **Refresh the tracker on every image bump.** The vendored script must come from the new image: run `scripts/umami-tracker.sh ghcr.io/umami-software/umami:<tag>@sha256:<index digest> /tmp/stats.js`, save it as `apps/web/public/assets/stats-<first 8 hex of its sha256>.js`, delete the old file, update the BOM row `umami tracker` (version and sha256) in `CLAUDE.md`, and the `src` in both page shells. `test/stats-tracker.test.ts` fails until the version matches the image.
+7. Repeat the checks of section 8. Reinstall the other files of section 2 only if the PR changed them, then `systemctl reload stats-firewall.service`.
 
 ## 10. Removal
 
