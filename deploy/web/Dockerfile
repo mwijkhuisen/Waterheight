@@ -13,7 +13,7 @@
 # clears Grype. The Go stage from ARG GO_VERSION to ARG GO_FIXES is the same text
 # as in deploy/server/Dockerfile and deploy/backup/Dockerfile
 # (test/check-bom.test.ts).
-FROM node:26.12.0-trixie-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11 AS go
+FROM node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS go
 ARG GO_VERSION=1.27.2
 ADD --checksum=sha256:ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5 \
   https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz \
@@ -45,7 +45,7 @@ RUN m=github.com/caddyserver/caddy/v2@v${CADDY_VERSION} \
   && go version -m /gobin/caddy \
     | grep -E "^\s+dep\s+github.com/caddyserver/caddy/v2\s+v${CADDY_VERSION}\s+h1:yj0Y4fYZGPkSvibBJ1sTWE33xC0fxztVyXEW5iIdUT4=$"
 
-FROM node:26.12.0-trixie-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11 AS build
+FROM node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS build
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
@@ -55,7 +55,7 @@ RUN scripts/install-pnpm.sh /opt/pnpm
 ENV PATH=/opt/pnpm/bin:$PATH
 RUN pnpm install --frozen-lockfile && pnpm -F web build
 
-FROM caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+FROM caddy:2.11.8-alpine@sha256:f6228111e5fafa1a5238258d0858e103f10599b8d1659a146e7726681a002bb9
 # The image's own binary carries a cap_net_bind_service file capability, and the kernel refuses to exec such a binary
 # under cap_drop: ALL (caddy-docker#396). The build above replaces it (#252) and, freshly built, carries none. Caddy
 # runs as uid 65533 with no capability and binds 80/443 through the container's net.ipv4.ip_unprivileged_port_start.
