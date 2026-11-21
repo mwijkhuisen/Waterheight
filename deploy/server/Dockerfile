@@ -13,7 +13,7 @@
 # they clear Grype. The Go stage from ARG GO_VERSION to ARG GO_FIXES is the same
 # text as in deploy/backup/Dockerfile and deploy/web/Dockerfile, which builds Caddy
 # with it (#252; test/check-bom.test.ts).
-FROM node:26.12.0-trixie-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11 AS go
+FROM node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS go
 ARG GO_VERSION=1.27.2
 ADD --checksum=sha256:ecbadb99091a3f46e31f5f934b068b1864eafa7995211b39eaddf76996045fe5 \
   https://dl.google.com/go/go${GO_VERSION}.linux-amd64.tar.gz \
@@ -44,7 +44,7 @@ RUN m=github.com/protomaps/go-pmtiles@v${GO_PMTILES_VERSION} \
   && go get ${GO_FIXES} \
   && go build -trimpath -ldflags "-s -w -X main.version=${GO_PMTILES_VERSION}" -o /gobin/pmtiles .
 
-FROM node:26.12.0-trixie-slim@sha256:e556a144463cc8dc53afe8de6d2fa0db5c132fd39ffa232c17641bd40df2bf11 AS build
+FROM node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS build
 RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
