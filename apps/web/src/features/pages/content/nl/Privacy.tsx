@@ -13,18 +13,34 @@ export default function Privacy() {
       <h2>Wie is verantwoordelijk</h2>
       <Contact locale="nl" />
 
-      <h2>Geen cookies, geen trackers</h2>
+      <h2>Bezoekstatistieken</h2>
       <p>
-        Deze site gebruikt geen cookies, geen trackers en geen statistiek- of analysediensten. Je browser vraagt bij een
-        bezoek niets aan andere servers: elk bestand dat de pagina laadt, ook de kaart, komt van deze site zelf. Een
-        link naar een andere site laadt pas als je erop klikt.
+        Om te weten hoeveel mensen deze site gebruiken en welke pagina’s ze lezen, stuurt elke pagina die je opent één
+        kort bericht naar <code>stats.waterradar.io</code>: onze eigen statistiekserver (Umami), die op dezelfde machine
+        draait als deze site. Het bericht gaat via het netwerk van Cloudflare, dat het dus met je IP-adres ontvangt. Het
+        is het enige verzoek dat je browser buiten deze site doet: elk bestand dat de pagina laadt, ook de kaart, komt
+        van deze site zelf, en een link naar een andere site laadt pas als je erop klikt.
+      </p>
+      <p>
+        Het bericht bevat het adres van de pagina zonder het deel na het vraagteken (dus niet het tijdstip of station
+        dat je koos), de paginatitel, de site en pagina waar je vandaan kwam (ook zonder dat deel), de taal van je
+        browser en de grootte van je scherm. Uit het verzoek leidt de statistiekserver de browser, het
+        besturingssysteem, het soort apparaat en het land af, en de regio en plaats als Cloudflare die meestuurt. Hij
+        slaat geen IP-adres op en plaatst geen cookie. Om een bezoeker één keer te tellen, maakt hij uit je IP-adres en
+        browser, een geheime sleutel en de huidige maand een code. Alleen met die sleutel is de code aan een IP-adres te
+        koppelen, en dat doen wij nooit; vanaf de volgende maand tel je als nieuwe bezoeker.
+      </p>
+      <p>
+        Stuurt je browser Do Not Track mee, dan gaat er geen bericht. De statistieken zijn alleen voor ons, worden met
+        niemand gedeeld en blijven bewaard tot wij ze verwijderen.
       </p>
 
       <h2>Niets opgeslagen in je browser</h2>
       <p>
         Wij slaan niets op in je browser: geen cookies, geen localStorage en geen andere opslag. De weergave die je
         kiest (tijdstip, station, kaartweergave en rivier) staat alleen in het webadres, en je taal volgt uit het adres:
-        pagina’s met /en/ in het adres zijn Engels.
+        pagina’s met /en/ in het adres zijn Engels. Ook het statistiekscript schrijft niets: het kijkt alleen of de
+        instelling <code>umami.disabled</code> bestaat, en stuurt dan niets.
       </p>
 
       <h2>Toegangslogboek</h2>
@@ -62,9 +78,9 @@ export default function Privacy() {
       <h2>Je rechten</h2>
       <p>
         Je kunt ons via het contactadres hierboven vragen om inzage in gegevens die wij van je hebben, om correctie of
-        verwijdering, en je kunt bezwaar maken tegen de verwerking. Omdat het logboek alleen verkorte adressen bevat,
-        kunnen we een verzoek soms niet aan jou koppelen. Heb je een klacht over hoe wij met je gegevens omgaan, dan kun
-        je die indienen bij de Autoriteit Persoonsgegevens.
+        verwijdering, en je kunt bezwaar maken tegen de verwerking. Omdat het logboek alleen verkorte adressen bevat en
+        de statistieken geen enkel adres, kunnen we een verzoek of bezoek soms niet aan jou koppelen. Heb je een klacht
+        over hoe wij met je gegevens omgaan, dan kun je die indienen bij de Autoriteit Persoonsgegevens.
       </p>
     </>
   );

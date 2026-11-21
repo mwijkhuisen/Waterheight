@@ -59,11 +59,25 @@ const fontPackages = (): NoticePackage[] =>
     files: [{ name: f.file, text: readFileSync(new URL(f.file, fontsDir), 'utf8') }],
   }));
 
+/**
+ * The statistics script (#270 B, ADR-0024): Umami's built tracker, vendored byte for byte in public/assets (the BOM row
+ * `umami tracker`), no npm package either; its MIT text is in vendor/umami.
+ */
+export const TRACKER = { name: 'Umami tracker (umami-software/umami)', version: '3.4.1', file: 'LICENSE' } as const;
+const trackerPackage = (): NoticePackage => ({
+  name: TRACKER.name,
+  version: TRACKER.version,
+  license: 'MIT',
+  files: [
+    { name: TRACKER.file, text: readFileSync(new URL(`./vendor/umami/${TRACKER.file}`, import.meta.url), 'utf8') },
+  ],
+});
+
 const preamble = (mapCommit: string) =>
   [
-    "Licence texts of the third-party npm packages in this site's JavaScript and of its two fonts. Map data: © OpenStreetMap contributors · Protomaps.",
+    "Licence texts of the third-party npm packages in this site's JavaScript, of its statistics script and of its two fonts. Map data: © OpenStreetMap contributors · Protomaps.",
     `The licences of the map glyphs and sprites are in /assets/map/${mapCommit}/LICENSES.md.`,
-    'Licentieteksten van de npm-pakketten van derden in de JavaScript van deze site en van de twee lettertypen. Kaartgegevens: © OpenStreetMap contributors · Protomaps.',
+    'Licentieteksten van de npm-pakketten van derden in de JavaScript van deze site, van het statistiekscript en van de twee lettertypen. Kaartgegevens: © OpenStreetMap contributors · Protomaps.',
     `De licenties van de kaartlettertypen en sprites staan in /assets/map/${mapCommit}/LICENSES.md.`,
   ].join('\n');
 
@@ -145,7 +159,7 @@ export function thirdPartyNotices(): Plugin {
       this.emitFile({
         type: 'asset',
         fileName: 'third-party-notices.txt',
-        source: noticesText([...packages.values(), ...fontPackages()], preamble(commits[0] ?? '')),
+        source: noticesText([...packages.values(), ...fontPackages(), trackerPackage()], preamble(commits[0] ?? '')),
       });
     },
   };

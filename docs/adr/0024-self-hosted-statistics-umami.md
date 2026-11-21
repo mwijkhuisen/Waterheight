@@ -1,8 +1,8 @@
 # ADR-0024: Self-hosted statistics (Umami) at stats.waterradar.io
 
-- **Status:** Accepted (owner, 2026-11-12 and 2026-11-14; issue #270, `docs/plan/PHASES.md` §65). Part A (the stack) is this change; part B (the tracker, the CSP and the privacy text) follows in its own PR.
+- **Status:** Accepted (owner, 2026-11-12 and 2026-11-14; issue #270, `docs/plan/PHASES.md` §65). Part A (the stack) shipped in #276; part B (the tracker, the CSP and the privacy text) is its own PR, part of #270.
 - **Date:** 2026-11-14
-- **Revisit:** when part B ships, when the owner wants history kept or backed up (D2, D3), or when Umami changes its licence or stops publishing releases.
+- **Revisit:** when the owner wants a second tracker attribute or a new Umami release (the tracker is vendored and refreshed with the image, runbook §9), when the owner wants history kept or backed up (D2, D3), or when Umami changes its licence or stops publishing releases.
 
 ## Context
 
@@ -33,7 +33,7 @@
 ### Relation to ADR-0006 and the invariants
 
 - **Invariant 7 keeps its text.** `stats.waterradar.io` is the owner's own host in the same registrable domain (same site). This is an exception to ADR-0006 in spirit only: no third party sees a visitor. Part B's Playwright spec for off-origin requests names this host as the one allowed exception.
-- **Invariant 10 (CSP).** Part B adds the host to `connect-src` (and `script-src` if the tracker is loaded from it). This ADR covers that change; part B still states the exact diff.
+- **Invariant 10 (CSP).** Part B adds the host to `connect-src` only. `script-src` stays `'self'`, because the tracker is same-origin code (section "Part B" below). This ADR covers that change and states the exact diff there.
 - **Never touch `table inet rws`: one named waiver (owner, 2026-11-14).** `deploy/host/nftables.conf` drops anything from `wg0` that is not forwarded to the owner bridge. A drop in any base chain is final, so no peer could reach `10.66.0.1:8444`. The line becomes `iifname "wg0" oifname != { "rws-owner-pub", "stats-publish" } drop`, and `table inet stats` does all the filtering behind it. It needs one rws bootstrap re-run (`docs/runbooks/stats.md` §4; R-117).
 
 ### Where reality differs from #270
@@ -49,9 +49,30 @@
 - **Maintainer health:** Umami Software, Inc.; v3.4.1 was released 2026-10-23, v3.5.0 on 2026-11-12 (the project releases about monthly). v3.4.1 is pinned because 3.5.0 was under 7 days old.
 - **Transitive count:** the image's own `package.json` at v3.4.1 lists 61 direct `dependencies`; the full transitive tree is not counted. This is the image's own tree, not this repository's lockfile: `pnpm-lock.yaml` and the web bundle are unchanged.
 
+## Part B: the tracker and the CSP
+
+- **The tag.** Last in `<body>` of `apps/web/index.html` and `apps/web/en/index.html`:
+  `<script type="[[`text/javascript`]]" defer src="/assets/stats-654f12c7.js" data-website-id="<id>" data-host-url="https://stats.waterradar.io" data-domains="waterradar.io" data-do-not-track="true" data-exclude-search="true" data-exclude-hash="true"></script>`
+  The website ID is the one of runbook §7; the repository holds the nil UUID until the owner pastes it.
+- **The script is vendored.** `apps/web/public/assets/stats-654f12c7.js` is byte for byte `/app/public/script.js` of the pinned image (Umami 3.4.1, sha256 `654f12c7548be726eba5b71d5ef8bffc2a41a39a0053e2a49a847869ccd7ac3f`, 4773 bytes, MIT; licence in `apps/web/vendor/umami/LICENSE` and `/third-party-notices.txt`). `scripts/umami-tracker.sh` reads it from the registry for every linux platform and fails unless they agree. It is a BOM row of kind `asset` (`umami tracker`), checked by `check-bom`, and refreshed with every image bump (runbook §9). The `stats` CI job compares it byte for byte with `/app/public/script.js` of the image pinned in `deploy/stats/compose.yaml` (`deploy/tests/stats-e2e.sh`), so an edited file, or an image bump without the refresh, fails CI.
+- **The CSP diff** (`deploy/web/site.caddy`, both copies; `docs/plan/ARCHITECTURE.md:1020`; ADR-0016; `test/verify-prod.test.ts`):
+  - before: `connect-src 'self'`
+  - after: `connect-src 'self' https://stats.waterradar.io`
+  - `script-src` stays `'self'`. `deploy/web/owner.caddy` is unchanged: `connect-src 'self'`.
+- **What the tracker does** (read in the pinned source): reads only `localStorage.umami.disabled`, writes no storage and no cookie, sends `fetch` with `credentials: 'omit'` and `keepalive` to `/api/send`, matches `data-domains` by exact hostname (CI, localhost and `owner.waterradar.io` never send), and honours Do Not Track. The server stores no IP. Cloudflare and Umami still see the visitor's address and user agent while the request is handled.
+- **CORS.** `/api/*` answers `Access-Control-Allow-Origin: *` with a one-day preflight cache: one preflight per browser per day.
+- **Invariant 7.** The browser's one request beyond this site goes to the owner's host; the off-origin Playwright check names it as the one exception.
+
+### Where part B differs from #270
+
+1. **Two more attributes, `data-exclude-search="true"` and `data-exclude-hash="true"`.** `apps/web/src/lib/url/useUrlState.ts:44` rewrites `?t=` and `?s=` with `history.replaceState`, which the tracker hooks. Without the first attribute every timebar step or station pick would be a page view and the query would be stored. With it a page counts once, no query is stored and the referrer's query is stripped. The second keeps a `#fragment` out too: the app uses none, but a link may carry one, and Umami would store it with the path (security review).
+2. **The owner site gate.** The owner site serves the same `/srv/www`. Only `site.caddy` runs the templates module over the page shells, so only there does `type` render as `text/javascript`. On the owner site the raw `[[...]]` value is no JavaScript MIME type, so the tag is an inert data block: never fetched, never run. `owner.caddy` stays unchanged and keeps `connect-src 'self'`.
+3. **`/assets/stats-<sha8>.js` instead of `/<name>.js`.** The existing immutable `@assets` route serves it, so no route is added and the page routes are untouched. A new version is a new file name.
+4. **"Part of #270", not a closing change.** The [owner] and [agent-prod] boxes of A, B's [agent-prod] checks and the E5 approval stay open after the merge; the owner closes #270.
+
 ## Consequences
 
-- A visit count exists only after part B ships the tracker; until then the stack holds no data and the public site is unchanged.
+- A visit count exists only once part B is deployed with the real website ID; before that the stack holds no data.
 - The VM carries a third compose project and a second cloudflared; its images are outside the rws Grype gate and updated by hand (KG-509).
-- Open risks and gaps: R-111 to R-117, KG-508 to KG-512. Threats: `docs/threat-model.md` v4.91.
+- Open risks and gaps: R-111 to R-117, KG-508 to KG-513. Threats: `docs/threat-model.md` v4.91 (part A) and v4.93 (part B).
 - Rejected variants stay rejected; a different tool is a new ADR.

@@ -15,8 +15,10 @@ MapLibre GL JS 6 removed its UMD and CSP bundles (catalogue §8 C23), and whethe
 **Final CSP** (site-wide; `deploy/web/site.caddy`, A§12.2, `test/verify-prod.test.ts`):
 
 ```
-default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp
+default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://stats.waterradar.io; worker-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests; report-to csp
 ```
+
+#270 part B (ADR-0024) adds one source, `https://stats.waterradar.io` in `connect-src`: the POST of the owner's own statistics script. `script-src` stays `'self'`, and the owner site (`deploy/web/owner.caddy`) keeps `connect-src 'self'`.
 
 Only tightened: `blob:` is gone from `img-src` and `worker-src`. Evidence, all three browsers (Playwright 1.63.0: Chromium 153, Firefox 155, WebKit 26.6):
 
