@@ -205,7 +205,7 @@ proof "Docker $(docker version --format '{{.Server.Version}}') and Compose $(doc
 
 # ------------------------------------------------------------------ images
 step "Build the server, web and backup images (at once), and pull the other images meanwhile"
-readonly CADDY_PROBE_IMAGE=caddy:2.11.8-alpine@sha256:f6228111e5fafa1a5238258d0858e103f10599b8d1659a146e7726681a002bb9
+readonly CADDY_PROBE_IMAGE=caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
 # #217: the third-party images of the stack (every digest-pinned image line of the compose files), the other images this
 # script and the degraded spec run, pulled while the three images build; each pull and each build has its own log, and
 # every one is waited for and its exit status checked.
