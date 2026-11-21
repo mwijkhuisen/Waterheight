@@ -23,14 +23,14 @@
     "fixtures:synth": "node scripts/synthesize-fixture.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.4",
-    "@maplibre/maplibre-gl-style-spec": "26.5.1",
+    "@biomejs/biome": "2.6.6",
+    "@maplibre/maplibre-gl-style-spec": "26.6.0",
     "@protomaps/basemaps": "5.7.2",
     "@types/node": "26.6.6",
     "@vitest/coverage-v8": "5.1.0",
     "fast-check": "4.10.2",
     "lighthouse": "13.6.0",
-    "msw": "3.0.3",
+    "msw": "3.0.4",
     "typescript": "6.0.3",
     "vitest": "5.1.0",
     "yaml": "2.9.1",
