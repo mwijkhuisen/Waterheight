@@ -208,7 +208,8 @@ ignore:
   # zlib1g +b1 (deb) in postgres only: no postgres image with trixie-security's +deb13u1 yet (owner, 2026-11-15 and
   # 2026-11-21, #277, R-095). The location is the dpkg database of a Debian image; distroless images keep theirs under
   # /var/lib/dpkg/status.d/ and are not covered. Both CVEs are in zlib's gz_write (one fixing commit, df84af25), which
-  # postgres's pg_dump -Fc never calls: it compresses with deflate().
+  # postgres's pg_dump -Fc never calls: it compresses with deflate(). Grype 0.119.0 no longer reports CVE-2026-76844 in
+  # any image (release run 44902193982); its rule stays, pinned like the other, until #277 PR 2 deletes both.
   - vulnerability: CVE-2026-76844
     package:
       name: zlib1g
