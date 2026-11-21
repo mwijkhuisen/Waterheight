@@ -6,7 +6,7 @@
 - an update of the Umami, PostgreSQL or cloudflared image (section 9, D4);
 - the stack is to be removed (section 10).
 
-An [owner] task: it needs the owner's workstation (Cloudflare), the VM and a WireGuard peer. Agents have no production access and no peer. Design and reasons: `docs/adr/0024-self-hosted-statistics-umami.md`; threats: `docs/threat-model.md` v4.91 and v4.92 (part B); risks R-111 to R-117; gaps KG-508 to KG-513.
+An [owner] task: it needs the owner's workstation (Cloudflare), the VM and a WireGuard peer. Agents have no production access and no peer. Design and reasons: `docs/adr/0024-self-hosted-statistics-umami.md`; threats: `docs/threat-model.md` v4.91 and v4.93 (part B); risks R-111 to R-117; gaps KG-508 to KG-513.
 
 What it is: the compose project `stats` (`deploy/stats/compose.yaml`) with Umami, its own PostgreSQL 18 and its own cloudflared. The tunnel routes `^/api/send$` only (`deploy/stats/cloudflared.yml`); the dashboard and `/mcp` listen on `10.66.0.1:8444`, from a WireGuard peer only (D1). Its host files are installed by hand, not by `bootstrap.sh`: they live in `deploy/stats/` so that `rws-update` never sees them. The stack has no backup, no healthcheck ping and no tick (D2); the history stays until the owner deletes it (D3).
 

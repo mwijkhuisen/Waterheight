@@ -56,8 +56,8 @@ describe('check-bom', () => {
 
   it('fails on a wrong pin in a package.json', () => {
     const dir = scratch();
-    edit(dir, 'apps/server/package.json', '"hono": "4.13.16"', '"hono": "4.13.17"');
-    expect(checkBom(dir).join('\n')).toMatch(/hono@4\.13\.17: the bill of materials says 4\.13\.16/);
+    edit(dir, 'apps/server/package.json', '"hono": "4.13.17"', '"hono": "4.13.18"');
+    expect(checkBom(dir).join('\n')).toMatch(/hono@4\.13\.18: the bill of materials says 4\.13\.17/);
   });
 
   it('fails on a version range', () => {
@@ -87,8 +87,8 @@ describe('check-bom', () => {
 
   it('fails when the lockfile does not match', () => {
     const dir = scratch();
-    edit(dir, 'pnpm-lock.yaml', /(\n {6}hono:\n {8}specifier: )4\.13\.16/, '$14.13.10');
-    expect(checkBom(dir).join('\n')).toMatch(/hono@4\.13\.16: pnpm-lock\.yaml has 4\.13\.10/);
+    edit(dir, 'pnpm-lock.yaml', /(\n {6}hono:\n {8}specifier: )4\.13\.17/, '$14.13.10');
+    expect(checkBom(dir).join('\n')).toMatch(/hono@4\.13\.17: pnpm-lock\.yaml has 4\.13\.10/);
   });
 
   it('fails on TypeScript 7', () => {
@@ -134,11 +134,11 @@ describe('check-bom', () => {
     edit(
       dir,
       'tools/geo/Dockerfile',
-      /^FROM node:26\.12\.0-trixie-slim@sha256:[0-9a-f]{64} AS build/m,
-      'FROM node:26.12.0-trixie-slim AS build',
+      /^FROM node:26\.13\.0-trixie-slim@sha256:[0-9a-f]{64} AS build/m,
+      'FROM node:26.13.0-trixie-slim AS build',
     );
     expect(checkBom(dir).join('\n')).toMatch(
-      /tools\/geo\/Dockerfile: base image node:26\.12\.0-trixie-slim has no installed image row/,
+      /tools\/geo\/Dockerfile: base image node:26\.13\.0-trixie-slim has no installed image row/,
     );
   });
 
@@ -206,10 +206,10 @@ describe('supply-chain rules (risk R-008)', () => {
     edit(
       dir,
       'pnpm-lock.yaml',
-      /(\n {2}hono@4\.13\.16:\n {4}resolution: )\{integrity: [^}]+\}/,
-      '$1{tarball: https://example.com/hono-4.13.16.tgz}',
+      /(\n {2}hono@4\.13\.17:\n {4}resolution: )\{integrity: [^}]+\}/,
+      '$1{tarball: https://example.com/hono-4.13.17.tgz}',
     );
-    expect(checkSupplyChain(dir).join('\n')).toMatch(/hono@4\.13\.16: resolves by tarball, not by registry integrity/);
+    expect(checkSupplyChain(dir).join('\n')).toMatch(/hono@4\.13\.17: resolves by tarball, not by registry integrity/);
   });
 
   it.each([
