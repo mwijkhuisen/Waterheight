@@ -116,9 +116,9 @@ describe('check-bom', () => {
 
   it('fails on a Dockerfile base image without an installed row', () => {
     const dir = scratch();
-    edit(dir, 'deploy/web/Dockerfile', /^FROM caddy:2\.11\.7-alpine@sha256:[0-9a-f]{64}/m, 'FROM caddy:2.11.7-alpine');
+    edit(dir, 'deploy/web/Dockerfile', /^FROM caddy:2\.11\.8-alpine@sha256:[0-9a-f]{64}/m, 'FROM caddy:2.11.8-alpine');
     expect(checkBom(dir).join('\n')).toMatch(
-      /deploy\/web\/Dockerfile: base image caddy:2\.11\.7-alpine has no installed image row/,
+      /deploy\/web\/Dockerfile: base image caddy:2\.11\.8-alpine has no installed image row/,
     );
   });
 
@@ -127,11 +127,11 @@ describe('check-bom', () => {
     edit(
       dir,
       'tools/geo/Dockerfile',
-      /^FROM node:26\.12\.0-trixie-slim@sha256:[0-9a-f]{64} AS build/m,
-      'FROM node:26.12.0-trixie-slim AS build',
+      /^FROM node:26\.13\.0-trixie-slim@sha256:[0-9a-f]{64} AS build/m,
+      'FROM node:26.13.0-trixie-slim AS build',
     );
     expect(checkBom(dir).join('\n')).toMatch(
-      /tools\/geo\/Dockerfile: base image node:26\.12\.0-trixie-slim has no installed image row/,
+      /tools\/geo\/Dockerfile: base image node:26\.13\.0-trixie-slim has no installed image row/,
     );
   });
 
