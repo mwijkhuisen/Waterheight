@@ -211,7 +211,7 @@ describe('the owner API serves every route as the owner role', () => {
       ['/api/v1/snapshot?t=bad', 400, 'bad_parameter'],
       [`/api/v1/snapshot?t=${iso(HOUR_START)}&zz=1`, 400, 'unknown_parameter'],
       [`/api/v1/series/${ids.ownerCanary}/forecast?v=1`, 400, 'unknown_parameter'],
-      ['/api/v1/series/99999999?from=2026-10-01T00:00Z&to=2026-10-02T00:00Z', 404, 'not_found'],
+      [`/api/v1/series/99999999?from=${iso(HOUR_START - DAY)}&to=${iso(HOUR_START)}`, 404, 'not_found'],
       ['/api/v1/nope', 404, 'not_found'],
     ] as const) {
       const a = await ask(owner, get(path), 'identity');
