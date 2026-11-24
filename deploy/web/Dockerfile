@@ -55,7 +55,7 @@ RUN scripts/install-pnpm.sh /opt/pnpm
 ENV PATH=/opt/pnpm/bin:$PATH
 RUN pnpm install --frozen-lockfile && pnpm -F web build
 
-FROM caddy:2.11.7-alpine@sha256:d8542f48d34a9cf4e4c11a478865229840e87e4c96ea3f439101f31a5d35f75f
+FROM caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
 # The image's own binary carries a cap_net_bind_service file capability, and the kernel refuses to exec such a binary
 # under cap_drop: ALL (caddy-docker#396). The build above replaces it (#252) and, freshly built, carries none. Caddy
 # runs as uid 65533 with no capability and binds 80/443 through the container's net.ipv4.ip_unprivileged_port_start.

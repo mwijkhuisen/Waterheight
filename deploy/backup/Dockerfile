@@ -34,7 +34,7 @@ RUN m=github.com/restic/restic@v${RESTIC_VERSION} \
   && go get ${GO_FIXES} \
   && go build -trimpath -tags disable_grpc_modules -ldflags '-s -w' -o /gobin/restic ./cmd/restic
 
-FROM gcr.io/distroless/static-debian13:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931
+FROM gcr.io/distroless/static-debian13:nonroot@sha256:8ce6dd87e9823c5b48dcfb2c8604714ccb351ce59607327bcc4957448da279b5
 COPY --from=restic /gobin/restic /usr/local/bin/restic
 # restic buffers pack files in TMPDIR; /cache is a volume, the root file system is read-only.
 ENV TMPDIR=/cache
