@@ -177,7 +177,12 @@ describe('the style files and the lockfile', () => {
     for (const doc of parseAllDocuments(readFileSync(join(ROOT, 'pnpm-lock.yaml'), 'utf8'))) {
       Object.assign(snapshots, (doc.toJSON() as Lock | null)?.snapshots);
     }
-    expect(snapshots[`maplibre-gl@${maplibre}`]?.dependencies?.['@maplibre/maplibre-gl-style-spec']).toBe(pinned);
+    // Since 6.19 (zustand, with optional react peers) the snapshot key carries a peer suffix: maplibre-gl@6.19.0(…).
+    const keys = Object.keys(snapshots).filter(
+      (k) => k === `maplibre-gl@${maplibre}` || k.startsWith(`maplibre-gl@${maplibre}(`),
+    );
+    expect(keys).toHaveLength(1);
+    expect(snapshots[keys[0] ?? '']?.dependencies?.['@maplibre/maplibre-gl-style-spec']).toBe(pinned);
     // And there is no second copy: what the client parses the style with is what validated it.
     const copies = Object.keys(snapshots).filter((k) => k.startsWith('@maplibre/maplibre-gl-style-spec@'));
     expect(copies).toEqual([`@maplibre/maplibre-gl-style-spec@${pinned}`]);
