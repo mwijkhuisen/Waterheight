@@ -7,7 +7,7 @@
 # in v0.62.0. The Go tarball is sha256-pinned, the module is checked against its
 # pinned go.sum hash, and every module download against the Go checksum database.
 # GO_FIXES are the fixed versions (each at least 7 days old), none below the
-# version Caddy 2.11.7 itself requires (otel/sdk v1.46.0 is Caddy's own), so the
+# version Caddy 2.11.9 itself requires (otel/sdk v1.46.0 is Caddy's own), so the
 # one list upgrades all four builds and never downgrades Caddy (a downgraded
 # otel/sdk breaks its build). Back to the image's binary once a Caddy release
 # clears Grype. The Go stage from ARG GO_VERSION to ARG GO_FIXES is the same text
@@ -30,20 +30,20 @@ ENV PATH=/usr/local/go/bin:$PATH GOTOOLCHAIN=local CGO_ENABLED=0 GOFLAGS= \
 ARG GO_FIXES="golang.org/x/net@v0.62.0 golang.org/x/crypto@v0.58.0 golang.org/x/text@v0.43.0 google.golang.org/grpc@v1.83.2 go.opentelemetry.io/otel/sdk@v1.46.0 github.com/klauspost/compress@v1.20.2 github.com/go-jose/go-jose/v4@v4.1.6 github.com/andybalholm/brotli@v1.2.7"
 # Built as the upstream release is (.goreleaser.yml): cmd/caddy/main.go in a main module `caddy` that requires the
 # release module, and the release flags (-trimpath, -s -w and the tags nobadger, nomysql and nopgx). So the build info
-# names github.com/caddyserver/caddy/v2 v2.11.7 with its go.sum hash (the last line checks it): `caddy version` prints
+# names github.com/caddyserver/caddy/v2 v2.11.9 with its go.sum hash (the last line checks it): `caddy version` prints
 # it, and Syft and Grype match Caddy's own advisories by it. Built inside its own module, Caddy is (devel) to both.
 # The main module takes Caddy's own `go 1.26.0` line (go mod init would write the toolchain's 1.27.2), so the edge
 # binary keeps the GODEBUG defaults of the release; neither go mod tidy nor GO_FIXES raises it (review SR-2).
-ARG CADDY_VERSION=2.11.7
+ARG CADDY_VERSION=2.11.9
 RUN m=github.com/caddyserver/caddy/v2@v${CADDY_VERSION} \
-  && go mod download -json "$m" | grep -F '"Sum": "h1:yj0Y4fYZGPkSvibBJ1sTWE33xC0fxztVyXEW5iIdUT4="' \
+  && go mod download -json "$m" | grep -F '"Sum": "h1:bhZtcRKQOq0fuLvEgCdPYvUxXyGn9kzjG4lh2332DTE="' \
   && mkdir /gosrc/caddy && cd /gosrc/caddy \
   && cp "$(go env GOMODCACHE)/$m/cmd/caddy/main.go" . \
   && go mod init caddy && go mod edit -go=1.26.0 -require="$m" && go mod tidy \
   && go get ${GO_FIXES} \
   && go build -trimpath -tags nobadger,nomysql,nopgx -ldflags '-s -w' -o /gobin/caddy . \
   && go version -m /gobin/caddy \
-    | grep -E "^\s+dep\s+github.com/caddyserver/caddy/v2\s+v${CADDY_VERSION}\s+h1:yj0Y4fYZGPkSvibBJ1sTWE33xC0fxztVyXEW5iIdUT4=$"
+    | grep -E "^\s+dep\s+github.com/caddyserver/caddy/v2\s+v${CADDY_VERSION}\s+h1:bhZtcRKQOq0fuLvEgCdPYvUxXyGn9kzjG4lh2332DTE=$"
 
 FROM node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS build
 RUN apt-get update \
@@ -60,7 +60,7 @@ FROM caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20f
 # under cap_drop: ALL (caddy-docker#396). The build above replaces it (#252) and, freshly built, carries none. Caddy
 # runs as uid 65533 with no capability and binds 80/443 through the container's net.ipv4.ip_unprivileged_port_start.
 COPY --from=go /gobin/caddy /usr/bin/caddy
-# #131 (R-095, owner 2026-10-16): the base still carries Alpine's zlib 1.3.2-r0 (CVE-2026-85091), so a fixed version
+# #131 (R-095, owner 2026-10-16): the base carries Alpine's zlib 1.3.2 (CVE-2026-85091; r1 on the Alpine 3.24 base), so a fixed version
 # is pinned (BOM row): 1.4-r0 (also fixes CVE-2026-4738) since 2026-11-06, the day Alpine replaced 1.3.2-r1, on the
 # owner's release-age override. Alpine keeps only a branch's newest revision: once the pinned one is replaced the build
 # fails, and the pin moves, or goes when the caddy image carries the fix. Caddy is a static Go binary and does not link
@@ -68,10 +68,13 @@ COPY --from=go /gobin/caddy /usr/bin/caddy
 # Owner 2026-10-26: the base's curl 8.22.0-r0 (CVE-2026-92392, High) goes, and with it libcurl and the libraries only
 # it links (brotli-libs, c-ares, libidn2, libpsl, libunistring, nghttp2-libs, zstd-libs). Nothing here runs curl: the
 # healthchecks and the e2e checks use busybox wget. This also retires #221's brotli-libs pin.
-# #252: the base's musl and musl-utils 1.2.5-r23 (CVE-2026-107891, High) take r24 (built 2026-10-21), pinned like zlib.
+# #252 pinned musl and musl-utils 1.2.5-r24 (CVE-2026-107891) like zlib; the pin went with Caddy 2.11.9, whose
+# Alpine 3.24.4 base carries musl 1.2.6-r3 (built 2026-10-21 with r24, the newest in v3.24/main).
+# The 2.11.9 base carries libcrypto3 and libssl3 3.5.9-r0 (CVE-2026-107496, -88823, -95691, -95692, High): both take
+# 3.5.9-r1 (built 2026-11-18T23:31Z), pinned like zlib.
 ARG ZLIB_VERSION=1.4-r0
-ARG MUSL_VERSION=1.2.5-r24
-RUN apk add --no-cache "zlib=${ZLIB_VERSION}" "musl=${MUSL_VERSION}" "musl-utils=${MUSL_VERSION}" \
+ARG OPENSSL_VERSION=3.5.9-r1
+RUN apk add --no-cache "zlib=${ZLIB_VERSION}" "libcrypto3=${OPENSSL_VERSION}" "libssl3=${OPENSSL_VERSION}" \
   && apk del curl \
   && mkdir -p /data/access /config \
   && chown -R 65533:65533 /data /config
