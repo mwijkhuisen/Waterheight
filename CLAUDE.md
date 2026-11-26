@@ -200,13 +200,13 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | pnpm | tool | 12.5.1 | installed | dcf914058a39cf8760b659d3348163ed01a9703500baa5f3f561958a03c309e71c127846891916980e75d364e66091edc093f72df984f9917d3c6796867f29f5 | MIT | native binary `@pnpm/exe.linux-x64` sha512 (`scripts/install-pnpm.sh`); 12.6.0 was under 7 days old at pin time |
 | postgresql-18 (apt.postgresql.org) | tool | 18 | installed | 0144068502a1eddd2a0280ede10ef607d1ec592ce819940991203941564e8e76 | PostgreSQL | hook only; sha256 of the repository key file ACCC4CF8.asc |
 | typescript | npm | 6.0.3 | installed | – | Apache-2.0 | TS 7 forbidden |
-| @biomejs/biome | npm | 2.6.6 | installed | – | MIT OR Apache-2.0 | lint + format |
+| @biomejs/biome | npm | 2.6.8 | installed | – | MIT OR Apache-2.0 | lint + format |
 | vitest | npm | 5.1.0 | installed | – | MIT | |
-| msw | npm | 3.0.4 | installed | – | MIT | `onUnhandledFrame: 'error'`; postinstall denied (`allowBuilds`) |
+| msw | npm | 3.0.6 | installed | – | MIT | `onUnhandledFrame: 'error'`; postinstall denied (`allowBuilds`) |
 | yaml | npm | 2.9.1 | installed | – | ISC | registry and lockfile parsing; apps/server reads the registry at runtime (P1) |
 | @types/node | npm | 26.6.6 | installed | – | MIT | |
-| hono | npm | 4.13.17 | installed | – | MIT | apps/server |
-| @hono/node-server | npm | 2.1.6 | installed | – | MIT | apps/server |
+| hono | npm | 4.13.19 | installed | – | MIT | apps/server |
+| @hono/node-server | npm | 2.1.9 | installed | – | MIT | apps/server |
 | pg | npm | 8.23.1 | installed | – | MIT | apps/server: PostgreSQL driver of migrate, load and api (P2a) |
 | @types/pg | npm | 8.23.1 | installed | – | MIT | |
 | zod | npm | 4.6.7 | installed | – | MIT | packages/contracts; apps/server manifest and spec schemas (P1); apps/web (P4b): `?s=` and the API answers, set `jitless` before any schema is built (its `new Function` probe is a CSP violation) |
@@ -214,9 +214,9 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | react-dom | npm | 19.3.1 | installed | – | MIT | apps/web |
 | @types/react | npm | 19.3.0 | installed | – | MIT | |
 | @types/react-dom | npm | 19.3.0 | installed | – | MIT | |
-| vite | npm | 8.3.7 | installed | – | MIT | apps/web |
+| vite | npm | 8.3.8 | installed | – | MIT | apps/web |
 | @vitejs/plugin-react | npm | 6.3.0 | installed | – | MIT | apps/web |
-| @inlang/paraglide-js | npm | 3.2.1 | installed | – | MIT | apps/web |
+| @inlang/paraglide-js | npm | 3.2.2 | installed | – | MIT | apps/web |
 | @inlang/plugin-message-format | npm | 4.6.0 | installed | – | MIT | loaded from node_modules so Paraglide never fetches plugin code from a CDN |
 | actions/checkout | action | 7.0.1 | installed | 3d3c42e5aac5ba805825da76410c181273ba90b1 | MIT | |
 | actions/setup-node | action | 7.1.0 | installed | 949feb2413d6458794dcd2491c4babbbce0c15c1 | MIT | `package-manager-cache: false` |
@@ -250,27 +250,27 @@ Exact pins only. `scripts/check-bom.ts` fails CI when a direct dependency, the l
 | distroless static | image | nonroot | installed | gcr.io/distroless/static-debian13:nonroot@sha256:aafe993665bf6200db38a02c11a9351e782a84b6a45e7f33b6695638c88e3931 | Apache-2.0 | P1b backup image runtime |
 | buildkit | image | v0.33.0 | installed | moby/buildkit:v0.33.0@sha256:6c2fa84a6b61ccd72899dde4239f8d5717f05f9a8ca6f3cad185fb1a95a94de3 | Apache-2.0 | release.yml builder (setup-buildx driver) |
 | buildkit-syft-scanner | image | 1.12.0 | installed | docker/buildkit-syft-scanner:1.12.0@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9 | Apache-2.0 | release.yml SBOM generator (Syft) |
-| croner | npm | 11.0.0 | installed | – | MIT | apps/server: capture scheduler (P1) |
+| croner | npm | 11.0.1 | installed | – | MIT | apps/server: capture scheduler (P1) |
 | undici | npm | 8.12.4 | installed | – | MIT | apps/server: SSRF-guarded fetch client (P1) |
-| fast-xml-parser | npm | 5.12.0 | installed | – | MIT | apps/server: CAP/XLSX validity, entities off (P1); the NL-4 parser (`adapters/nl-4/parse.ts`, P2b; P5 parsers) |
+| fast-xml-parser | npm | 5.12.1 | installed | – | MIT | apps/server: CAP/XLSX validity, entities off (P1); the NL-4 parser (`adapters/nl-4/parse.ts`, P2b; P5 parsers) |
 | csv-parse | npm | 7.0.2 | planned | – | MIT | P2/P5 |
 | fflate | npm | 0.8.3 | installed | – | MIT | apps/server: streamed ZIP guard (P1); the NL-4 converter reads the workbook through it (`readXlsx` in `http/guards.ts`, P2b; P5 parsers) |
 | proj4 | npm | 2.22.0 | planned | – | MIT | P5b did not need it: the EPSG:25832 columns of DE-8 are not read (the OpenHygon file has WGS84) |
 | pino | npm | 10.4.0 | installed | – | MIT | apps/server: JSON logs (P1) |
-| kysely | npm | 0.29.8 | installed | – | MIT | apps/server: typed, parameterised SQL (`sql` templates; P2a) |
+| kysely | npm | 0.29.9 | installed | – | MIT | apps/server: typed, parameterised SQL (`sql` templates; P2a) |
 | kysely-codegen | npm | 0.20.0 | installed | – | MIT | dev only: `pnpm db:types` writes `apps/server/src/db/generated.ts` (base tables; P2a) |
 | @hono/zod-openapi | npm | 1.6.3 | planned | – | MIT | P9; P4a uses Zod's `z.toJSONSchema` instead (owner, 2026-10-01) |
-| maplibre-gl | npm | 6.17.0 | installed | – | BSD-3-Clause | apps/web: the map, a lazy chunk; its worker from `setWorkerUrl` (P3, ADR-0016) |
+| maplibre-gl | npm | 6.19.0 | installed | – | BSD-3-Clause | apps/web: the map, a lazy chunk; its worker from `setWorkerUrl` (P3, ADR-0016); since 6.19.0 it lists `zustand` 5.1.0 (MIT, pmndrs; no dependencies, its react peers optional) as a dependency, whose vanilla store its dist inlines, so the bundle resolves no zustand module |
 | pmtiles | npm | 4.5.0 | installed | – | BSD-3-Clause | apps/web: the `pmtiles://` protocol through `addProtocol` (P3) |
 | @protomaps/basemaps | npm | 5.7.2 | installed | – | BSD-3-Clause | dev only: `tools/geo/basemap/build-style.ts` generates the NL and EN styles (flavour `white`; P3) |
-| @maplibre/maplibre-gl-style-spec | npm | 26.6.0 | installed | – | ISC | dev only: validates the generated styles; the exact version maplibre-gl resolves (P3) |
+| @maplibre/maplibre-gl-style-spec | npm | 26.8.0 | installed | – | ISC | dev only: validates the generated styles; the exact version maplibre-gl resolves (P3) |
 | @tanstack/react-router | npm | 1.170.39 | planned | – | MIT | P10 at the earliest: P4b has two static pages and keeps `t` and `s` in `lib/url` without a router (owner, 2026-10-01) |
-| @tanstack/react-query | npm | 5.107.1 | installed | – | MIT | apps/web: fetches keyed by the quantised t, cancelled when superseded (P4b); 1 transitive (`@tanstack/query-core`) |
+| @tanstack/react-query | npm | 5.108.0 | installed | – | MIT | apps/web: fetches keyed by the quantised t, cancelled when superseded (P4b); 1 transitive (`@tanstack/query-core`) |
 | echarts | npm | 6.1.0 | installed | – | Apache-2.0 | apps/web: the station chart, a lazy chunk, tooltips `richText` only (P4b); 2 transitive (`zrender`, `tslib`) |
 | temporal-polyfill | npm | 1.0.8 | installed | – | MIT | apps/web `lib/time`: loaded only where `Temporal` is missing (WebKit; P3) |
 | fast-check | npm | 4.10.2 | installed | – | MIT | dev only: property and fuzz tests (P2a) |
 | @vitest/coverage-v8 | npm | 5.1.0 | installed | – | MIT | dev only: `pnpm test:coverage` (≥ 90% lines of every adapter's parse and normalise; P2a) |
-| @playwright/test | npm | 1.64.1 | installed | – | Apache-2.0 | dev only: `pnpm -F web e2e` (Chromium, Firefox, WebKit; P3, planned for P4); held at 1.64.1 (2026-11-21, #282): the Firefox 159 of 1.65.0 and 1.65.1 (firefox-1572) crashes the page in 12 e2e tests that pass on 1.64.1 with the same bundle |
+| @playwright/test | npm | 1.64.1 | installed | – | Apache-2.0 | dev only: `pnpm -F web e2e` (Chromium, Firefox, WebKit; P3, planned for P4); held at 1.64.1 (2026-11-21, #282; again 2026-11-26, #285, where Dependabot proposed 1.65.1 once more): the Firefox 159 of 1.65.0 and 1.65.1 (firefox-1572) crashes the page in 12 e2e tests that pass on 1.64.1 with the same bundle |
 | @axe-core/playwright | npm | 4.14.0 | installed | – | MPL-2.0 | dev only: axe on the spike pages (P3) and on three views of the real pages (P4b); the full accessibility pass is P10 |
 | lighthouse | npm | 13.6.0 | installed | – | Apache-2.0 | dev only: the Lighthouse spec of the CI `e2e` job (P10a; mobile, simulated 4G, local Chromium, reports to disk, no upload); 102 transitive packages (103 lockfile entries reachable only through it, with itself; 13.6.0 brings `@sentry/node` 11 with its bundler plugins, the `sentry` CLI and `oxc-parser`, loaded only with `enableErrorReporting`, which the spec leaves off), no build script |
 | docker/build-push-action | action | 7.4.0 | installed | c3c9e263c25d99ce0380d002d59b67737d91b0dc | Apache-2.0 | P1b |
