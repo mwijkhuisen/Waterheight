@@ -512,7 +512,7 @@ expect_teardown() {
   [[ -z $(find "$RWS_SRV/backup/drill" -mindepth 1) ]] || fail "the scratch directory was not emptied"
   while IFS= read -r f; do [[ ! -e $f ]] || fail "an env file is left behind"; done <"$FIX/envpaths"
 }
-readonly PG_RE='postgres:18\.6-trixie@sha256:[0-9a-f]{64}'
+readonly PG_RE='postgres:18\.7-trixie@sha256:[0-9a-f]{64}'
 
 case_ "restore drill with a db: the dump in a throwaway postgres on an internal network, sanity, the replay check, teardown"
 setup_db
