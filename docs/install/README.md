@@ -17,7 +17,7 @@ How to install and run this repository, based on phase P0 (foundation, merged) a
 | OS | Linux x64 or arm64 (Debian 13 / Ubuntu 24.04 tested) | macOS works for the Node part; the scripts assume bash and GNU tools |
 | Node.js | **26.10.0** exactly (`.node-version`; `engines`: `>=26.10.0 <27`) | Node 26 runs `.ts` through type stripping and has native `Temporal`. **corepack is not bundled**; do not use it |
 | pnpm | **12.5.1** (`packageManager` in `package.json`) | Install with `scripts/install-pnpm.sh` (sha512-pinned native binary), not with `npm i -g pnpm` |
-| PostgreSQL | **18** (CI uses `postgres:18.6-trixie`) | Only for the integration tests. The cluster must use the builtin `C.UTF-8` locale |
+| PostgreSQL | **18** (CI uses `postgres:18.7-trixie`) | Only for the integration tests. The cluster must use the builtin `C.UTF-8` locale |
 | dbmate | 2.36.0 | Only for `scripts/dbmate-roundtrip.sh` |
 | shellcheck | 0.11.0 | Optional; CI lints `scripts/*.sh` |
 | git, curl, bash ≥ 5 | any recent | |
@@ -67,7 +67,7 @@ sudo -u postgres psql -p 5433 -c "CREATE DATABASE rws OWNER rws"
 export DATABASE_URL='postgres://rws:rws@localhost:5433/rws?sslmode=disable'
 ```
 
-Alternatively run the CI image: `docker run -d -p 5433:5432 -e POSTGRES_USER=rws -e POSTGRES_PASSWORD=rws -e POSTGRES_INITDB_ARGS='--locale-provider=builtin --builtin-locale=C.UTF-8' postgres:18.6-trixie` (pin the digest from `CLAUDE.md`). `?sslmode=disable` is required against a local server without TLS. Keep this database throwaway: `scripts/dbmate-roundtrip.sh` refuses any non-local URL.
+Alternatively run the CI image: `docker run -d -p 5433:5432 -e POSTGRES_USER=rws -e POSTGRES_PASSWORD=rws -e POSTGRES_INITDB_ARGS='--locale-provider=builtin --builtin-locale=C.UTF-8' postgres:18.7-trixie` (pin the digest from `CLAUDE.md`). `?sslmode=disable` is required against a local server without TLS. Keep this database throwaway: `scripts/dbmate-roundtrip.sh` refuses any non-local URL.
 
 ### 1.6 Verify
 

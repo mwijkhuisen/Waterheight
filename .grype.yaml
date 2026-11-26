@@ -3,34 +3,18 @@
 # Each rule is an owner decision: it names the vulnerability and the package's name, version and type, so a new
 # finding, or the same one in another version, still fails the gate. A rule with a location matches that path only.
 # What is accepted today:
-# - cloudflared 2026.11.1 (the tunnel edge): GO-2026-6860 in its golang.org/x/net v0.61.0, which every cloudflared
-#   release up to 2026.11.1 requires, until a release requiring v0.62.0 or newer is 7 days old (owner 2026-11-06,
-#   #252; renewed 2026-11-21, #277); scoped to the cloudflared binary, so our own images still fail on it.
-# - postgres 18.6-trixie: the stdlib go1.24.6 findings of its gosu 1.19, which never runs, since db and the restore
-#   drill start as 999:999 (owner 2026-10-16, #167). gosu 1.20 of postgres 18.7 is built with go1.24.6 as well.
-# - zlib1g 1:1.3.dfsg+really1.3.1-1+b1 (deb) in postgres 18.6-trixie: CVE-2026-76844 and CVE-2026-85091, fixed only
-#   in trixie-security's +deb13u1 (DSA-6613-1), which no postgres image has yet, not even 18.7-trixie of 2026-11-20
-#   (debian:trixie-slim was last built 2026-11-04) (owner 2026-11-15, #277). Since 2026-11-21 (#277) the rules are
-#   scoped to /var/lib/dpkg/status, the dpkg database of a Debian image: the server image (distroless 1d736cf8,
-#   #280) and cloudflared 2026.11.1 (#277) are on +deb13u1, and as distroless images they record the package under
-#   /var/lib/dpkg/status.d/, so +b1 there fails.
+# - postgres 18.7-trixie: the stdlib go1.24.6 findings of its gosu 1.20 (1.19 in 18.6), which never runs, since db and
+#   the restore drill start as 999:999 (owner 2026-10-16, #167).
 # History: #131 built restic, dbmate and go-pmtiles from their release modules with GO_FIXES; #252 did the same for
-# Caddy and moved cloudflared to 2026.10.6, which retired every other rule. R-095 keeps the full record.
+# Caddy and moved cloudflared to 2026.10.6, which retired every other rule. #284 (2026-11-26) retired the cloudflared
+# x/net rule (2026.11.2 requires v0.62.0) and the two zlib1g rules (postgres 18.7-trixie carries +deb13u1).
+# R-095 keeps the full record.
 #
 # expires: 2026-12-09
 # test/grype-ignore.test.ts fails from that date: bump the binaries (or ask the owner again), then delete the rules
 # that no longer match. Never add a rule without an owner decision (CLAUDE.md, dependency policy).
 ignore:
-  # golang.org/x/net v0.61.0 (go-module) in cloudflared: every release up to 2026.11.1 (owner, 2026-11-06, #252, R-095),
-  # until a cloudflared release requiring x/net v0.62.0 or newer is 7 days old. The location is the binary's path in
-  # the image as Syft records it.
-  - vulnerability: GO-2026-6860
-    package:
-      name: golang.org/x/net
-      version: v0.61.0
-      type: go-module
-      location: /usr/local/bin/cloudflared
-  # stdlib go1.24.6 (go-module) in postgres: gosu 1.19 (postgres:18.6-trixie), never run: db starts as 999 (#167)
+  # stdlib go1.24.6 (go-module) in postgres: gosu 1.20 (postgres:18.7-trixie), never run: db starts as 999 (#167)
   - vulnerability: GO-2025-4006
     package:
       name: stdlib
@@ -206,20 +190,3 @@ ignore:
       name: stdlib
       version: go1.24.6
       type: go-module
-  # zlib1g +b1 (deb) in postgres only: no postgres image with trixie-security's +deb13u1 yet (owner, 2026-11-15 and
-  # 2026-11-21, #277, R-095). The location is the dpkg database of a Debian image; distroless images keep theirs under
-  # /var/lib/dpkg/status.d/ and are not covered. Both CVEs are in zlib's gz_write (one fixing commit, df84af25), which
-  # postgres's pg_dump -Fc never calls: it compresses with deflate(). Grype 0.119.0 no longer reports CVE-2026-76844 in
-  # any image (release run 44902193982); its rule stays, pinned like the other, until #277 PR 2 deletes both.
-  - vulnerability: CVE-2026-76844
-    package:
-      name: zlib1g
-      version: "1:1.3.dfsg+really1.3.1-1+b1"
-      type: deb
-      location: /var/lib/dpkg/status
-  - vulnerability: CVE-2026-85091
-    package:
-      name: zlib1g
-      version: "1:1.3.dfsg+really1.3.1-1+b1"
-      type: deb
-      location: /var/lib/dpkg/status

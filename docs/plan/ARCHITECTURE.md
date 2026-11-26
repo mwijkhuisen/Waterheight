@@ -89,7 +89,7 @@ flowchart LR
     CAP["capture<br/>no DB credentials<br/>egress: allowlist only"]
     RAW[("raw archive<br/>zstd · sha256 · JSONL manifest")]
     LOAD["load<br/>parse → normalise → QC → upsert<br/>quarantine on drift"]
-    DB[("PostgreSQL 18.6<br/>obs · forecasts · refs · warnings")]
+    DB[("PostgreSQL 18.7<br/>obs · forecasts · refs · warnings")]
     PUB["publish<br/>static JSON per 10-min bucket"]
     FILES[("public files<br/>/data/v1/…")]
     API["api (Hono)<br/>read-only · bounded"]
@@ -878,7 +878,7 @@ apps/web/src/
 | `publish-owner` | server image, role `publish --audience owner` | `db` | **none** | `rws_owner_api` | `owner/www` (rw, as `/srv/www`), `owner/status` (ro, as `/srv/capture`), `public/data/v1/rivers` (ro, as `/srv/rivers`; P11a); nothing else of `public` | 256 MB |
 | `caddy-owner` (P9a; overlay `deploy/compose.owner.yaml`) | the web image with `Caddyfile.owner` (uid 65533, no capability) | `edge`, `owner_edge` (P9b) | **none** | – | `owner/www/v1` (ro), `caddy_owner_data`, `caddy_owner_config`; secret `owner_basic_auth` | 128 MB |
 | `watchdog` | server image, role `watchdog` | `egress` | `hc-ping.com` + own domain | – | – | 64 MB |
-| `db` | `postgres:18.6-trixie` (uid 999) | `db` | **none** | – | `pgdata` (`/var/lib/postgresql`); `/etc/rws/postgres` (ro; P2a: `pg_hba.conf` and `pg_ident.conf`) | 3 GB |
+| `db` | `postgres:18.7-trixie` (uid 999) | `db` | **none** | – | `pgdata` (`/var/lib/postgresql`); `/etc/rws/postgres` (ro; P2a: `pg_hba.conf` and `pg_ident.conf`) | 3 GB |
 | `migrate` (one-shot) | server image, role `migrate` (P2a: dbmate 2.36.0, built from its pinned release module since #131, inside the server image, not a separate image) | `db` | none | `rws_migrator` | – | 256 MB |
 | `backup` (timer job) | backup image: restic 0.19.1 on distroless static (P1b). P2a: it stays restic-only, with no pg client | `backup` (P1b). P2a: never on `db`; the dump runs inside the `db` container | the bucket host only (nftables set filled per run) | none. P2a: the dump runs in `db` as `rws_backup` (peer on the socket, no password) | `raw` (ro); P2a: `/srv/rws/backup/db` (ro, the nightly dump) | 512 MB |
 | `backfill` (P14a; one-shot job, profile `jobs`, started by hand: `compose run --rm backfill backfill run`) | server image, role `backfill`, uid 65532 with `group_add 61002` (`rws_x_api_key`) and `61011` (`db_rws_backfill`), 1 cpu, 64 pids | `egress`, `db` (the one service on both: threat model trust boundary 7) | allowlisted hosts of `registry/backfill.yaml`, a subset of the `capture.yaml` hosts of the same source; works only 22:00–05:00 UTC | `rws_backfill` (CONNECTION LIMIT 2: the running job plus a status, pause or abort call; `backfill_job` and `backfill_guard` only) | `raw` (rw) | 256 MB |
